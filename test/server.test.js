@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { io: createClient } = require('socket.io-client');
 const {
-  server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList
+  server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
+  hintRevealCount
 } = require('../server');
 
 function emitAck(socket, event, payload = {}) {
@@ -33,6 +34,9 @@ test('입력 정규화와 설정 범위를 서버에서 제한한다', () => {
   assert.match(validateCustomWordList(Array(9).fill('단어')).error, /10개 이상/);
   assert.match(validateCustomWordList(['사 과', '사과', ...Array.from({ length: 8 }, (_, i) => `단어${i}`)]).error, /중복/);
   assert.equal(validateCustomWordList(Array.from({ length: 10 }, (_, i) => `단어${i}`)).words.length, 10);
+  assert.equal(hintRevealCount('곰', 0.9), 0);
+  assert.equal(hintRevealCount('학교', 0.9), 0);
+  assert.equal(hintRevealCount('자동차', 0.5), 1);
 
   const room = { hostId: 'host-id', settings: { hostParticipates: false }, game: { drawerId: 'drawer-id' } };
   assert.equal(canSeeSecret(room, 'host-id'), true);

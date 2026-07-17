@@ -93,6 +93,7 @@ function renderRoom() {
   elements.tabletCanvasActions.classList.toggle('hidden', !canStartRound && !canCloseRoom);
   elements.tabletCanvasActions.classList.toggle('single-action', Number(canStartRound) + Number(canCloseRoom) === 1);
   elements.canvasSection.classList.toggle('tablet-actions-visible', canStartRound || canCloseRoom);
+  elements.canvasSection.classList.toggle('tablet-overlay-full', room.state !== 'playing' && !canStartRound && !canCloseRoom);
   elements.restartButton.classList.toggle('hidden', !isHost() || room.state !== 'finished');
   elements.lobbyButton.classList.toggle('hidden', !isHost() || room.state !== 'finished');
   elements.settingsButton.classList.toggle('hidden', !isHost() || room.state === 'playing');
@@ -109,7 +110,7 @@ function renderPlayers() {
   const sorted = [...room.players].sort((a, b) => b.score - a.score || Number(b.isHost) - Number(a.isHost));
   elements.playerList.replaceChildren(...sorted.map((player, index) => {
     const item = document.createElement('div');
-    item.className = `player-item ${player.userId === userId ? 'me' : ''} ${!player.connected ? 'offline' : ''}`;
+    item.className = `player-item ${player.userId === userId ? 'me' : ''} ${player.hasGuessed ? 'guessed' : ''} ${!player.connected ? 'offline' : ''}`;
     const avatar = document.createElement('span');
     avatar.className = 'player-avatar';
     avatar.textContent = ['🐣', '🐰', '🐻', '🐸', '🦊', '🐼'][index % 6];

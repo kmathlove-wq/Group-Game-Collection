@@ -288,6 +288,13 @@ function maskAnswer(answer, revealCount) {
   }).join('');
 }
 
+function hintRevealCount(answer, elapsedRatio) {
+  const letters = [...String(answer ?? '')].filter((char) => !/\s/.test(char)).length;
+  if (letters <= 2) return 0;
+  if (elapsedRatio >= 0.66) return Math.max(1, Math.floor(letters / 2));
+  return elapsedRatio >= 0.4 ? 1 : 0;
+}
+
 function scheduleRound(room) {
   const oldTimer = roomTimers.get(room.code);
   if (oldTimer) clearTimeout(oldTimer);
@@ -677,8 +684,7 @@ setInterval(() => {
   for (const room of rooms.values()) {
     if (room.state === 'playing' && room.settings.hintsEnabled && room.game.answer && room.game.endAt) {
       const elapsedRatio = 1 - Math.max(0, room.game.endAt - now) / (room.settings.roundTime * 1000);
-      const letters = [...room.game.answer].filter((char) => !/\s/.test(char)).length;
-      const nextStage = elapsedRatio >= 0.66 ? Math.max(1, Math.floor(letters / 2)) : elapsedRatio >= 0.4 ? 1 : 0;
+      const nextStage = hintRevealCount(room.game.answer, elapsedRatio);
       if (nextStage > room.game.hintStage) {
         room.game.hintStage = nextStage;
         room.game.hint = maskAnswer(room.game.answer, nextStage);
@@ -694,5 +700,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList
+  app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
+  hintRevealCount
 };
