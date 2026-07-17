@@ -23,7 +23,7 @@
   </section>
 
   <main class="game-layout">
-    <aside id="playersPanel" class="panel players-panel mobile-tab-panel active" data-tab="players">
+    <aside id="playersPanel" class="panel players-panel mobile-tab-panel" data-tab="players">
       <div class="panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><button id="settingsButton" class="icon-button host-only hidden" title="방 설정">⚙</button></div>
       <div id="playerList" class="player-list"></div>
       <div class="lobby-actions">
@@ -60,7 +60,7 @@
     </aside>
   </main>
 
-  <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="players" class="active">👥<span>참가자</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="tools">🎨<span>그림 도구</span></button></nav>
+  <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="canvas" class="active">🖼️<span>그림</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="players">👥<span>참가자</span></button><button data-target="tools">🎨<span>그림 도구</span></button></nav>
 
   <div id="playerActionMenu" class="player-action-menu hidden" role="menu" aria-label="참가자 관리 메뉴">
     <strong id="playerActionName"></strong>

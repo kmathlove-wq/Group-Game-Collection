@@ -55,7 +55,7 @@ npm test          # node --test
 - `두들팡`은 전체 사이트 안에 포함된 개별 게임 이름이다. 두 이름을 같은 의미로 사용하지 않는다.
 - 현재 사용 로고는 `public/assets/doodlepang-logo-green.png`이다.
 - 첫 화면은 가운데 정렬된 카드, 게임방 PC 화면은 참가자/Canvas/채팅 3열이다.
-- 모바일은 참가자/채팅/그림 도구 하단 탭을 사용한다.
+- 모바일은 그림/채팅/참가자/그림 도구 하단 탭을 사용하며 기본 탭은 그림이다.
 - 태블릿은 참가자를 그림판 위에 두고 그림판과 채팅을 2열로 동시에 표시하며, 휴대폰만 하단 탭 레이아웃을 사용한다.
 - 주요 CSS 변수는 `--purple`, `--purple-dark`, `--pink`, `--yellow`, `--mint`, `--ink`, `--muted`, `--line`이다.
 - 사용자 문자열은 `innerHTML`로 삽입하지 말고 `textContent`를 사용한다.
@@ -106,6 +106,7 @@ npm test          # node --test
 - 재접속/중도 입장에는 `canvas:sync`로 현재 보이는 stroke 목록을 전달한다.
 - `clear`, `undo`, `redo`는 `canvas:action`으로 처리하며 서버 기록을 기준으로 다시 그린다.
 - 전체 Canvas 이미지를 매 프레임 Socket.IO로 보내지 않는다.
+- Canvas CSS 요소는 원본 8:5 비율을 보존해야 하며 `object-fit` 여백으로 터치 좌표와 그림 위치가 어긋나게 만들지 않는다.
 
 ## 재접속과 성능
 - 연결 해제 후 30초 동안 참가자, 점수와 역할을 유지한다.
