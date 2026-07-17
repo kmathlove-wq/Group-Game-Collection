@@ -136,7 +136,7 @@ npm test          # node --test
 - 패키지는 꼭 필요한 경우에만 추가하고 `package-lock.json`을 함께 갱신한다.
 - 코드 변경 후 최소한 `node --check`, `git diff --check`, `npm test`를 실행한다.
 - 테스트 실패를 숨기거나 미완성 기능을 완성된 것처럼 문서화하지 않는다.
-- 커밋이나 push는 사용자가 명시적으로 요청한 경우에만 수행한다.
+- 사용자가 GitHub 업로드를 금지하지 않은 경우, 변경과 검증이 끝나면 관련 파일을 커밋하고 배포 브랜치에 push한다.
 - 새로 확인한 중요한 프로젝트 불변 조건은 `CLAUDE.md`와 `AGENTS.md`에 반영한다.
 - 두 문서는 각각 200줄을 넘기지 않으며 수정 후 `wc -l CLAUDE.md AGENTS.md`로 확인한다.
 
