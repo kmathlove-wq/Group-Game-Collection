@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { io: createClient } = require('socket.io-client');
 const {
-  server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret
+  server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList
 } = require('../server');
 
 function emitAck(socket, event, payload = {}) {
@@ -30,6 +30,9 @@ test('입력 정규화와 설정 범위를 서버에서 제한한다', () => {
   assert.equal(normalizeSettings({ roundTime: 17 }).roundTime, 60);
   assert.equal(normalizeSettings({}).hostParticipates, false);
   assert.equal(normalizeSettings({ hostParticipates: true }).hostParticipates, true);
+  assert.match(validateCustomWordList(Array(9).fill('단어')).error, /10개 이상/);
+  assert.match(validateCustomWordList(['사 과', '사과', ...Array.from({ length: 8 }, (_, i) => `단어${i}`)]).error, /중복/);
+  assert.equal(validateCustomWordList(Array.from({ length: 10 }, (_, i) => `단어${i}`)).words.length, 10);
 
   const room = { hostId: 'host-id', settings: { hostParticipates: false }, game: { drawerId: 'drawer-id' } };
   assert.equal(canSeeSecret(room, 'host-id'), true);
@@ -75,12 +78,13 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   assert.match(rejectedWordMode.error, /무작위 제시어/);
 
   const guestSecret = new Promise((resolve) => guest.once('game:secret', resolve));
+  const customWords = Array.from({ length: 10 }, (_, index) => `사용자단어${index + 1}`);
   const started = await emitAck(host, 'game:start', {
-    drawerMode: 'selected', drawerId: 'guest-id', wordMode: 'random', difficulty: 'easy'
+    drawerMode: 'selected', drawerId: 'guest-id', wordMode: 'customList', customWords
   });
   assert.equal(started.ok, true);
   const { answer } = await guestSecret;
-  assert.ok(answer);
+  assert.ok(customWords.includes(answer));
   await new Promise((resolve) => setTimeout(resolve, 40));
   assert.equal(leakedAnswer, false, '게임에 참여하는 방장에게 정답 문자열을 보내면 안 된다');
 

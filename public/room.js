@@ -16,7 +16,8 @@ const elements = {
   canvas: $('#drawingCanvas'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
-  playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote')
+  playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote'),
+  customWordList: $('[name="customWordList"]'), customWordCount: $('#customWordCount')
 };
 
 let room = null;
@@ -208,8 +209,21 @@ function updateRoundForm() {
   const randomWordMode = roundForm.querySelector('[name="wordMode"][value="random"]');
   roundForm.querySelectorAll('[name="wordMode"][value="selected"], [name="wordMode"][value="custom"]').forEach((field) => { field.disabled = participatingHost; });
   ['preparedWord', 'customWord', 'acceptedAnswers'].forEach((name) => { roundForm.elements[name].disabled = participatingHost; });
-  if (participatingHost) randomWordMode.checked = true;
+  const selectedWordMode = roundForm.querySelector('[name="wordMode"]:checked');
+  if (participatingHost && ['selected', 'custom'].includes(selectedWordMode?.value)) randomWordMode.checked = true;
   elements.participationNote.classList.toggle('hidden', !participatingHost);
+}
+
+function customWordsFromInput() {
+  return elements.customWordList.value.split(/\r?\n/).map((word) => word.trim()).filter(Boolean);
+}
+
+function updateCustomWordCount() {
+  const customWords = customWordsFromInput();
+  const uniqueWords = new Set(customWords.map((word) => word.toLocaleLowerCase('ko-KR').replace(/\s/g, '')));
+  const duplicateCount = customWords.length - uniqueWords.size;
+  elements.customWordCount.textContent = `${customWords.length}개 / 최소 10개 · ${duplicateCount ? `중복 ${duplicateCount}개` : '중복 없음'}`;
+  elements.customWordCount.classList.toggle('invalid', customWords.length > 0 && (customWords.length < 10 || duplicateCount > 0));
 }
 
 function openSettings() {
@@ -392,10 +406,12 @@ elements.canvas.addEventListener('pointerdown', startDrawing);
 elements.canvas.addEventListener('pointermove', moveDrawing);
 elements.canvas.addEventListener('pointerup', endDrawing);
 elements.canvas.addEventListener('pointercancel', endDrawing);
+elements.customWordList.addEventListener('input', updateCustomWordCount);
+updateCustomWordCount();
 
 $('#roundForm').addEventListener('submit', (event) => {
   event.preventDefault(); const data = new FormData(event.currentTarget);
-  const payload = { drawerMode: data.get('drawerMode'), drawerId: data.get('drawerId'), wordMode: data.get('wordMode'), customWord: data.get('customWord'), preparedWord: data.get('preparedWord'), difficulty: data.get('difficulty'), acceptedAnswers: String(data.get('acceptedAnswers') || '').split(',').map((value) => value.trim()).filter(Boolean) };
+  const payload = { drawerMode: data.get('drawerMode'), drawerId: data.get('drawerId'), wordMode: data.get('wordMode'), customWord: data.get('customWord'), customWords: customWordsFromInput(), preparedWord: data.get('preparedWord'), difficulty: data.get('difficulty'), acceptedAnswers: String(data.get('acceptedAnswers') || '').split(',').map((value) => value.trim()).filter(Boolean) };
   secretAnswer = '';
   emitAck('game:start', payload, () => { elements.roundDialog.close(); playSound('start'); });
 });

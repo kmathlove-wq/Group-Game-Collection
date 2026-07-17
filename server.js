@@ -11,6 +11,8 @@ const RECONNECT_GRACE_MS = 30_000;
 const ROOM_IDLE_MS = 6 * 60 * 60 * 1000;
 const DRAWING_ACTION_LIMIT = 2_000;
 const NICKNAME_MAX_LENGTH = 30;
+const CUSTOM_WORD_LIST_MIN = 10;
+const CUSTOM_WORD_LIST_MAX = 100;
 
 const app = express();
 const server = http.createServer(app);
@@ -258,6 +260,25 @@ function chooseWord(payload) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function validateCustomWordList(input) {
+  if (!Array.isArray(input)) return { error: `사용자 단어 목록을 ${CUSTOM_WORD_LIST_MIN}개 이상 입력해 주세요.` };
+  if (input.length > CUSTOM_WORD_LIST_MAX) return { error: `사용자 단어 목록은 최대 ${CUSTOM_WORD_LIST_MAX}개까지 입력할 수 있습니다.` };
+
+  const customWords = [];
+  for (const value of input) {
+    const raw = String(value ?? '').trim();
+    if (!raw) continue;
+    if ([...raw].length > 30) return { error: '사용자 단어는 항목당 최대 30자까지 입력할 수 있습니다.' };
+    if (/\p{Cc}/u.test(raw)) return { error: '사용자 단어에는 제어 문자를 사용할 수 없습니다.' };
+    customWords.push(cleanText(raw, 30));
+  }
+  if (customWords.length < CUSTOM_WORD_LIST_MIN) return { error: `사용자 단어 목록을 ${CUSTOM_WORD_LIST_MIN}개 이상 입력해 주세요.` };
+
+  const normalized = customWords.map((word) => normalizeAnswer(word, true));
+  if (new Set(normalized).size !== normalized.length) return { error: '사용자 단어 목록에 중복된 단어가 있습니다.' };
+  return { words: customWords };
+}
+
 function maskAnswer(answer, revealCount) {
   let seen = 0;
   return [...answer].map((char) => {
@@ -275,11 +296,16 @@ function scheduleRound(room) {
 }
 
 function startRound(room, payload) {
-  if (room.settings.hostParticipates && payload.wordMode !== 'random') {
-    return '게임에 참여하는 방장은 제시어를 알 수 없도록 무작위 제시어만 사용할 수 있습니다.';
+  const randomWordModes = ['random', 'customList'];
+  if (room.settings.hostParticipates && !randomWordModes.includes(payload.wordMode)) {
+    return '게임에 참여하는 방장은 기본 무작위 또는 사용자 목록 무작위 제시어만 사용할 수 있습니다.';
   }
   const drawerId = chooseDrawer(room, payload);
-  const answer = chooseWord(payload);
+  const customList = payload.wordMode === 'customList' ? validateCustomWordList(payload.customWords) : null;
+  if (customList?.error) return customList.error;
+  const answer = customList
+    ? customList.words[Math.floor(Math.random() * customList.words.length)]
+    : chooseWord(payload);
   if (!drawerId) return '그릴 사람을 선택해 주세요.';
   if (!answer) return '올바른 제시어를 입력하거나 선택해 주세요.';
 
@@ -667,4 +693,6 @@ if (require.main === module) {
   server.listen(PORT, () => console.log(`Group Game Collection server: http://localhost:${PORT}`));
 }
 
-module.exports = { app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret };
+module.exports = {
+  app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList
+};
