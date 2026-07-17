@@ -14,7 +14,8 @@ const elements = {
   closeRoomLobbyButton: $('#closeRoomLobbyButton'), playersPanel: $('#playersPanel'), tabletLobbyButton: $('#tabletLobbyButton'),
   tabletLobbyClose: $('#tabletLobbyClose'), tabletLobbyBackdrop: $('#tabletLobbyBackdrop'), tabletPlayerCount: $('#tabletPlayerCount'),
   roundLabel: $('#roundLabel'), statusLabel: $('#statusLabel'), hintLabel: $('#hintLabel'), timerLabel: $('#timerLabel'),
-  canvas: $('#drawingCanvas'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
+  canvas: $('#drawingCanvas'), canvasSection: $('.canvas-section'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
+  tabletCanvasActions: $('#tabletCanvasActions'), tabletStartButton: $('#tabletStartButton'), tabletCloseRoomButton: $('#tabletCloseRoomButton'),
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
   playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote'),
@@ -81,12 +82,21 @@ function renderRoom() {
   elements.readyButton.classList.toggle('hidden', room.state !== 'waiting' || isHost());
   elements.readyButton.textContent = self?.ready ? '✓ 준비 완료' : '✓ 준비하기';
   elements.readyButton.classList.toggle('ready', Boolean(self?.ready));
-  elements.startButton.classList.toggle('hidden', !isHost() || !['waiting', 'roundResult'].includes(room.state));
-  elements.startButton.textContent = room.state === 'roundResult' ? '▶ 다음 라운드' : '▶ 게임 시작';
+  const canStartRound = isHost() && ['waiting', 'roundResult'].includes(room.state);
+  const canCloseRoom = isHost() && room.state === 'waiting';
+  const startLabel = room.state === 'roundResult' ? '▶ 다음 라운드' : '▶ 게임 시작';
+  elements.startButton.classList.toggle('hidden', !canStartRound);
+  elements.startButton.textContent = startLabel;
+  elements.tabletStartButton.classList.toggle('hidden', !canStartRound);
+  elements.tabletStartButton.textContent = startLabel;
+  elements.tabletCloseRoomButton.classList.toggle('hidden', !canCloseRoom);
+  elements.tabletCanvasActions.classList.toggle('hidden', !canStartRound && !canCloseRoom);
+  elements.tabletCanvasActions.classList.toggle('single-action', Number(canStartRound) + Number(canCloseRoom) === 1);
+  elements.canvasSection.classList.toggle('tablet-actions-visible', canStartRound || canCloseRoom);
   elements.restartButton.classList.toggle('hidden', !isHost() || room.state !== 'finished');
   elements.lobbyButton.classList.toggle('hidden', !isHost() || room.state !== 'finished');
   elements.settingsButton.classList.toggle('hidden', !isHost() || room.state === 'playing');
-  elements.closeRoomLobbyButton.classList.toggle('hidden', !isHost() || room.state !== 'waiting');
+  elements.closeRoomLobbyButton.classList.toggle('hidden', !canCloseRoom);
 
   renderPlayers();
   renderChatHistory();
@@ -407,7 +417,9 @@ elements.chatForm.addEventListener('submit', (event) => {
   });
 });
 elements.readyButton.addEventListener('click', () => emitAck('room:ready'));
-elements.startButton.addEventListener('click', () => { setTabletLobby(false); elements.roundDialog.showModal(); });
+function openRoundDialog() { setTabletLobby(false); elements.roundDialog.showModal(); }
+elements.startButton.addEventListener('click', openRoundDialog);
+elements.tabletStartButton.addEventListener('click', openRoundDialog);
 elements.restartButton.addEventListener('click', () => emitAck('game:restart'));
 elements.lobbyButton.addEventListener('click', () => emitAck('game:lobby'));
 elements.settingsButton.addEventListener('click', () => { setTabletLobby(false); openSettings(); });
@@ -441,6 +453,7 @@ function closeRoom() {
 }
 $('#closeRoomButton').addEventListener('click', closeRoom);
 elements.closeRoomLobbyButton.addEventListener('click', closeRoom);
+elements.tabletCloseRoomButton.addEventListener('click', closeRoom);
 $('#copyCode').addEventListener('click', async () => { try { await navigator.clipboard.writeText(roomCode); showToast('방 코드를 복사했습니다!'); } catch { showToast(`방 코드: ${roomCode}`); } });
 $('#muteButton').addEventListener('click', (event) => { muted = !muted; localStorage.setItem('catchmind:muted', muted); event.currentTarget.textContent = muted ? '🔇' : '🔊'; });
 $('#muteButton').textContent = muted ? '🔇' : '🔊';
