@@ -133,9 +133,9 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 14px; di
 /* 태블릿은 참가자를 그림판 위에 두고, 그림판과 채팅을 나란히 유지한다. */
 @media (min-width: 761px) and (max-width: 1024px), (min-width: 761px) and (hover: none) and (pointer: coarse) and (max-width: 1366px) {
   .room-page { height: 100dvh; }
-  .game-layout { grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: minmax(150px, 24%) minmax(0, 1fr); gap: 8px; padding: 8px; }
-  .players-panel { grid-column: 1; grid-row: 1; }
-  .player-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-content: start; gap: 2px; }
+  .game-layout { grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: minmax(210px, 32%) minmax(0, 1fr); gap: 8px; padding: 8px; }
+  .players-panel { grid-column: 1; grid-row: 1; min-height: 210px; z-index: 1; }
+  .player-list { display: grid; min-height: 80px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-content: start; gap: 2px; }
   .lobby-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .canvas-section { grid-column: 1; grid-row: 2; }
   .chat-panel { grid-column: 2; grid-row: 1 / span 2; }
