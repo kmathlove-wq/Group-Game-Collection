@@ -56,7 +56,7 @@ npm test          # node --test
 - 현재 사용 로고는 `public/assets/doodlepang-logo-green.png`이다.
 - 첫 화면은 가운데 정렬된 카드, 게임방 PC 화면은 참가자/Canvas/채팅 3열이다.
 - 모바일은 참가자/채팅/그림 도구 하단 탭을 사용한다.
-- 1024px 이하 화면과 1366px 이하 터치 중심 태블릿은 잘림 방지를 위해 같은 하단 탭 레이아웃을 사용한다.
+- 태블릿은 참가자를 그림판 위에 두고 그림판과 채팅을 2열로 동시에 표시하며, 휴대폰만 하단 탭 레이아웃을 사용한다.
 - 주요 CSS 변수는 `--purple`, `--purple-dark`, `--pink`, `--yellow`, `--mint`, `--ink`, `--muted`, `--line`이다.
 - 사용자 문자열은 `innerHTML`로 삽입하지 말고 `textContent`를 사용한다.
 
