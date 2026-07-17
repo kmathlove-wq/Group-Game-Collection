@@ -13,7 +13,7 @@
   <header class="room-header">
     <a class="mini-logo" href="/" aria-label="그룹 게임 컬렉션의 두들팡 첫 화면"><img src="/assets/doodlepang-logo-green.png" alt=""><b>두들팡</b></a>
     <div class="room-title-area"><h1 id="roomTitle">방에 입장하는 중…</h1><button id="copyCode" class="code-badge" title="방 코드 복사">CODE <b id="roomCode">------</b> ⧉</button></div>
-    <div class="header-actions"><span id="socketStatus" class="socket-dot">연결 중</span><button id="muteButton" class="icon-button" title="음소거">🔊</button><button id="leaveButton" class="button danger compact">나가기</button></div>
+    <div class="header-actions"><span id="socketStatus" class="socket-dot">연결 중</span><button id="tabletLobbyButton" class="icon-button tablet-lobby-button" type="button" aria-controls="playersPanel" aria-expanded="false" aria-label="참가자 대기실 열기">👥<span id="tabletPlayerCount">0</span></button><button id="muteButton" class="icon-button" title="음소거">🔊</button><button id="leaveButton" class="button danger compact">나가기</button></div>
   </header>
 
   <section class="game-status-bar">
@@ -24,7 +24,7 @@
 
   <main class="game-layout">
     <aside id="playersPanel" class="panel players-panel mobile-tab-panel" data-tab="players">
-      <div class="panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><button id="settingsButton" class="icon-button host-only hidden" title="방 설정">⚙</button></div>
+      <div class="panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><div class="panel-heading-actions"><button id="settingsButton" class="icon-button host-only hidden" title="방 설정">⚙</button><button id="tabletLobbyClose" class="icon-button tablet-lobby-close" type="button" aria-label="참가자 대기실 닫기">×</button></div></div>
       <div id="playerList" class="player-list"></div>
       <div class="lobby-actions">
         <button id="readyButton" class="button secondary full">✓ 준비하기</button>
@@ -59,6 +59,8 @@
       <small class="chat-help">정답은 채팅에 공개되지 않아요.</small>
     </aside>
   </main>
+
+  <button id="tabletLobbyBackdrop" class="tablet-lobby-backdrop" type="button" aria-label="참가자 대기실 닫기" tabindex="-1"></button>
 
   <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="canvas" class="active">🖼️<span>그림</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="players">👥<span>참가자</span></button></nav>
 

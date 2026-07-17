@@ -11,7 +11,8 @@ const elements = {
   roomTitle: $('#roomTitle'), roomCode: $('#roomCode'), socketStatus: $('#socketStatus'), toast: $('#toast'),
   playerCount: $('#playerCount'), playerList: $('#playerList'), readyButton: $('#readyButton'), startButton: $('#startButton'),
   restartButton: $('#restartButton'), lobbyButton: $('#lobbyButton'), settingsButton: $('#settingsButton'),
-  closeRoomLobbyButton: $('#closeRoomLobbyButton'),
+  closeRoomLobbyButton: $('#closeRoomLobbyButton'), playersPanel: $('#playersPanel'), tabletLobbyButton: $('#tabletLobbyButton'),
+  tabletLobbyClose: $('#tabletLobbyClose'), tabletLobbyBackdrop: $('#tabletLobbyBackdrop'), tabletPlayerCount: $('#tabletPlayerCount'),
   roundLabel: $('#roundLabel'), statusLabel: $('#statusLabel'), hintLabel: $('#hintLabel'), timerLabel: $('#timerLabel'),
   canvas: $('#drawingCanvas'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), roundDialog: $('#roundDialog'),
@@ -72,6 +73,7 @@ function renderRoom() {
   elements.roomTitle.textContent = room.settings.title;
   elements.roomCode.textContent = room.code;
   elements.playerCount.textContent = `${room.players.length}/${room.settings.maxPlayers}`;
+  elements.tabletPlayerCount.textContent = room.players.length;
   elements.roundLabel.textContent = room.state === 'waiting' ? '대기실' : `${room.game.round} / ${room.game.totalRounds}`;
   document.title = `${room.settings.title} · 두들팡 | 그룹 게임 컬렉션`;
 
@@ -123,6 +125,13 @@ function renderPlayers() {
     }
     return item;
   }));
+}
+
+function setTabletLobby(open) {
+  elements.playersPanel.classList.toggle('tablet-open', open);
+  elements.tabletLobbyBackdrop.classList.toggle('open', open);
+  elements.tabletLobbyButton.setAttribute('aria-expanded', String(open));
+  if (open) elements.tabletLobbyClose.focus();
 }
 
 function openPlayerMenu(player, anchor) {
@@ -398,10 +407,13 @@ elements.chatForm.addEventListener('submit', (event) => {
   });
 });
 elements.readyButton.addEventListener('click', () => emitAck('room:ready'));
-elements.startButton.addEventListener('click', () => elements.roundDialog.showModal());
+elements.startButton.addEventListener('click', () => { setTabletLobby(false); elements.roundDialog.showModal(); });
 elements.restartButton.addEventListener('click', () => emitAck('game:restart'));
 elements.lobbyButton.addEventListener('click', () => emitAck('game:lobby'));
-elements.settingsButton.addEventListener('click', openSettings);
+elements.settingsButton.addEventListener('click', () => { setTabletLobby(false); openSettings(); });
+elements.tabletLobbyButton.addEventListener('click', () => setTabletLobby(true));
+elements.tabletLobbyClose.addEventListener('click', () => setTabletLobby(false));
+elements.tabletLobbyBackdrop.addEventListener('click', () => setTabletLobby(false));
 elements.canvas.addEventListener('pointerdown', startDrawing);
 elements.canvas.addEventListener('pointermove', moveDrawing);
 elements.canvas.addEventListener('pointerup', endDrawing);
@@ -453,7 +465,7 @@ document.addEventListener('click', (event) => {
   if (!elements.playerActionMenu.contains(event.target)) closePlayerMenu();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closePlayerMenu();
+  if (event.key === 'Escape') { closePlayerMenu(); setTabletLobby(false); }
 });
 window.addEventListener('resize', closePlayerMenu);
 
