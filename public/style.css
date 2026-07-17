@@ -162,12 +162,13 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 14px; di
   .tablet-lobby-backdrop.open { display: block; opacity: 1; pointer-events: auto; }
 }
 
-/* 높이가 짧은 가로 화면은 아래 대신 그림판 옆의 여유 공간을 사용한다. */
+/* 높이가 짧은 가로 화면은 왼쪽 여유 공간을 방장 버튼으로 채운다. */
 @media (min-width: 761px) and (max-width: 1024px) and (min-aspect-ratio: 8/5), (min-width: 761px) and (hover: none) and (pointer: coarse) and (max-width: 1366px) and (min-aspect-ratio: 8/5) {
-  .canvas-section.tablet-actions-visible { grid-template-columns: minmax(0, 1fr) 142px; grid-template-rows: minmax(0, 1fr); }
-  .canvas-section.tablet-actions-visible #drawingCanvas { grid-column: 1; grid-row: 1; }
-  .canvas-section.tablet-actions-visible .canvas-overlay { inset: 0 150px 0 0; }
-  .canvas-section.tablet-actions-visible .tablet-canvas-actions { grid-column: 2; grid-row: 1; width: 100%; grid-template-columns: 1fr; align-self: center; }
+  .canvas-section.tablet-actions-visible { grid-template-columns: 142px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .canvas-section.tablet-actions-visible #drawingCanvas { grid-column: 2; grid-row: 1; }
+  .canvas-section.tablet-actions-visible .canvas-overlay { inset: 0 0 0 150px; }
+  .canvas-section.tablet-actions-visible .tablet-canvas-actions { grid-column: 1; grid-row: 1; width: 100%; height: 100%; grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 0; align-self: stretch; }
+  .canvas-section.tablet-actions-visible .tablet-canvas-actions.single-action .button:not(.hidden) { grid-column: 1; grid-row: 1 / -1; }
 }
 
 @media (max-width: 760px) {
