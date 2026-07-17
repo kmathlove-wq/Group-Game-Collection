@@ -64,6 +64,7 @@ function normalizeSettings(raw = {}, existing = {}) {
     showWordLength: raw.showWordLength === undefined ? (existing.showWordLength ?? true) : Boolean(raw.showWordLength),
     hintsEnabled: raw.hintsEnabled === undefined ? (existing.hintsEnabled ?? true) : Boolean(raw.hintsEnabled),
     allowLateJoin: raw.allowLateJoin === undefined ? (existing.allowLateJoin ?? false) : Boolean(raw.allowLateJoin),
+    hostParticipates: raw.hostParticipates === undefined ? (existing.hostParticipates ?? false) : Boolean(raw.hostParticipates),
     ignoreSpaces: raw.ignoreSpaces === undefined ? (existing.ignoreSpaces ?? true) : Boolean(raw.ignoreSpaces)
   };
 }
@@ -152,9 +153,14 @@ function emitRoomState(room) {
   emitRoomList();
 }
 
+function canSeeSecret(room, userId) {
+  return room.game.drawerId === userId || (!room.settings.hostParticipates && room.hostId === userId);
+}
+
 function sendSecret(room) {
   if (!room.game.answer) return;
-  const targets = new Set([room.hostId, room.game.drawerId]);
+  const targets = new Set([room.game.drawerId]);
+  if (!room.settings.hostParticipates) targets.add(room.hostId);
   for (const userId of targets) {
     const player = room.players.get(userId);
     if (player?.connected) io.to(player.socketId).emit('game:secret', { answer: room.game.answer });
@@ -227,9 +233,9 @@ function normalizeAnswer(text, ignoreSpaces) {
 }
 
 function chooseDrawer(room, payload) {
-  const connected = [...room.players.values()].filter((p) => p.connected);
+  const connected = [...room.players.values()].filter((p) => p.connected && (room.settings.hostParticipates || p.userId !== room.hostId));
   if (!connected.length) return null;
-  if (payload.drawerMode === 'selected') return room.players.get(payload.drawerId)?.connected ? payload.drawerId : null;
+  if (payload.drawerMode === 'selected') return connected.some((p) => p.userId === payload.drawerId) ? payload.drawerId : null;
   let candidates = connected;
   if (payload.drawerMode === 'different' && connected.length > 1) {
     candidates = connected.filter((p) => p.userId !== room.game.previousDrawerId);
@@ -269,6 +275,9 @@ function scheduleRound(room) {
 }
 
 function startRound(room, payload) {
+  if (room.settings.hostParticipates && payload.wordMode !== 'random') {
+    return '게임에 참여하는 방장은 제시어를 알 수 없도록 무작위 제시어만 사용할 수 있습니다.';
+  }
   const drawerId = chooseDrawer(room, payload);
   const answer = chooseWord(payload);
   if (!drawerId) return '그릴 사람을 선택해 주세요.';
@@ -300,6 +309,7 @@ function startRound(room, payload) {
 
 function ranking(room) {
   return [...room.players.values()]
+    .filter((p) => room.settings.hostParticipates || p.userId !== room.hostId)
     .sort((a, b) => b.score - a.score || a.joinedAt - b.joinedAt)
     .map((p, index) => ({ rank: index + 1, userId: p.userId, nickname: p.nickname, score: p.score, correctCount: p.correctCount, drawCount: p.drawCount }));
 }
@@ -408,7 +418,7 @@ io.on('connection', (socket) => {
       ack({ ok: true, code, reconnected: true });
       socket.emit('room:state', roomState(room));
       socket.emit('canvas:sync', visibleDrawing(room.game.drawingActions));
-      if ([room.hostId, room.game.drawerId].includes(userId) && room.game.answer) socket.emit('game:secret', { answer: room.game.answer });
+      if (canSeeSecret(room, userId) && room.game.answer) socket.emit('game:secret', { answer: room.game.answer });
       emitRoomState(room);
       return;
     }
@@ -469,6 +479,7 @@ io.on('connection', (socket) => {
   socket.on('room:transfer', (payload = {}, ack = () => {}) => {
     const membership = requireHost(socket, ack);
     if (!membership) return;
+    if (membership.room.state === 'playing') return ack({ ok: false, error: '라운드 진행 중에는 방장을 넘길 수 없습니다.' });
     const target = membership.room.players.get(payload.userId);
     if (!target) return ack({ ok: false, error: '참가자를 찾을 수 없습니다.' });
     membership.room.hostId = target.userId;
@@ -510,6 +521,9 @@ io.on('connection', (socket) => {
       const guess = normalizeAnswer(text, room.settings.ignoreSpaces);
       const correct = room.game.acceptedAnswers.some((answer) => normalizeAnswer(answer, room.settings.ignoreSpaces) === guess);
       // 출제자나 이미 맞힌 사람의 정답 문자열이 일반 채팅으로 새지 않게 막는다.
+      if (correct && player.userId === room.hostId && !room.settings.hostParticipates) {
+        return ack({ ok: false, error: '진행 전용 방장은 정답에 참여할 수 없습니다.' });
+      }
       if (correct && player.userId === room.game.drawerId) {
         return ack({ ok: false, error: '현재 출제자는 정답을 입력할 수 없습니다.' });
       }
@@ -532,7 +546,7 @@ io.on('connection', (socket) => {
         io.to(room.code).emit('answer:correct', { userId: player.userId, nickname: player.nickname, points });
         emitRoomState(room);
         ack({ ok: true, correct: true });
-        const eligible = [...room.players.values()].filter((p) => p.connected && p.userId !== room.game.drawerId);
+        const eligible = [...room.players.values()].filter((p) => p.connected && p.userId !== room.game.drawerId && (room.settings.hostParticipates || p.userId !== room.hostId));
         if (eligible.length > 0 && eligible.every((p) => room.game.guessedIds.has(p.userId))) endRound(room, 'all-guessed');
         return;
       }
@@ -550,6 +564,8 @@ io.on('connection', (socket) => {
     const { room } = membership;
     if (!['waiting', 'roundResult'].includes(room.state)) return ack({ ok: false, error: '지금은 라운드를 시작할 수 없습니다.' });
     if (room.players.size < 2) return ack({ ok: false, error: '게임을 시작하려면 2명 이상 필요합니다.' });
+    const participants = [...room.players.values()].filter((p) => p.connected && (room.settings.hostParticipates || p.userId !== room.hostId));
+    if (participants.length < 2) return ack({ ok: false, error: '게임에 참여하는 사람이 2명 이상 필요합니다.' });
     if (room.game.round >= room.settings.totalRounds) return ack({ ok: false, error: '모든 라운드가 끝났습니다. 다시 하기를 눌러 주세요.' });
     const error = startRound(room, payload);
     ack(error ? { ok: false, error } : { ok: true });
@@ -651,4 +667,4 @@ if (require.main === module) {
   server.listen(PORT, () => console.log(`Group Game Collection server: http://localhost:${PORT}`));
 }
 
-module.exports = { app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings };
+module.exports = { app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret };

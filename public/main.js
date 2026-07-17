@@ -112,7 +112,8 @@ document.querySelector('#createForm').addEventListener('submit', (event) => {
   const settings = {
     title: data.get('title'), maxPlayers: Number(data.get('maxPlayers')), isPublic: data.get('isPublic') === 'true',
     roundTime: Number(data.get('roundTime')), totalRounds: Number(data.get('totalRounds')),
-    showWordLength: data.has('showWordLength'), hintsEnabled: data.has('hintsEnabled'), allowLateJoin: data.has('allowLateJoin')
+    showWordLength: data.has('showWordLength'), hintsEnabled: data.has('hintsEnabled'), allowLateJoin: data.has('allowLateJoin'),
+    hostParticipates: data.has('hostParticipates')
   };
   socket.emit('room:create', { userId, nickname, settings }, (result) => {
     if (!result?.ok) return showToast(result?.error || '방을 만들지 못했습니다.');

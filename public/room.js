@@ -16,7 +16,7 @@ const elements = {
   canvas: $('#drawingCanvas'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
-  playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName')
+  playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote')
 };
 
 let room = null;
@@ -105,7 +105,7 @@ function renderPlayers() {
     const name = document.createElement('strong');
     name.textContent = player.nickname;
     const badges = document.createElement('small');
-    badges.textContent = [player.isHost && '👑 방장', player.isDrawer && '✏️ 출제자', player.hasGuessed && '✅ 정답', !player.connected && '재접속 대기', room.state === 'waiting' && player.ready && '준비 완료'].filter(Boolean).join(' · ') || (player.userId === userId ? '나' : '참가자');
+    badges.textContent = [player.isHost && '👑 방장', player.isHost && (room.settings.hostParticipates ? '🎮 게임 참여' : '👁 진행 전용'), player.isDrawer && '✏️ 출제자', player.hasGuessed && '✅ 정답', !player.connected && '재접속 대기', room.state === 'waiting' && player.ready && '준비 완료'].filter(Boolean).join(' · ') || (player.userId === userId ? '나' : '참가자');
     info.append(name, badges);
     const score = document.createElement('b');
     score.className = 'player-score';
@@ -197,10 +197,19 @@ function updateCanvasAccess() {
 function updateRoundForm() {
   if (!room) return;
   const current = elements.drawerSelect.value;
-  elements.drawerSelect.replaceChildren(...room.players.filter((player) => player.connected).map((player) => {
+  const availableDrawers = room.players.filter((player) => player.connected && (room.settings.hostParticipates || !player.isHost));
+  elements.drawerSelect.replaceChildren(...availableDrawers.map((player) => {
     const option = document.createElement('option'); option.value = player.userId; option.textContent = player.nickname; return option;
   }));
   if ([...elements.drawerSelect.options].some((option) => option.value === current)) elements.drawerSelect.value = current;
+
+  const participatingHost = isHost() && room.settings.hostParticipates;
+  const roundForm = $('#roundForm');
+  const randomWordMode = roundForm.querySelector('[name="wordMode"][value="random"]');
+  roundForm.querySelectorAll('[name="wordMode"][value="selected"], [name="wordMode"][value="custom"]').forEach((field) => { field.disabled = participatingHost; });
+  ['preparedWord', 'customWord', 'acceptedAnswers'].forEach((name) => { roundForm.elements[name].disabled = participatingHost; });
+  if (participatingHost) randomWordMode.checked = true;
+  elements.participationNote.classList.toggle('hidden', !participatingHost);
 }
 
 function openSettings() {
@@ -387,12 +396,13 @@ elements.canvas.addEventListener('pointercancel', endDrawing);
 $('#roundForm').addEventListener('submit', (event) => {
   event.preventDefault(); const data = new FormData(event.currentTarget);
   const payload = { drawerMode: data.get('drawerMode'), drawerId: data.get('drawerId'), wordMode: data.get('wordMode'), customWord: data.get('customWord'), preparedWord: data.get('preparedWord'), difficulty: data.get('difficulty'), acceptedAnswers: String(data.get('acceptedAnswers') || '').split(',').map((value) => value.trim()).filter(Boolean) };
-  emitAck('game:start', payload, () => { secretAnswer = ''; elements.roundDialog.close(); playSound('start'); });
+  secretAnswer = '';
+  emitAck('game:start', payload, () => { elements.roundDialog.close(); playSound('start'); });
 });
 
 $('#settingsForm').addEventListener('submit', (event) => {
   event.preventDefault(); const data = new FormData(event.currentTarget);
-  emitAck('room:settings', { title: data.get('title'), maxPlayers: Number(data.get('maxPlayers')), roundTime: Number(data.get('roundTime')), totalRounds: Number(data.get('totalRounds')), isPublic: data.get('isPublic') === 'true', showWordLength: data.has('showWordLength'), hintsEnabled: data.has('hintsEnabled'), allowLateJoin: data.has('allowLateJoin') }, () => elements.settingsDialog.close());
+  emitAck('room:settings', { title: data.get('title'), maxPlayers: Number(data.get('maxPlayers')), roundTime: Number(data.get('roundTime')), totalRounds: Number(data.get('totalRounds')), isPublic: data.get('isPublic') === 'true', showWordLength: data.has('showWordLength'), hintsEnabled: data.has('hintsEnabled'), allowLateJoin: data.has('allowLateJoin'), hostParticipates: data.has('hostParticipates') }, () => elements.settingsDialog.close());
 });
 
 $('#leaveButton').addEventListener('click', () => { if (confirm('방에서 나가시겠어요?')) emitAck('room:leave', {}, () => returnHomeWithNotice('방에서 나왔습니다.')); });
