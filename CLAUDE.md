@@ -1,0 +1,148 @@
+# 그룹 게임 컬렉션 — CLAUDE.md
+
+## 프로젝트 개요
+그룹 게임 컬렉션은 여럿이 함께 즐기는 온라인 게임을 한곳에 모으는 플랫폼이다.
+현재 첫 번째 게임은 최대 30명이 한 방에서 즐기는 캐치마인드 방식의 그림 퀴즈 `두들팡`이다.
+Express가 정적 파일을 제공하고 Socket.IO가 방, 참가자, 채팅, 그림과 게임 상태를 동기화한다.
+방·점수·라운드 데이터는 현재 Node.js 프로세스 메모리에만 저장되며 서버 재시작 시 초기화된다.
+
+## 기술 구성
+- 런타임: Node.js 18 이상
+- 서버: Express 4, Socket.IO 4
+- 클라이언트: HTML, CSS, 바닐라 JavaScript, HTML Canvas
+- 테스트: Node.js 내장 테스트 러너, `socket.io-client`
+- 저장소: `MemoryRoomStore`; Redis/DB는 아직 연결하지 않음
+- 외부 유료 API와 프런트엔드 프레임워크는 사용하지 않음
+
+## 파일 구조
+```text
+/
+├── server.js                       # HTTP/Socket.IO 서버와 게임 규칙
+├── package.json                    # start/dev/test 명령과 의존성
+├── package-lock.json
+├── README.md                       # 설치·테스트·배포·확장 설명
+├── CLAUDE.md                       # Claude용 프로젝트 지식
+├── AGENTS.md                       # Codex/에이전트용 작업 지침
+├── lib/
+│   └── memory-room-store.js        # 교체 가능한 메모리 방 저장소
+├── data/
+│   └── words.json                  # easy/normal/hard 제시어 목록
+├── public/
+│   ├── index.html                  # 닉네임, 방 생성·검색·코드 입장
+│   ├── room.html                   # 대기실, 게임, 모달 마크업
+│   ├── main.js                     # 첫 화면과 공개 방 목록 로직
+│   ├── room.js                     # 방 상태, 채팅, Canvas 클라이언트
+│   ├── style.css                   # 전체 PC/모바일 반응형 스타일
+│   └── assets/                     # 두들팡 로고 PNG
+└── test/
+    └── server.test.js              # 실제 Socket.IO 통합 테스트
+```
+
+## 실행과 검증
+```bash
+npm install
+npm run dev       # http://localhost:3000
+npm start         # node server.js
+npm test          # node --test
+```
+- 서버 상태 확인: `GET /health`
+- 기본 포트: `process.env.PORT || 3000`
+- JS 변경 후 `node --check <파일>`과 `npm test`를 실행한다.
+- `npm test`는 로컬 임시 포트를 열기 때문에 제한된 샌드박스에서는 권한 승인이 필요할 수 있다.
+
+## 브랜드와 UI
+- 전체 사이트명은 `그룹 게임 컬렉션`, 패키지명은 `group-game-collection`이다.
+- `두들팡`은 전체 사이트 안에 포함된 개별 게임 이름이다. 두 이름을 같은 의미로 사용하지 않는다.
+- 현재 사용 로고는 `public/assets/doodlepang-logo-green.png`이다.
+- 첫 화면은 가운데 정렬된 카드, 게임방 PC 화면은 참가자/Canvas/채팅 3열이다.
+- 모바일은 참가자/채팅/그림 도구 하단 탭을 사용한다.
+- 주요 CSS 변수는 `--purple`, `--purple-dark`, `--pink`, `--yellow`, `--mint`, `--ink`, `--muted`, `--line`이다.
+- 사용자 문자열은 `innerHTML`로 삽입하지 말고 `textContent`를 사용한다.
+
+## 향후 게임 컬렉션 구조
+- 게임이 두 개 이상이 되는 시점에 루트 `/`를 전체 게임 선택 화면으로 바꾼다.
+- 선택 화면에는 현재 `두들팡`과 이후 추가된 게임을 같은 수준의 게임 카드로 표시한다.
+- 각 게임은 고유 이름, 로고, 설명과 진입 경로를 가지며 서로의 상태와 로직을 섞지 않는다.
+- 공통 사이트 헤더와 선택 화면은 `그룹 게임 컬렉션` 브랜드를 사용한다.
+- 두들팡 방·Canvas·정답 로직은 게임 전용 모듈로 이동할 수 있게 새 공통 코드와 결합도를 낮게 유지한다.
+- 실제 두 번째 게임을 추가하기 전에는 기능 없는 빈 게임 카드나 작동하지 않는 선택지를 노출하지 않는다.
+
+## 사용자와 방 규칙
+- 브라우저별 임시 사용자 ID는 legacy 키 `catchmind:userId`로 `localStorage`에 저장한다.
+- 닉네임도 `catchmind:nickname`에 저장한다. 키 이름은 브랜드 변경 전 호환성을 위해 유지 중이다.
+- 닉네임은 공백만 입력할 수 없고 최대 30자이며, 이모지와 일반 특수문자는 허용한다.
+- 같은 방에서는 대소문자를 무시한 중복 닉네임을 허용하지 않는다.
+- 방 코드는 혼동 문자를 뺀 영문 대문자·숫자 6자리다.
+- 최대 인원은 2~30명, 라운드 시간은 30/60/90/120초다.
+- 방 상태는 `waiting`, `playing`, `roundResult`, `finished` 네 종류다.
+- 공개방만 목록에 보이며 진행 중 입장은 `allowLateJoin`이 켜진 경우에만 허용한다.
+- 마지막 참가자가 나가면 방을 즉시 삭제한다.
+
+## 방장 기능
+- 게임 시작, 설정 변경, 강퇴, 방장 위임, 방 종료는 서버에서 방장 권한을 검사한다.
+- 참가자 이름 옆 점 세 개 버튼은 방장 넘기기/강퇴하기 팝업 메뉴를 연다.
+- 대기실의 방 종료 버튼은 방장에게만 보인다.
+- 방장이 30초 안에 재접속하지 않으면 다음 참가자에게 방장을 자동 위임한다.
+- 방 종료 시 `room:closed`, 강퇴 시 `room:kicked`를 대상에게 전송한다.
+- 직접 퇴장과 강퇴는 첫 화면에서 서로 다른 일회성 알림을 표시한다.
+
+## 게임과 정답 보안
+- 게임 상태와 점수는 항상 서버가 결정한다. 클라이언트가 점수나 정답 여부를 보내게 만들지 않는다.
+- `room:state`와 공개 방 목록에는 정답 문자열을 절대 포함하지 않는다.
+- 정답은 `game:secret`으로 방장과 현재 출제자의 개인 socket ID에만 전송한다.
+- 정답 비교는 앞뒤 공백, 대소문자, 연속 공백을 정규화하고 설정에 따라 모든 공백을 무시한다.
+- 출제자와 이미 맞힌 참가자가 정답 문자열을 보내도 일반 채팅으로 노출하지 않는다.
+- 점수는 1등 100, 2등 80, 3등 60, 이후 40점에 남은 시간 보너스를 더한다.
+- 출제자는 정답자 한 명마다 10점을 얻는다.
+- 서버의 `endAt`을 기준으로 타이머를 계산하고 서버 타이머가 라운드를 종료한다.
+- 힌트는 서버가 마스킹 문자열만 만들어 보내며 정답 전체를 공개하지 않는다.
+
+## Canvas 동기화
+- 좌표는 Canvas 크기와 무관하게 0~1 범위로 정규화한다.
+- 클라이언트는 포인터 선분을 약 24ms 간격, 최대 30개씩 묶어 `canvas:draw`로 보낸다.
+- 서버는 `playing` 상태와 현재 출제자, 좌표·색상·굵기·도구를 검사한다.
+- 한 방의 현재 라운드 동작만 `drawingActions`에 보관한다.
+- 재접속/중도 입장에는 `canvas:sync`로 현재 보이는 stroke 목록을 전달한다.
+- `clear`, `undo`, `redo`는 `canvas:action`으로 처리하며 서버 기록을 기준으로 다시 그린다.
+- 전체 Canvas 이미지를 매 프레임 Socket.IO로 보내지 않는다.
+
+## 재접속과 성능
+- 연결 해제 후 30초 동안 참가자, 점수와 역할을 유지한다.
+- 같은 `userId`가 돌아오면 기존 socket ID를 교체하고 방/Canvas/비밀 제시어 상태를 복구한다.
+- 채팅은 방마다 최근 100개까지만 저장한다.
+- 채팅은 사용자별 5초당 7개, 그림 요청은 초당 70개로 제한한다.
+- 그림 액션은 최대 2,000개이며 라운드 종료 시 삭제한다.
+- Socket.IO room 범위로만 방송하고 전체 사용자에게 그림 이벤트를 보내지 않는다.
+
+## 주요 Socket.IO 이벤트
+| 영역 | 클라이언트 요청 | 서버 알림 |
+|---|---|---|
+| 방 | `rooms:request`, `room:create`, `room:join`, `room:leave` | `rooms:list`, `room:state` |
+| 관리 | `room:ready`, `room:settings`, `room:transfer`, `room:kick`, `room:close` | `room:kicked`, `room:closed` |
+| 게임 | `game:start`, `game:restart`, `game:lobby` | `game:secret`, `game:hint`, `round:ended` |
+| 채팅 | `chat:send` | `chat:message`, `answer:correct` |
+| 그림 | `canvas:draw`, `canvas:action` | `canvas:draw`, `canvas:sync` |
+
+## 작업 규칙
+- 사용자가 변경을 요청하면 답변으로만 설명하지 말고 실제 프로젝트 파일에 반영한다. 검토 결과 바꿀 내용이 없을 때만 그대로 둔다.
+- 사용자 요청 없이 기존 변경사항, 파일 또는 기능을 되돌리거나 삭제하지 않는다.
+- 변경 전 관련 HTML/JS/CSS와 서버 이벤트를 함께 확인한다.
+- 클라이언트 입력을 신뢰하지 말고 권한, 방 상태, 길이와 범위를 서버에서 재검사한다.
+- 정답·점수·방장·출제자 권한의 서버 주도 원칙을 깨지 않는다.
+- 새 이벤트를 추가하면 요청 측, 수신 측, ack 오류 처리와 재접속 동작을 함께 구현한다.
+- 사용자 표시 문자열은 DOM API의 `textContent`를 사용해 XSS를 방지한다.
+- 기존 `localStorage`/`sessionStorage` 키를 바꿀 때는 이전 사용자 호환성을 고려한다.
+- 모바일과 PC 레이아웃을 모두 확인하고 Canvas 정규화 좌표 규칙을 유지한다.
+- 패키지는 꼭 필요한 경우에만 추가하고 `package-lock.json`을 함께 갱신한다.
+- 코드 변경 후 최소한 `node --check`, `git diff --check`, `npm test`를 실행한다.
+- 테스트 실패를 숨기거나 미완성 기능을 완성된 것처럼 문서화하지 않는다.
+- 커밋이나 push는 사용자가 명시적으로 요청한 경우에만 수행한다.
+- 새로 확인한 중요한 프로젝트 불변 조건은 `CLAUDE.md`와 `AGENTS.md`에 반영한다.
+- 두 문서는 각각 200줄을 넘기지 않으며 수정 후 `wc -l CLAUDE.md AGENTS.md`로 확인한다.
+
+## 배포와 확장 주의
+- GitHub Pages만으로는 Socket.IO 서버를 실행할 수 없다.
+- Render/Railway/Fly.io/VPS에서 Express와 Socket.IO를 같은 Node.js 서버로 실행한다.
+- 현재는 단일 인스턴스 전용이다. 수평 확장 전 Redis 저장소와 Socket.IO Redis adapter가 필요하다.
+- 로그인, 영구 전적, 실제 음원, 신고/차단, 운영 환경 30명 장시간 부하 테스트는 아직 없다.
+- 비밀키와 토큰은 코드·문서·로그에 넣지 않는다.

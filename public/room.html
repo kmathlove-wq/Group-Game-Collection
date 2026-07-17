@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6c5ce7">
+  <title>두들팡 게임 방 · 그룹 게임 컬렉션</title>
+  <link rel="icon" type="image/png" href="/assets/doodlepang-logo-green.png">
+  <link rel="apple-touch-icon" href="/assets/doodlepang-logo-green.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="room-page">
+  <header class="room-header">
+    <a class="mini-logo" href="/" aria-label="그룹 게임 컬렉션의 두들팡 첫 화면"><img src="/assets/doodlepang-logo-green.png" alt=""><b>두들팡</b></a>
+    <div class="room-title-area"><h1 id="roomTitle">방에 입장하는 중…</h1><button id="copyCode" class="code-badge" title="방 코드 복사">CODE <b id="roomCode">------</b> ⧉</button></div>
+    <div class="header-actions"><span id="socketStatus" class="socket-dot">연결 중</span><button id="muteButton" class="icon-button" title="음소거">🔊</button><button id="leaveButton" class="button danger compact">나가기</button></div>
+  </header>
+
+  <section class="game-status-bar">
+    <div><small>라운드</small><strong id="roundLabel">대기실</strong></div>
+    <div class="hint-panel"><small id="statusLabel">친구들을 기다리는 중</small><strong id="hintLabel">모두 모이면 방장이 시작해요!</strong></div>
+    <div class="timer-wrap"><small>남은 시간</small><strong id="timerLabel">--</strong></div>
+  </section>
+
+  <main class="game-layout">
+    <aside id="playersPanel" class="panel players-panel mobile-tab-panel active" data-tab="players">
+      <div class="panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><button id="settingsButton" class="icon-button host-only hidden" title="방 설정">⚙</button></div>
+      <div id="playerList" class="player-list"></div>
+      <div class="lobby-actions">
+        <button id="readyButton" class="button secondary full">✓ 준비하기</button>
+        <button id="startButton" class="button primary full host-only hidden">▶ 게임 시작</button>
+        <button id="restartButton" class="button primary full host-only hidden">↻ 다시 하기</button>
+        <button id="lobbyButton" class="button secondary full host-only hidden">대기실로</button>
+        <button id="closeRoomLobbyButton" class="button danger-outline full host-only hidden">방 종료</button>
+      </div>
+    </aside>
+
+    <section class="canvas-section">
+      <div id="canvasOverlay" class="canvas-overlay"><span>🎨</span><h2>아직 게임이 시작되지 않았어요</h2><p>방장이 라운드를 설정하면 이곳에 그림이 나타납니다.</p></div>
+      <canvas id="drawingCanvas" width="1200" height="750" aria-label="그림 캔버스"></canvas>
+      <div id="drawerTools" class="drawing-tools mobile-tab-panel" data-tab="tools" aria-label="그림 도구">
+        <div class="tool-group">
+          <button class="tool-button active" data-tool="pen" title="펜">✏️<span>펜</span></button>
+          <button class="tool-button" data-tool="eraser" title="지우개">◻️<span>지우개</span></button>
+          <button id="undoButton" class="tool-button" title="실행 취소">↶<span>취소</span></button>
+          <button id="redoButton" class="tool-button" title="다시 실행">↷<span>다시</span></button>
+          <button id="clearButton" class="tool-button" title="전체 지우기">🗑️<span>지우기</span></button>
+        </div>
+        <div class="color-tools"><input id="colorPicker" type="color" value="#2d3436" title="색상"><div id="quickColors" class="quick-colors"><button style="--color:#2d3436" data-color="#2d3436"></button><button style="--color:#e84393" data-color="#e84393"></button><button style="--color:#e17055" data-color="#e17055"></button><button style="--color:#fdcb6e" data-color="#fdcb6e"></button><button style="--color:#00b894" data-color="#00b894"></button><button style="--color:#0984e3" data-color="#0984e3"></button><button style="--color:#6c5ce7" data-color="#6c5ce7"></button></div></div>
+        <label class="width-control">굵기 <input id="widthPicker" type="range" min="1" max="30" value="6"><output id="widthOutput">6</output></label>
+      </div>
+      <p id="spectatorNotice" class="spectator-notice">출제자의 그림을 보고 채팅으로 정답을 맞혀 보세요!</p>
+    </section>
+
+    <aside id="chatPanel" class="panel chat-panel mobile-tab-panel" data-tab="chat">
+      <div class="panel-heading"><h2>실시간 채팅</h2><span class="online-badge">● LIVE</span></div>
+      <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+      <form id="chatForm" class="chat-form"><input id="chatInput" maxlength="120" placeholder="메시지 또는 정답 입력…" autocomplete="off"><button class="send-button" aria-label="전송">➤</button></form>
+      <small class="chat-help">정답은 채팅에 공개되지 않아요.</small>
+    </aside>
+  </main>
+
+  <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="players" class="active">👥<span>참가자</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="tools">🎨<span>그림 도구</span></button></nav>
+
+  <div id="playerActionMenu" class="player-action-menu hidden" role="menu" aria-label="참가자 관리 메뉴">
+    <strong id="playerActionName"></strong>
+    <button id="transferHostButton" role="menuitem">👑 방장 넘기기</button>
+    <button id="kickPlayerButton" class="danger-item" role="menuitem">🚪 강퇴하기</button>
+  </div>
+
+  <dialog id="roundDialog" class="modal">
+    <form id="roundForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">다음 라운드</p><h2>출제 설정</h2></div><button type="button" class="icon-button close-modal">×</button></div>
+      <fieldset><legend>그림을 그릴 사람</legend><div class="segmented"><label><input type="radio" name="drawerMode" value="random" checked><span>무작위</span></label><label><input type="radio" name="drawerMode" value="different"><span>이전과 다르게</span></label><label><input type="radio" name="drawerMode" value="selected"><span>직접 선택</span></label></div><select id="drawerSelect" name="drawerId"></select></fieldset>
+      <fieldset><legend>제시어</legend><div class="segmented"><label><input type="radio" name="wordMode" value="random" checked><span>무작위</span></label><label><input type="radio" name="wordMode" value="selected"><span>목록에서 선택</span></label><label><input type="radio" name="wordMode" value="custom"><span>직접 입력</span></label></div><div class="form-grid"><label>무작위 난이도<select name="difficulty"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label><label>준비된 제시어<select name="preparedWord"><optgroup label="쉬움"><option>고양이</option><option>강아지</option><option>자동차</option><option>해바라기</option><option>축구공</option></optgroup><optgroup label="보통"><option>자전거</option><option>소방차</option><option>놀이공원</option><option>잠수함</option><option>보물상자</option></optgroup><optgroup label="어려움"><option>시간여행</option><option>인공지능</option><option>우주정거장</option><option>오케스트라</option><option>텔레파시</option></optgroup></select></label></div><label>직접 제시어<input name="customWord" maxlength="30" placeholder="직접 입력 선택 시"></label><label>추가 허용 답안<input name="acceptedAnswers" maxlength="100" placeholder="쉼표로 구분 (선택)"></label></fieldset>
+      <button class="button primary full">라운드 시작!</button>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="modal">
+    <form id="settingsForm" method="dialog"><div class="modal-heading"><h2>방 설정</h2><button type="button" class="icon-button close-modal">×</button></div><label>방 제목<input name="title" maxlength="30"></label><div class="form-grid"><label>최대 인원<input name="maxPlayers" type="number" min="2" max="30"></label><label>제한 시간<select name="roundTime"><option>30</option><option>60</option><option>90</option><option>120</option></select></label><label>전체 라운드<input name="totalRounds" type="number" min="1" max="20"></label><label>공개 여부<select name="isPublic"><option value="true">공개방</option><option value="false">비공개방</option></select></label></div><div class="toggle-list"><label><input name="showWordLength" type="checkbox"><span>정답 글자 수 공개</span></label><label><input name="hintsEnabled" type="checkbox"><span>힌트 사용</span></label><label><input name="allowLateJoin" type="checkbox"><span>게임 중 입장 허용</span></label></div><button class="button primary full">설정 저장</button><button id="closeRoomButton" type="button" class="button danger-outline full">방 종료</button></form>
+  </dialog>
+
+  <dialog id="resultDialog" class="modal result-modal"><div id="resultContent"></div></dialog>
+  <div id="toast" class="toast" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/room.js"></script>
+</body>
+</html>

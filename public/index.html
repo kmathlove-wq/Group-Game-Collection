@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6c5ce7">
+  <title>두들팡 · 그룹 게임 컬렉션</title>
+  <link rel="icon" type="image/png" href="/assets/doodlepang-logo-green.png">
+  <link rel="apple-touch-icon" href="/assets/doodlepang-logo-green.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="landing-page">
+  <div class="background-shapes" aria-hidden="true"><span></span><span></span><span></span></div>
+  <main class="landing-shell">
+    <section class="hero-card">
+      <div class="logo-mark"><img src="/assets/doodlepang-logo-green.png" alt="두들팡 로고"></div>
+      <p class="eyebrow">그룹 게임 컬렉션</p>
+      <h1><span>두들팡</span></h1>
+      <p class="hero-copy">최대 30명이 그림으로 말하고, 누구보다 빠르게 맞혀 보세요.</p>
+
+      <label class="field-label" for="nickname">게임에서 사용할 닉네임</label>
+      <div class="nickname-row">
+        <input id="nickname" autocomplete="nickname" placeholder="자유롭게 닉네임 입력" aria-describedby="nicknameHelp">
+        <span id="nicknameCount">0/12</span>
+      </div>
+      <p id="nicknameHelp" class="field-help">이모지와 특수문자도 자유롭게 사용할 수 있어요.</p>
+
+      <div class="main-actions">
+        <button id="createRoomButton" class="button primary">＋ 방 만들기</button>
+        <button id="browseRoomsButton" class="button secondary">🔎 공개 방 찾기</button>
+      </div>
+      <button id="joinCodeButton" class="button ghost full">⌨ 방 코드로 입장</button>
+      <button id="howToButton" class="text-button">게임 방법 보기</button>
+      <p id="connectionStatus" class="connection-status" role="status">서버에 연결하는 중…</p>
+    </section>
+
+    <aside class="feature-strip" aria-label="게임 특징">
+      <div><span>⚡</span><strong>실시간</strong><small>그림과 채팅을 바로 공유</small></div>
+      <div><span>🏆</span><strong>점수 경쟁</strong><small>빠르게 맞힐수록 고득점</small></div>
+      <div><span>📱</span><strong>어디서나</strong><small>PC와 모바일 모두 지원</small></div>
+    </aside>
+  </main>
+
+  <dialog id="createDialog" class="modal">
+    <form id="createForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">새로운 게임</p><h2>방 만들기</h2></div><button type="button" class="icon-button close-modal" aria-label="닫기">×</button></div>
+      <label>방 제목<input name="title" maxlength="30" value="즐거운 두들팡" required></label>
+      <div class="form-grid">
+        <label>최대 인원<select name="maxPlayers"><option>2</option><option>4</option><option selected>8</option><option>10</option><option>15</option><option>20</option><option>30</option></select></label>
+        <label>제한 시간<select name="roundTime"><option>30</option><option selected>60</option><option>90</option><option>120</option></select></label>
+        <label>전체 라운드<input name="totalRounds" type="number" min="1" max="20" value="5"></label>
+        <label>공개 여부<select name="isPublic"><option value="true">공개방</option><option value="false">비공개방</option></select></label>
+      </div>
+      <div class="toggle-list">
+        <label><input name="showWordLength" type="checkbox" checked><span>정답 글자 수 공개</span></label>
+        <label><input name="hintsEnabled" type="checkbox" checked><span>힌트 사용</span></label>
+        <label><input name="allowLateJoin" type="checkbox"><span>게임 중 입장 허용</span></label>
+      </div>
+      <button class="button primary full" value="default">방 만들고 입장</button>
+    </form>
+  </dialog>
+
+  <dialog id="roomsDialog" class="modal wide-modal">
+    <div class="modal-heading"><div><p class="eyebrow">함께할 방</p><h2>공개 방 찾기</h2></div><button type="button" class="icon-button close-modal" aria-label="닫기">×</button></div>
+    <div class="room-filters">
+      <input id="roomSearch" placeholder="방 제목 검색">
+      <select id="roomSort"><option value="new">최신순</option><option value="players">인원 많은 순</option></select>
+      <label class="check-inline"><input id="joinableOnly" type="checkbox"> 입장 가능한 방만</label>
+      <button id="refreshRooms" class="button compact">↻ 새로고침</button>
+    </div>
+    <div id="roomList" class="room-list"></div>
+  </dialog>
+
+  <dialog id="codeDialog" class="modal small-modal">
+    <form id="codeForm" method="dialog">
+      <div class="modal-heading"><h2>방 코드로 입장</h2><button type="button" class="icon-button close-modal" aria-label="닫기">×</button></div>
+      <label>6자리 방 코드<input name="code" class="code-input" maxlength="6" placeholder="A7K3P2" autocomplete="off" required></label>
+      <button class="button primary full">입장하기</button>
+    </form>
+  </dialog>
+
+  <dialog id="howToDialog" class="modal">
+    <div class="modal-heading"><h2>게임 방법</h2><button type="button" class="icon-button close-modal" aria-label="닫기">×</button></div>
+    <ol class="how-to-list"><li><b>방에 모이기</b><span>닉네임을 정하고 방을 만들거나 찾아 입장해요.</span></li><li><b>그림 그리기</b><span>방장이 출제자와 제시어를 정하면 라운드 시작!</span></li><li><b>정답 맞히기</b><span>그림을 보고 채팅에 정답을 입력해요. 빠를수록 점수가 높아요.</span></li><li><b>우승하기</b><span>모든 라운드가 끝났을 때 점수가 가장 높은 사람이 우승해요.</span></li></ol>
+  </dialog>
+
+  <div id="toast" class="toast" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/main.js"></script>
+</body>
+</html>
