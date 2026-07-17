@@ -104,6 +104,7 @@ function renderRoom() {
   renderGameStatus();
   updateCanvasAccess();
   updateRoundForm();
+  requestAnimationFrame(syncCanvasOverlay);
 }
 
 function renderPlayers() {
@@ -341,6 +342,21 @@ function redrawCanvas() {
   drawingActions.forEach((action) => action.segments?.forEach(drawSegment));
 }
 
+function syncCanvasOverlay() {
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const sectionRect = elements.canvasSection.getBoundingClientRect();
+  if (!canvasRect.width || !canvasRect.height) return;
+  Object.assign(elements.canvasOverlay.style, {
+    left: `${canvasRect.left - sectionRect.left}px`,
+    top: `${canvasRect.top - sectionRect.top}px`,
+    width: `${canvasRect.width}px`,
+    height: `${canvasRect.height}px`,
+    right: 'auto',
+    bottom: 'auto',
+    visibility: 'visible'
+  });
+}
+
 function pointerPoint(event) {
   const rect = elements.canvas.getBoundingClientRect();
   return { x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) };
@@ -481,7 +497,12 @@ document.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') { closePlayerMenu(); setTabletLobby(false); }
 });
-window.addEventListener('resize', closePlayerMenu);
+window.addEventListener('resize', () => { closePlayerMenu(); syncCanvasOverlay(); });
+if ('ResizeObserver' in window) {
+  const canvasObserver = new ResizeObserver(syncCanvasOverlay);
+  canvasObserver.observe(elements.canvas);
+  canvasObserver.observe(elements.canvasSection);
+}
 
 document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
   selectedTool = button.dataset.tool; document.querySelectorAll('[data-tool]').forEach((item) => item.classList.toggle('active', item === button));
@@ -500,3 +521,4 @@ document.querySelectorAll('.mobile-tabs button').forEach((button) => button.addE
 }));
 
 redrawCanvas();
+syncCanvasOverlay();

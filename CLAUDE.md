@@ -114,6 +114,7 @@ npm test          # node --test
 - `clear`, `undo`, `redo`는 `canvas:action`으로 처리하며 서버 기록을 기준으로 다시 그린다.
 - 전체 Canvas 이미지를 매 프레임 Socket.IO로 보내지 않는다.
 - Canvas CSS 요소는 원본 8:5 비율을 보존해야 하며 `object-fit` 여백으로 터치 좌표와 그림 위치가 어긋나게 만들지 않는다.
+- 대기 안내 오버레이는 `ResizeObserver`로 실제 Canvas의 화면상 경계에 맞춰 두 겹 그림판처럼 보이지 않게 한다.
 
 ## 재접속과 성능
 - 연결 해제 후 30초 동안 참가자, 점수와 역할을 유지한다.

@@ -122,7 +122,7 @@ label { display: grid; gap: 7px; font-size: .86rem; font-weight: 700; color: #52
 .canvas-section { min-height: 0; min-width: 0; position: relative; display: grid; place-items: center; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
 #drawingCanvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; aspect-ratio: 8 / 5; background: #fff; border-radius: 16px; box-shadow: 0 5px 20px rgba(40,38,70,.09); }
 #drawingCanvas.drawable { cursor: crosshair; box-shadow: 0 0 0 3px rgba(108,92,231,.3), 0 5px 20px rgba(40,38,70,.09); }
-.canvas-overlay { position: absolute; z-index: 2; inset: 0 0 78px; display: grid; place-content: center; text-align: center; pointer-events: none; border-radius: 16px; background: rgba(255,255,255,.94); }.canvas-overlay span { font-size: 3.3rem; }.canvas-overlay h2 { margin: 10px 0 5px; font-size: 1.1rem; }.canvas-overlay p { color: var(--muted); margin: 0; font-size: .8rem; }
+.canvas-overlay { position: absolute; z-index: 2; display: grid; place-content: center; text-align: center; pointer-events: none; visibility: hidden; border-radius: 16px; background: rgba(255,255,255,.94); }.canvas-overlay span { font-size: 3.3rem; }.canvas-overlay h2 { margin: 10px 0 5px; font-size: 1.1rem; }.canvas-overlay p { color: var(--muted); margin: 0; font-size: .8rem; }
 .drawing-tools { width: 100%; min-height: 66px; display: none; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border-radius: 15px; background: #fff; border: 1px solid var(--line); pointer-events: none; }.drawing-tools.drawer-active { display: flex; pointer-events: auto; }.tool-group, .color-tools, .quick-colors { display: flex; align-items: center; gap: 5px; }.tool-button { border: 0; border-radius: 9px; background: transparent; padding: 6px 7px; font-size: 1rem; }.tool-button span { display: block; color: var(--muted); font-size: .52rem; }.tool-button.active { background: var(--purple-pale); box-shadow: inset 0 0 0 1.5px var(--purple); }.color-tools { padding-left: 8px; border-left: 1px solid var(--line); }.color-tools input { width: 35px; height: 35px; padding: 3px; border-radius: 50%; }.quick-colors button { width: 20px; height: 20px; border: 2px solid #fff; outline: 1px solid #ddd; border-radius: 50%; background: var(--color); }.width-control { display: flex; grid-auto-flow: column; align-items: center; gap: 6px; font-size: .65rem; }.width-control input { width: 70px; padding: 0; box-shadow: none; }.width-control output { min-width: 18px; color: var(--purple); }.spectator-notice { position: absolute; bottom: 78px; left: 50%; translate: -50% 0; margin: 0; padding: 7px 13px; border-radius: 100px; color: #615b78; background: rgba(255,255,255,.9); font-size: .7rem; white-space: nowrap; }
 .chat-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto auto; }.online-badge { color: #00a77c; font-size: .6rem; font-weight: 900; }.chat-messages { overflow-y: auto; padding: 12px; }.chat-row { margin-bottom: 10px; font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; }.chat-row b { color: var(--purple); margin-right: 6px; }.chat-row.system { text-align: center; }.chat-row.system span { display: inline-block; padding: 5px 9px; border-radius: 8px; background: #f4f4f8; color: var(--muted); font-size: .66rem; }.chat-form { display: grid; grid-template-columns: 1fr 42px; gap: 7px; padding: 10px 10px 5px; border-top: 1px solid var(--line); }.chat-form input { font-size: .78rem; padding: 9px 10px; }.send-button { border: 0; border-radius: 10px; color: #fff; background: var(--purple); }.chat-help { color: #9b9da6; font-size: .58rem; padding: 1px 12px 9px; }
 .mobile-tabs { display: none; }
@@ -146,8 +146,8 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 14px; di
   .lobby-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .players-panel #startButton, .players-panel #closeRoomLobbyButton { display: none !important; }
   .canvas-section { grid-column: 1; grid-row: 1; }
-  .canvas-section.tablet-actions-visible .canvas-overlay { inset: 0 0 58px; }
-  .canvas-section.tablet-overlay-full .canvas-overlay { inset: 0; }
+  .canvas-section.tablet-overlay-full { border-radius: 16px; background: #fff; }
+  .canvas-section.tablet-overlay-full #drawingCanvas { box-shadow: none; }
   .tablet-canvas-actions { position: relative; z-index: 3; width: min(100%, 520px); min-height: 50px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-self: end; }
   .tablet-canvas-actions .button { min-height: 46px; margin: 0; }
   .tablet-canvas-actions.single-action .button:not(.hidden) { grid-column: 1 / -1; }
@@ -167,7 +167,6 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 14px; di
 @media (min-width: 761px) and (max-width: 1024px) and (min-aspect-ratio: 8/5), (min-width: 761px) and (hover: none) and (pointer: coarse) and (max-width: 1366px) and (min-aspect-ratio: 8/5) {
   .canvas-section.tablet-actions-visible { grid-template-columns: 142px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .canvas-section.tablet-actions-visible #drawingCanvas { grid-column: 2; grid-row: 1; }
-  .canvas-section.tablet-actions-visible .canvas-overlay { inset: 0 0 0 150px; }
   .canvas-section.tablet-actions-visible .tablet-canvas-actions { grid-column: 1; grid-row: 1; width: 100%; height: 100%; grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 0; align-self: stretch; }
   .canvas-section.tablet-actions-visible .tablet-canvas-actions.single-action .button:not(.hidden) { grid-column: 1; grid-row: 1 / -1; }
 }
@@ -179,7 +178,7 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 14px; di
   .room-header { grid-template-columns: auto 1fr auto; padding: 0 8px; gap: 6px; }.mini-logo { font-size: 1rem; }.room-title-area h1 { font-size: .76rem; max-width: 150px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.header-actions .socket-dot, .header-actions .danger { display: none; }.header-actions { gap: 3px; }
   .game-status-bar { grid-template-columns: 65px 1fr 65px; padding: 5px 8px; }.game-status-bar small { font-size: .56rem; }.hint-panel strong { font-size: .73rem; }.timer-wrap strong { font-size: 1.25rem; }
   .game-layout { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0,1fr); padding: 7px; }
-  .canvas-section { grid-column: 1; grid-row: 1; height: 100%; align-content: center; grid-template-rows: auto; }.canvas-overlay { inset: 0; }.canvas-overlay p { padding: 0 20px; }.canvas-section #drawingCanvas { max-height: calc(100dvh - 190px); }
+  .canvas-section { grid-column: 1; grid-row: 1; height: 100%; align-content: center; grid-template-rows: auto; }.canvas-overlay p { padding: 0 20px; }.canvas-section #drawingCanvas { max-height: calc(100dvh - 190px); }
   .mobile-tab-panel { display: none; }.mobile-tab-panel.active { display: grid; position: fixed; z-index: 8; left: 7px; right: 7px; bottom: 67px; top: 119px; box-shadow: 0 10px 40px rgba(40,38,70,.22); }
   .drawing-tools.mobile-tab-panel { display: none; }
   .drawing-tools.mobile-tab-panel.active { display: none; }

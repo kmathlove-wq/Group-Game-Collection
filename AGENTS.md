@@ -113,6 +113,7 @@ CLAUDE.md                    상세 프로젝트 지식
 - 태블릿 대기 화면에서 방장 메뉴가 없는 사용자는 Canvas 안내 오버레이가 남는 공간을 채우며, 정답자는 참가자 목록에서 초록색으로 강조한다.
 - Canvas DOM 크기와 내부 좌표계의 비율을 바꿀 때 모든 클라이언트가 같은 그림을 보도록 검증한다.
 - Canvas 표시 영역에 letterbox 여백을 만들지 않아 포인터 좌표와 실제 그림 위치가 일치하게 유지한다.
+- 대기 안내 `.canvas-overlay`는 바깥 레이아웃이 아니라 실제 Canvas의 화면상 위치와 크기에 정확히 맞춘다.
 
 ## 이벤트 체크리스트
 - 방: `room:create`, `room:join`, `room:leave`, `room:state`, `rooms:list`
