@@ -11,6 +11,7 @@ const RECONNECT_GRACE_MS = 30_000;
 const ROOM_IDLE_MS = 6 * 60 * 60 * 1000;
 const DRAWING_ACTION_LIMIT = 2_000;
 const NICKNAME_MAX_LENGTH = 30;
+const MAX_ROUNDS = 100;
 const CUSTOM_WORD_LIST_MIN = 10;
 const CUSTOM_WORD_LIST_MAX = 100;
 
@@ -62,7 +63,7 @@ function normalizeSettings(raw = {}, existing = {}) {
     maxPlayers: Math.min(30, Math.max(2, Number(raw.maxPlayers ?? existing.maxPlayers ?? 10) || 10)),
     isPublic: raw.isPublic === undefined ? (existing.isPublic ?? true) : Boolean(raw.isPublic),
     roundTime: allowedTimes.includes(roundTime) ? roundTime : 60,
-    totalRounds: Math.min(20, Math.max(1, Number(raw.totalRounds ?? existing.totalRounds ?? 5) || 5)),
+    totalRounds: Math.min(MAX_ROUNDS, Math.max(1, Number(raw.totalRounds ?? existing.totalRounds ?? 5) || 5)),
     showWordLength: raw.showWordLength === undefined ? (existing.showWordLength ?? true) : Boolean(raw.showWordLength),
     hintsEnabled: raw.hintsEnabled === undefined ? (existing.hintsEnabled ?? true) : Boolean(raw.hintsEnabled),
     allowLateJoin: raw.allowLateJoin === undefined ? (existing.allowLateJoin ?? false) : Boolean(raw.allowLateJoin),

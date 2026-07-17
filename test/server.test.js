@@ -29,6 +29,7 @@ test('입력 정규화와 설정 범위를 서버에서 제한한다', () => {
   assert.equal(validateNickname('그림왕-1'), null);
   assert.deepEqual(normalizeSettings({ maxPlayers: 99, roundTime: 17, totalRounds: 0 }).maxPlayers, 30);
   assert.equal(normalizeSettings({ roundTime: 17 }).roundTime, 60);
+  assert.equal(normalizeSettings({ totalRounds: 999 }).totalRounds, 100);
   assert.equal(normalizeSettings({}).hostParticipates, false);
   assert.equal(normalizeSettings({ hostParticipates: true }).hostParticipates, true);
   assert.match(validateCustomWordList(Array(9).fill('단어')).error, /10개 이상/);
