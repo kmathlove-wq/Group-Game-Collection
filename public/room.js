@@ -192,7 +192,6 @@ function updateCanvasAccess() {
   elements.canvas.classList.toggle('drawable', drawer);
   elements.drawerTools.classList.toggle('drawer-active', drawer);
   elements.spectatorNotice.classList.toggle('hidden', drawer || room?.state !== 'playing');
-  document.querySelector('[data-target="tools"]').disabled = !drawer;
 }
 
 function updateRoundForm() {

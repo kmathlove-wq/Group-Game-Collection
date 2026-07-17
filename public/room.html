@@ -38,7 +38,7 @@
     <section class="canvas-section">
       <div id="canvasOverlay" class="canvas-overlay"><span>🎨</span><h2>아직 게임이 시작되지 않았어요</h2><p>방장이 라운드를 설정하면 이곳에 그림이 나타납니다.</p></div>
       <canvas id="drawingCanvas" width="1200" height="750" aria-label="그림 캔버스"></canvas>
-      <div id="drawerTools" class="drawing-tools mobile-tab-panel" data-tab="tools" aria-label="그림 도구">
+      <div id="drawerTools" class="drawing-tools mobile-tab-panel active" data-tab="canvas" aria-label="그림 도구">
         <div class="tool-group">
           <button class="tool-button active" data-tool="pen" title="펜">✏️<span>펜</span></button>
           <button class="tool-button" data-tool="eraser" title="지우개">◻️<span>지우개</span></button>
@@ -60,7 +60,7 @@
     </aside>
   </main>
 
-  <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="canvas" class="active">🖼️<span>그림</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="players">👥<span>참가자</span></button><button data-target="tools">🎨<span>그림 도구</span></button></nav>
+  <nav class="mobile-tabs" aria-label="모바일 메뉴"><button data-target="canvas" class="active">🖼️<span>그림</span></button><button data-target="chat">💬<span>채팅</span></button><button data-target="players">👥<span>참가자</span></button></nav>
 
   <div id="playerActionMenu" class="player-action-menu hidden" role="menu" aria-label="참가자 관리 메뉴">
     <strong id="playerActionName"></strong>
