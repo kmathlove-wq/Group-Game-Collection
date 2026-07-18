@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const AUDIO_MIMES = new Set(['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/ogg']);
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav', '.ogg']);
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.jfif', '.png', '.webp']);
 
 function text(value, max = 100) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max);
