@@ -32,7 +32,8 @@ function createGroupGame({ io, database, issueAudioToken }) {
   function publicList() {
     return [...rooms.values()].filter((r) => r.isPublic).map((r) => ({ code: r.code, title: r.title,
       playerCount: r.players.size, maxPlayers: r.maxPlayers, state: r.state,
-      canJoin: r.players.size < r.maxPlayers && (r.state === 'waiting' || r.allowLateJoin) }));
+      canJoin: r.players.size < r.maxPlayers && (r.state === 'waiting' || r.allowLateJoin),
+      hostNickname: r.players.get(r.hostId)?.nickname || '', answerMode: r.answerMode, createdAt: r.createdAt }));
   }
 
   function emitList() { io.emit('music:rooms:list', publicList()); }
