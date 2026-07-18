@@ -16,6 +16,7 @@ const elements = {
   roundLabel: $('#roundLabel'), statusLabel: $('#statusLabel'), hintLabel: $('#hintLabel'), timerLabel: $('#timerLabel'),
   canvas: $('#drawingCanvas'), canvasSection: $('.canvas-section'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
   tabletCanvasActions: $('#tabletCanvasActions'), tabletStartButton: $('#tabletStartButton'), tabletCloseRoomButton: $('#tabletCloseRoomButton'),
+  quickColors: $('#quickColors'), colorPrevButton: $('#colorPrevButton'), colorNextButton: $('#colorNextButton'),
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), chatSendButton: $('.send-button'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
   playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote'),
@@ -39,12 +40,42 @@ let selectedColor = '#2d3436';
 let selectedWidth = 6;
 let selectedManagedPlayer = null;
 const ctx = elements.canvas.getContext('2d');
+const paletteColors = [
+  ['#2d3436', '검정'], ['#636e72', '회색'], ['#b2bec3', '연회색'], ['#6d4c41', '갈색'], ['#d63031', '빨강'],
+  ['#e84393', '분홍'], ['#ff7675', '산호'], ['#e17055', '주황'], ['#fdcb6e', '노랑'], ['#b8e994', '연두'],
+  ['#00b894', '초록'], ['#006b4f', '진초록'], ['#55efc4', '민트'], ['#00cec9', '청록'], ['#74b9ff', '하늘'],
+  ['#0984e3', '파랑'], ['#274c77', '남색'], ['#6c5ce7', '보라'], ['#a29bfe', '연보라'], ['#9b59b6', '자주'],
+  ['#f5deb3', '베이지']
+];
 
 function showToast(message) {
   elements.toast.textContent = message;
   elements.toast.classList.add('show');
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => elements.toast.classList.remove('show'), 3200);
+}
+
+function renderQuickColors() {
+  elements.quickColors.replaceChildren(...paletteColors.map(([color, label], index) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.dataset.color = color; button.style.setProperty('--color', color);
+    button.setAttribute('aria-label', label); button.setAttribute('aria-pressed', String(index === 0));
+    button.classList.toggle('active', index === 0);
+    return button;
+  }));
+}
+
+function updatePaletteArrows() {
+  const maxScroll = elements.quickColors.scrollWidth - elements.quickColors.clientWidth;
+  elements.colorPrevButton.disabled = elements.quickColors.scrollLeft <= 1;
+  elements.colorNextButton.disabled = elements.quickColors.scrollLeft >= maxScroll - 1;
+}
+
+function markSelectedColor(color) {
+  elements.quickColors.querySelectorAll('[data-color]').forEach((button) => {
+    const active = button.dataset.color.toLowerCase() === color.toLowerCase();
+    button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+  });
 }
 
 function emitAck(event, payload = {}, onSuccess) {
@@ -228,6 +259,7 @@ function updateCanvasAccess() {
   elements.canvas.classList.toggle('drawable', drawer);
   elements.drawerTools.classList.toggle('drawer-active', drawer);
   elements.spectatorNotice.classList.toggle('hidden', drawer || room?.state !== 'playing');
+  if (drawer) requestAnimationFrame(updatePaletteArrows);
 }
 
 function updateRoundForm() {
@@ -515,7 +547,7 @@ document.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') { closePlayerMenu(); setTabletLobby(false); }
 });
-window.addEventListener('resize', () => { closePlayerMenu(); syncCanvasOverlay(); });
+window.addEventListener('resize', () => { closePlayerMenu(); syncCanvasOverlay(); updatePaletteArrows(); });
 if ('ResizeObserver' in window) {
   const canvasObserver = new ResizeObserver(syncCanvasOverlay);
   canvasObserver.observe(elements.canvas);
@@ -525,8 +557,13 @@ if ('ResizeObserver' in window) {
 document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
   selectedTool = button.dataset.tool; document.querySelectorAll('[data-tool]').forEach((item) => item.classList.toggle('active', item === button));
 }));
-$('#colorPicker').addEventListener('input', (event) => { selectedColor = event.target.value; selectedTool = 'pen'; });
-document.querySelectorAll('[data-color]').forEach((button) => button.addEventListener('click', () => { selectedColor = button.dataset.color; $('#colorPicker').value = selectedColor; selectedTool = 'pen'; }));
+renderQuickColors();
+$('#colorPicker').addEventListener('input', (event) => { selectedColor = event.target.value; selectedTool = 'pen'; markSelectedColor(selectedColor); });
+elements.quickColors.querySelectorAll('[data-color]').forEach((button) => button.addEventListener('click', () => { selectedColor = button.dataset.color; $('#colorPicker').value = selectedColor; selectedTool = 'pen'; markSelectedColor(selectedColor); }));
+elements.colorPrevButton.addEventListener('click', () => elements.quickColors.scrollBy({ left: -elements.quickColors.clientWidth, behavior: 'smooth' }));
+elements.colorNextButton.addEventListener('click', () => elements.quickColors.scrollBy({ left: elements.quickColors.clientWidth, behavior: 'smooth' }));
+elements.quickColors.addEventListener('scroll', updatePaletteArrows, { passive: true });
+updatePaletteArrows();
 $('#widthPicker').addEventListener('input', (event) => { selectedWidth = Number(event.target.value); $('#widthOutput').textContent = selectedWidth; });
 $('#undoButton').addEventListener('click', () => emitAck('canvas:action', { action: 'undo' }));
 $('#redoButton').addEventListener('click', () => emitAck('canvas:action', { action: 'redo' }));

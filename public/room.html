@@ -46,7 +46,7 @@
           <button id="redoButton" class="tool-button" title="다시 실행">↷<span>다시</span></button>
           <button id="clearButton" class="tool-button" title="전체 지우기">🗑️<span>지우기</span></button>
         </div>
-        <div class="color-tools"><input id="colorPicker" type="color" value="#2d3436" title="색상"><div id="quickColors" class="quick-colors"><button style="--color:#2d3436" data-color="#2d3436"></button><button style="--color:#e84393" data-color="#e84393"></button><button style="--color:#e17055" data-color="#e17055"></button><button style="--color:#fdcb6e" data-color="#fdcb6e"></button><button style="--color:#00b894" data-color="#00b894"></button><button style="--color:#0984e3" data-color="#0984e3"></button><button style="--color:#6c5ce7" data-color="#6c5ce7"></button></div></div>
+        <div class="color-tools"><input id="colorPicker" type="color" value="#2d3436" title="직접 색상 선택"><div class="quick-color-carousel"><button id="colorPrevButton" class="palette-arrow" type="button" aria-label="이전 색상">‹</button><div id="quickColors" class="quick-colors" role="group" aria-label="빠른 색상 선택"></div><button id="colorNextButton" class="palette-arrow" type="button" aria-label="다음 색상">›</button></div></div>
         <label class="width-control">굵기 <input id="widthPicker" type="range" min="1" max="30" value="6"><output id="widthOutput">6</output></label>
       </div>
       <p id="spectatorNotice" class="spectator-notice">출제자의 그림을 보고 채팅으로 정답을 맞혀 보세요!</p>
