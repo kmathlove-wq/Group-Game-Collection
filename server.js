@@ -1,9 +1,11 @@
+require('dotenv').config();
 const path = require('path');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
 const words = require('./data/words.json');
 const { MemoryRoomStore } = require('./lib/memory-room-store');
+const { setupMusicGame } = require('./src/music');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_CHAT_HISTORY = 100;
@@ -16,6 +18,7 @@ const CUSTOM_WORD_LIST_MIN = 10;
 const CUSTOM_WORD_LIST_MAX = 100;
 
 const app = express();
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   maxHttpBufferSize: 200_000,
@@ -23,11 +26,20 @@ const io = new Server(server, {
   pingInterval: 25_000
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size }));
-
 const rooms = new MemoryRoomStore();
 const roomTimers = new Map();
+
+const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
+app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/music', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music.html')));
+app.get('/music/solo', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-solo.html')));
+app.get('/music/lobby', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-lobby.html')));
+app.get('/music/room', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-room.html')));
+app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
+app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size }));
 
 function cleanText(value, maxLength) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, maxLength);
@@ -702,5 +714,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount
+  hintRevealCount, musicGame
 };
