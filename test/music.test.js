@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const { createMusicDatabase } = require('../src/music/database');
-const { parseSong, checkAnswer, createTokenStore } = require('../src/music/service');
+const { parseSong, checkAnswer, createTokenStore, IMAGE_EXTENSIONS, IMAGE_MIMES } = require('../src/music/service');
 
 test('송캐치 음원 검증과 정답 별칭을 서버에서 처리한다', () => {
   const parsed = parseSong({ title: '테스트 송', artist: '가수', titleAliases: '테스트송, Test Song',
@@ -14,6 +14,8 @@ test('송캐치 음원 검증과 정답 별칭을 서버에서 처리한다', ()
   assert.equal(checkAnswer(parsed.value, 'title', { value: 'TEST-SONG' }), true);
   assert.equal(checkAnswer(parsed.value, 'artist', { value: ' singer ' }), true);
   assert.match(parseSong({ title: '곡', artist: '가수', duration: 8, firstDuration: 3, secondDuration: 5, thirdDuration: 10 }).error, /벗어납니다/);
+  assert.equal(IMAGE_EXTENSIONS.has('.jfif'), true);
+  assert.equal(IMAGE_MIMES.has('image/jpeg'), true);
 });
 
 test('SQLite 공개 음원 데이터에는 저장 파일명이 포함되지 않는다', () => {
