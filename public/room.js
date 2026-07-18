@@ -107,7 +107,7 @@ function renderRoom() {
   elements.playerCount.textContent = `${room.players.length}/${room.settings.maxPlayers}`;
   elements.tabletPlayerCount.textContent = room.players.length;
   elements.roundLabel.textContent = room.state === 'waiting' ? '대기실' : `${room.game.round} / ${room.game.totalRounds}`;
-  document.title = `${room.settings.title} · 두들팡 | 그룹 게임 컬렉션`;
+  document.title = `${room.settings.title} · 그룹 게임 컬렉션-두들팡`;
 
   document.querySelectorAll('.host-only').forEach((element) => element.classList.toggle('hidden', !isHost()));
   elements.readyButton.classList.toggle('hidden', room.state !== 'waiting' || isHost());

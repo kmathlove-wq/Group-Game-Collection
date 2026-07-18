@@ -1,4 +1,74 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>송캐치 방</title><link rel="stylesheet" href="/music.css"></head>
-<body><main class="room-shell"><header class="room-top"><div><b id="roomTitle">송캐치</b> <small>CODE <strong id="roomCode"></strong></small></div><div><button id="ready" class="secondary">준비</button> <button id="start" class="primary hidden">게임 시작</button> <button id="leave" class="danger">나가기</button></div></header>
-<section class="room-grid"><div class="panel quiz-panel"><p id="status" class="eyebrow">친구들을 기다리는 중</p><div id="disc" class="audio-disc">♫</div><h1 id="quizTitle">방장이 게임을 시작하면 음악이 나와요</h1><p id="stage" class="lead"></p><audio id="audio" preload="auto"></audio><div id="answerArea" class="answer-row hidden"><input id="answer" placeholder="정답 입력"><input id="artist" class="hidden" placeholder="가수 입력"><button id="answerButton" class="primary">정답!</button></div><div id="result" class="notice hidden"></div></div>
-<aside class="panel side-panel"><div><h3>참가자</h3><div id="players" class="players"></div></div><div id="chat" class="chat"></div><div class="answer-row"><input id="chatInput" maxlength="200" placeholder="채팅 메시지"><button id="chatSend" class="secondary">전송</button></div></aside></section></main><script src="/socket.io/socket.io.js"></script><script src="/music-common.js"></script><script src="/music-room.js"></script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#ff4d75">
+  <title>그룹 게임 컬렉션-송캐치 단체전</title>
+  <link rel="icon" href="/assets/songcatch-logo.png">
+  <link rel="apple-touch-icon" href="/assets/songcatch-logo.png">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-room.css">
+</head>
+<body class="music-room-page">
+  <main class="music-room-shell">
+    <header class="music-room-header">
+      <a class="music-room-brand" href="/music" aria-label="그룹 게임 컬렉션-송캐치 첫 화면">
+        <img src="/assets/songcatch-logo.png" alt="">
+        <b>그룹 게임 컬렉션-송캐치</b>
+      </a>
+      <div class="music-room-title">
+        <h1 id="roomTitle">방에 입장하는 중…</h1>
+        <button id="copyCode" type="button" title="방 코드" aria-label="방 코드"><small>CODE</small> <strong id="roomCode">------</strong></button>
+      </div>
+      <div class="music-room-header-actions">
+        <span class="music-live-dot">● 연결됨</span>
+        <button id="leave" class="danger">나가기</button>
+      </div>
+    </header>
+
+    <section class="music-status-bar" aria-label="게임 진행 상태">
+      <div><small>라운드</small><strong id="roundLabel">대기실</strong></div>
+      <div class="music-status-center"><small id="status">친구들을 기다리는 중</small><strong id="statusMessage">모두 준비하면 방장이 시작해요!</strong></div>
+      <div><small>듣기 단계</small><strong id="stage">--</strong></div>
+    </section>
+
+    <section class="music-game-layout">
+      <aside class="panel music-players-panel">
+        <div class="music-panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><span>👥</span></div>
+        <div id="players" class="players music-player-list"></div>
+        <div class="music-lobby-actions">
+          <button id="ready" class="secondary wide">✓ 준비하기</button>
+          <button id="start" class="primary wide hidden">▶ 게임 시작</button>
+        </div>
+      </aside>
+
+      <section class="panel quiz-panel music-quiz-panel">
+        <div class="music-disc-wrap"><div id="disc" class="audio-disc">♫</div></div>
+        <h1 id="quizTitle">방장이 게임을 시작하면 음악이 나와요</h1>
+        <p class="music-quiz-help">짧게 듣고 제목이나 가수를 빠르게 맞혀 보세요.</p>
+        <audio id="audio" preload="auto"></audio>
+        <div id="answerArea" class="answer-row music-answer-row hidden">
+          <input id="answer" autocomplete="off" placeholder="정답 입력">
+          <input id="artist" class="hidden" autocomplete="off" placeholder="가수 입력">
+          <button id="answerButton" class="primary">정답!</button>
+        </div>
+        <div id="result" class="notice music-result hidden"></div>
+      </section>
+
+      <aside class="panel side-panel music-chat-panel">
+        <div class="music-panel-heading"><h2>실시간 채팅</h2><span class="music-live-badge">● LIVE</span></div>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="answer-row music-chat-form">
+          <input id="chatInput" maxlength="200" autocomplete="off" placeholder="메시지 입력…">
+          <button id="chatSend" class="secondary" aria-label="채팅 전송">➤</button>
+        </div>
+        <small class="music-chat-help">정답은 위의 정답 칸에 입력해 주세요.</small>
+      </aside>
+    </section>
+  </main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/music-common.js"></script>
+  <script src="/music-room.js"></script>
+</body>
+</html>

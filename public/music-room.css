@@ -1,0 +1,415 @@
+.music-room-page {
+  height: 100vh;
+  overflow: hidden;
+  background: #f3f1fa;
+}
+
+.music-room-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 64px 78px minmax(0, 1fr);
+}
+
+.music-room-header {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(210px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.music-room-brand {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: .86rem;
+}
+
+.music-room-brand img {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.music-room-brand b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-room-title {
+  text-align: center;
+}
+
+.music-room-title h1 {
+  max-width: 360px;
+  margin: 0 0 3px;
+  overflow: hidden;
+  font-size: .95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-room-title button {
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: none;
+  font-size: .68rem;
+}
+
+.music-room-title button strong {
+  color: var(--music2);
+  letter-spacing: .12em;
+}
+
+.music-room-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.music-live-dot,
+.music-live-badge {
+  color: var(--good);
+  font-size: .68rem;
+  font-weight: 850;
+}
+
+.music-status-bar {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 130px;
+  align-items: center;
+  padding: 8px 24px;
+  color: #fff;
+  text-align: center;
+  background: linear-gradient(105deg, #f04f79, #7a58ed);
+  box-shadow: 0 5px 18px rgba(103, 70, 190, .2);
+}
+
+.music-status-bar small,
+.music-status-bar strong {
+  display: block;
+}
+
+.music-status-bar small {
+  color: rgba(255, 255, 255, .76);
+  font-size: .68rem;
+}
+
+.music-status-bar strong {
+  margin-top: 3px;
+}
+
+.music-status-center strong {
+  font-size: 1.08rem;
+}
+
+.music-game-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 250px minmax(380px, 1fr) 310px;
+  gap: 12px;
+  padding: 12px;
+}
+
+.music-room-page .panel {
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(43, 38, 78, .06);
+}
+
+.music-panel-heading {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.music-panel-heading h2 {
+  margin: 0;
+  font-size: .9rem;
+}
+
+.music-panel-heading h2 span {
+  color: var(--music2);
+}
+
+.music-players-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.music-player-list {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.music-player-list .player {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  overflow: hidden;
+  border-radius: 12px;
+  font-size: .76rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-player-list .player.guessed {
+  box-shadow: inset 0 0 0 1.5px #79dcb5;
+}
+
+.music-lobby-actions {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.music-quiz-panel {
+  position: relative;
+  align-content: center;
+  padding: 28px;
+}
+
+.music-disc-wrap {
+  width: 184px;
+  height: 184px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 44%, #f1edff 45% 62%, transparent 63%);
+}
+
+.music-room-page .audio-disc {
+  width: 146px;
+  height: 146px;
+  margin: 0;
+  box-shadow: 0 14px 34px rgba(54, 45, 95, .22);
+}
+
+.music-quiz-panel h1 {
+  max-width: 680px;
+  margin: 12px auto 7px;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.music-quiz-help {
+  margin: 0 auto 16px;
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.music-answer-row {
+  width: min(620px, 100%);
+  margin: 18px auto 0;
+}
+
+.music-result {
+  width: min(620px, 100%);
+  margin: 14px auto 0;
+}
+
+.music-chat-panel {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  padding: 0;
+}
+
+.music-room-page .chat {
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+}
+
+.music-room-page .chat p {
+  margin: 0 0 8px;
+  font-size: .76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.music-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 7px;
+  margin: 0;
+  padding: 10px 10px 5px;
+  border-top: 1px solid var(--line);
+}
+
+.music-chat-form button {
+  padding: 0;
+}
+
+.music-chat-help {
+  padding: 1px 12px 10px;
+  color: #989aa6;
+  font-size: .6rem;
+}
+
+@media (max-width: 1050px) {
+  .music-room-header {
+    grid-template-columns: minmax(150px, 1fr) auto minmax(150px, 1fr);
+  }
+
+  .music-room-brand b {
+    display: none;
+  }
+
+  .music-game-layout {
+    grid-template-columns: 210px minmax(330px, 1fr) 260px;
+    gap: 8px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 820px) {
+  .music-room-page {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .music-room-shell {
+    min-height: 100vh;
+    grid-template-rows: 58px 68px auto;
+  }
+
+  .music-room-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .music-room-brand img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .music-room-title h1 {
+    max-width: 240px;
+    font-size: .8rem;
+  }
+
+  .music-live-dot {
+    display: none;
+  }
+
+  .music-status-bar {
+    grid-template-columns: 72px minmax(0, 1fr) 72px;
+    padding: 6px 9px;
+  }
+
+  .music-status-center strong {
+    font-size: .85rem;
+  }
+
+  .music-game-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 36vw);
+    grid-template-rows: minmax(520px, calc(100vh - 150px)) auto;
+  }
+
+  .music-quiz-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .music-chat-panel {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .music-players-panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 240px;
+  }
+
+  .music-player-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .music-room-title h1 {
+    max-width: 145px;
+  }
+
+  .music-room-header-actions .danger {
+    padding: 10px 12px;
+  }
+
+  .music-status-bar {
+    grid-template-columns: 58px minmax(0, 1fr) 58px;
+  }
+
+  .music-status-bar small {
+    font-size: .55rem;
+  }
+
+  .music-status-bar strong {
+    font-size: .72rem;
+  }
+
+  .music-game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(520px, calc(100vh - 138px)) 410px auto;
+    padding: 7px;
+  }
+
+  .music-quiz-panel,
+  .music-chat-panel,
+  .music-players-panel {
+    grid-column: 1;
+  }
+
+  .music-quiz-panel {
+    grid-row: 1;
+    padding: 20px 14px;
+  }
+
+  .music-chat-panel {
+    grid-row: 2;
+  }
+
+  .music-players-panel {
+    grid-row: 3;
+  }
+
+  .music-disc-wrap {
+    width: 152px;
+    height: 152px;
+  }
+
+  .music-room-page .audio-disc {
+    width: 124px;
+    height: 124px;
+  }
+
+  .music-answer-row {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-room-page .audio-disc {
+    animation: none;
+  }
+}
