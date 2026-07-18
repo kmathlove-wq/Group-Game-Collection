@@ -118,7 +118,8 @@ CLAUDE.md                    상세 프로젝트 지식
 
 ## 클라이언트 UI 규칙
 - 전체 사이트명은 `그룹 게임 컬렉션`, 현재 게임명은 `두들팡`, 현재 게임 로고는 `doodlepang-logo-green.png`다.
-- 게임 선택 기본 배경은 `group-game-background.png`, 송캐치 로고는 초록 배경의 `songcatch-logo.png`다.
+- 전체 사이트 탭/대표 로고는 `group-game-logo.png`, 게임 선택 기본 배경은 `group-game-background.png`, 송캐치 로고는 초록 배경의 `songcatch-logo.png`다.
+- 송캐치 관리자 화면은 `admin.css`가 레이아웃·반응형·애니메이션을 담당하며 기능 ID는 `admin.js`와 맞춰 유지한다.
 - 관리자 로그인 숨은 진입은 G가 아니라 송캐치 로고를 1.8초 안에 5번 누르는 동작이다.
 - 사용자 생성 문자열은 `textContent`로 넣는다. 템플릿 `innerHTML`에는 사용자 값을 보간하지 않는다.
 - 방장 전용 요소는 `.host-only`와 현재 서버 상태를 함께 사용해 표시한다.

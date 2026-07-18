@@ -68,7 +68,8 @@ npm test          # node --test
 - 전체 사이트명은 `그룹 게임 컬렉션`, 패키지명은 `group-game-collection`이다.
 - `두들팡`은 전체 사이트 안에 포함된 개별 게임 이름이다. 두 이름을 같은 의미로 사용하지 않는다.
 - 현재 사용 로고는 `public/assets/doodlepang-logo-green.png`이다.
-- 게임 선택 배경은 `group-game-background.png`, 송캐치 로고는 초록 배경의 `songcatch-logo.png`다.
+- 전체 사이트 탭/대표 로고는 `group-game-logo.png`, 게임 선택 배경은 `group-game-background.png`, 송캐치 로고는 초록 배경의 `songcatch-logo.png`다.
+- 송캐치 관리자 전용 레이아웃과 애니메이션은 `admin.css`에 두고 `prefers-reduced-motion`을 지원한다.
 - 관리자 숨은 진입은 게임 선택 또는 송캐치 첫 화면의 송캐치 로고를 빠르게 5번 누른다. G 로고에는 연결하지 않는다.
 - 첫 화면은 가운데 정렬된 카드, 게임방 PC 화면은 참가자/Canvas/채팅 3열이다.
 - 모바일은 그림/채팅/참가자 하단 탭을 사용하며 기본 탭은 그림이다. 출제자에게만 그림 탭 안에 도구를 함께 표시한다.
