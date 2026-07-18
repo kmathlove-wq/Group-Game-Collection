@@ -1,6 +1,7 @@
 (() => {
   const $ = (s) => document.querySelector(s); const socket = io(); const { userId, nickname, saveNickname, setNotice } = MusicCommon;
   $('#nickname').value = nickname();
+  const exitNotice = sessionStorage.getItem('music:exitNotice'); sessionStorage.removeItem('music:exitNotice'); if (exitNotice) setNotice($('#notice'), exitNotice, 'success');
   const updateNicknameCount = () => { $('#nicknameCount').textContent = `${Array.from($('#nickname').value).length}/30`; };
   updateNicknameCount(); $('#nickname').addEventListener('input', updateNicknameCount);
   const openDialog = (dialog) => { try { identity(); setNotice($('#notice'), ''); dialog.showModal(); } catch (error) { setNotice($('#notice'), error.message, 'error'); $('#nickname').focus(); } };

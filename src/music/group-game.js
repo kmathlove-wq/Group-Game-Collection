@@ -45,6 +45,18 @@ function createGroupGame({ io, database, issueAudioToken }) {
   }
   function clearRoomTimer(code) { clearTimeout(timers.get(code)); timers.delete(code); }
 
+  function closeRoom(room, message = '방장이 방을 종료했습니다.') {
+    clearRoomTimer(room.code);
+    io.to(`music:${room.code}`).emit('music:room:closed', { message });
+    for (const player of room.players.values()) {
+      const playerSocket = io.sockets.sockets.get(player.socketId);
+      if (!playerSocket) continue;
+      playerSocket.leave(`music:${room.code}`);
+      if (playerSocket.data.musicRoomCode === room.code) playerSocket.data.musicRoomCode = null;
+    }
+    rooms.delete(room.code); emitList();
+  }
+
   function membership(socket) {
     const room = rooms.get(socket.data.musicRoomCode);
     const player = room?.players.get(socket.data.musicUserId);
@@ -209,6 +221,12 @@ function createGroupGame({ io, database, issueAudioToken }) {
       const song = room.currentSongId && database.getSong(room.currentSongId, true);
       if (room.state === 'playing' && song && (checkAnswer(song, 'title', { value }) || checkAnswer(song, 'artist', { value }))) return ack({ ok: false, message: '정답은 답안 칸에 입력해 주세요.' });
       addChat(room, { type: 'chat', userId: player.userId, nickname: player.nickname, text: value }); ack({ ok: true });
+    });
+
+    socket.on('music:room:close', (_raw, ack = () => {}) => {
+      const { room, player } = membership(socket);
+      if (!room || room.hostId !== player.userId) return ack({ ok: false, message: '방장만 방을 종료할 수 있습니다.' });
+      closeRoom(room); ack({ ok: true });
     });
 
     socket.on('music:room:leave', (_raw, ack = () => {}) => { leave(socket); ack({ ok: true }); });

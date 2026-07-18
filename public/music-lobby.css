@@ -28,6 +28,7 @@
   background: rgba(255, 255, 255, .94);
   box-shadow: 0 20px 58px rgba(91, 62, 150, .16);
   backdrop-filter: blur(14px);
+  animation: songcatch-card-in .55s cubic-bezier(.2, .85, .3, 1) both;
 }
 
 .songcatch-lobby-logo {
@@ -40,6 +41,7 @@
   background: linear-gradient(145deg, #f3efff, #ffe9f1);
   box-shadow: 0 10px 24px rgba(108, 92, 231, .2);
   transform: rotate(-5deg);
+  animation: songcatch-logo-bob 4s ease-in-out .45s infinite;
 }
 
 .songcatch-lobby-logo img {
@@ -89,12 +91,13 @@
   color: var(--ink);
   background: #fff;
   font-size: 1rem;
-  transition: border-color .2s, box-shadow .2s;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
 }
 
 .songcatch-nickname-row input:focus {
   border-color: var(--music2);
   box-shadow: 0 0 0 4px rgba(108, 76, 255, .12);
+  transform: translateY(-1px);
 }
 
 .songcatch-nickname-row input::placeholder {
@@ -128,7 +131,13 @@
   min-height: 52px;
   border-radius: 14px;
   font-weight: 850;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
 }
+
+.songcatch-main-actions button:hover,
+.songcatch-code-button:hover { transform: translateY(-2px); box-shadow: 0 9px 20px rgba(50, 42, 90, .13); }
+.songcatch-main-actions button:active,
+.songcatch-code-button:active { transform: translateY(0) scale(.98); }
 
 .songcatch-code-button {
   width: 100%;
@@ -172,7 +181,12 @@
   border-radius: 18px;
   background: rgba(255, 255, 255, .72);
   backdrop-filter: blur(10px);
+  animation: songcatch-feature-in .45s ease-out both;
 }
+
+.songcatch-lobby-features div:nth-child(1) { animation-delay: .16s; }
+.songcatch-lobby-features div:nth-child(2) { animation-delay: .24s; }
+.songcatch-lobby-features div:nth-child(3) { animation-delay: .32s; }
 
 .songcatch-lobby-features span,
 .songcatch-lobby-features strong,
@@ -236,7 +250,10 @@
   border-radius: 11px;
   background: #f1f0f8;
   font-size: 1.2rem;
+  transition: color .16s ease, background .16s ease, transform .16s ease;
 }
+
+.music-modal-close:hover { color: var(--music2); background: #eae7ff; transform: rotate(6deg) scale(1.05); }
 
 .songcatch-toggle-list {
   display: grid;
@@ -334,7 +351,16 @@
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 15px;
+  background: #fff;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  animation: songcatch-room-in .28s ease-out both;
 }
+
+.music-room-card:nth-child(2) { animation-delay: .04s; }
+.music-room-card:nth-child(3) { animation-delay: .08s; }
+.music-room-card:nth-child(4) { animation-delay: .12s; }
+.music-room-card:nth-child(n+5) { animation-delay: .16s; }
+.music-room-card:hover { border-color: #d8d1ff; box-shadow: 0 10px 24px rgba(66, 53, 126, .1); transform: translateY(-2px); }
 
 .music-room-card h3 {
   margin: 6px 0 4px;
@@ -417,7 +443,17 @@
   margin: 0;
   box-shadow: 0 12px 36px rgba(36, 31, 63, .22);
   transform: translateX(-50%);
+  animation: songcatch-notice-in .22s ease-out both;
 }
+
+@keyframes songcatch-card-in { from { opacity: 0; transform: translateY(22px) scale(.975); } }
+@keyframes songcatch-logo-bob {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-7px) rotate(-2deg); }
+}
+@keyframes songcatch-feature-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes songcatch-room-in { from { opacity: 0; transform: translateY(8px) scale(.99); } }
+@keyframes songcatch-notice-in { from { opacity: 0; transform: translate(-50%, 10px); } }
 
 @media (max-width: 600px) {
   .songcatch-lobby-header {
@@ -477,7 +513,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .music-lobby-modal[open] {
-    animation: none;
-  }
+  .songcatch-lobby-card,
+  .songcatch-lobby-logo,
+  .songcatch-lobby-features div,
+  .music-lobby-modal[open],
+  .music-room-card,
+  .songcatch-lobby-notice { animation: none; }
+
+  .songcatch-nickname-row input,
+  .songcatch-main-actions button,
+  .songcatch-code-button,
+  .music-modal-close,
+  .music-room-card { transition: none; }
 }
