@@ -1,6 +1,52 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>송캐치 | 그룹 게임 컬렉션</title><link rel="icon" href="/assets/songcatch-logo.png"><link rel="stylesheet" href="/music.css"></head>
-<body class="music-page"><header class="music-header"><a href="/" class="mini-brand">G 그룹 게임 컬렉션</a></header>
-<main class="hero-shell"><button class="songcatch-hero-logo songcatch-admin-trigger" type="button" aria-label="송캐치 로고"><img src="/assets/songcatch-logo.png" alt="송캐치"></button><p class="eyebrow">듣는 순간, 정답을 캐치!</p><h1>송캐치</h1><p class="lead">3초, 5초, 10초. 더 빨리 맞힐수록 점수가 높아요.</p>
-<div class="mode-grid"><a class="mode-card" href="/music/solo"><span>🎧</span><h2>개인전</h2><p>혼자 연습하고 최고 점수에 도전해요.</p></a><a class="mode-card" href="/music/lobby"><span>👥</span><h2>단체전</h2><p>방을 만들고 최대 30명이 동시에 겨뤄요.</p></a></div>
-<aside class="copyright-note">관리자가 사용 권한을 확인한 음원만 등록해야 합니다. 음원의 저작권과 이용 허가는 업로더가 확인해야 합니다.</aside></main><script src="/games.js"></script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ff4d75">
+  <title>송캐치 | 그룹 게임 컬렉션</title>
+  <link rel="icon" href="/assets/songcatch-logo.png">
+  <link rel="apple-touch-icon" href="/assets/songcatch-logo.png">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-landing.css">
+</head>
+<body class="music-page songcatch-landing-page">
+  <header class="music-header songcatch-collection-header">
+    <a href="/" class="mini-brand"><span aria-hidden="true">G</span> 그룹 게임 컬렉션</a>
+  </header>
+
+  <main class="songcatch-landing-shell">
+    <section class="songcatch-entry-card">
+      <button class="songcatch-hero-logo songcatch-admin-trigger" type="button" aria-label="송캐치 로고">
+        <img src="/assets/songcatch-logo.png" alt="송캐치">
+      </button>
+      <p class="eyebrow">듣는 순간, 정답을 캐치!</p>
+      <h1>송캐치</h1>
+      <p class="lead">노래를 듣고 제목이나 가수를 누구보다 빠르게 맞혀 보세요.</p>
+
+      <div class="songcatch-mode-actions" aria-label="게임 모드 선택">
+        <a class="songcatch-mode-button personal" href="/music/solo">
+          <span class="mode-icon" aria-hidden="true">🎧</span>
+          <span><strong>개인 모드</strong><small>혼자 연습하고 최고 점수에 도전</small></span>
+        </a>
+        <a class="songcatch-mode-button group" href="/music/lobby">
+          <span class="mode-icon" aria-hidden="true">👥</span>
+          <span><strong>단체 모드</strong><small>방을 만들고 최대 30명이 함께 대결</small></span>
+        </a>
+      </div>
+
+      <p class="songcatch-guide">3초 · 5초 · 10초, 더 빨리 맞힐수록 점수가 높아요.</p>
+      <p class="songcatch-connection"><span aria-hidden="true"></span> 게임 모드를 선택해 시작하세요</p>
+    </section>
+
+    <aside class="songcatch-feature-strip" aria-label="게임 특징">
+      <div><span>⚡</span><strong>빠른 승부</strong><small>짧게 듣고 바로 정답</small></div>
+      <div><span>🎵</span><strong>다양한 문제</strong><small>제목과 가수를 맞히기</small></div>
+      <div><span>🏆</span><strong>점수 경쟁</strong><small>빠를수록 더 높은 점수</small></div>
+    </aside>
+
+    <aside class="copyright-note">관리자가 사용 권한을 확인한 음원만 등록해야 합니다. 음원의 저작권과 이용 허가는 업로더가 확인해야 합니다.</aside>
+  </main>
+  <script src="/games.js"></script>
+</body>
+</html>

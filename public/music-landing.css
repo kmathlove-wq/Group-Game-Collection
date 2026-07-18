@@ -1,0 +1,246 @@
+.songcatch-landing-page {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, .08), rgba(255, 255, 255, .08)),
+    url('/assets/songcatch-background.png') center / cover fixed no-repeat;
+}
+
+.songcatch-collection-header {
+  position: relative;
+  z-index: 5;
+  background: rgba(255, 255, 255, .94);
+  backdrop-filter: blur(12px);
+}
+
+.songcatch-collection-header .mini-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .98rem;
+  font-weight: 900;
+}
+
+.songcatch-collection-header .mini-brand span {
+  color: var(--music2);
+  font-size: 1.12rem;
+  font-weight: 950;
+}
+
+.songcatch-landing-shell {
+  min-height: calc(100vh - 64px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 28px;
+  padding: 40px 20px;
+}
+
+.songcatch-entry-card {
+  width: min(540px, calc(100vw - 32px));
+  padding: 38px 44px 32px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, .92);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, .93);
+  box-shadow: 0 20px 58px rgba(91, 62, 150, .16);
+  backdrop-filter: blur(14px);
+}
+
+.songcatch-entry-card .songcatch-hero-logo {
+  width: 82px;
+  height: 82px;
+  margin: -5px auto 14px;
+  filter: drop-shadow(0 11px 19px rgba(108, 76, 255, .22));
+  transition: transform .2s ease;
+}
+
+.songcatch-entry-card .songcatch-hero-logo:hover {
+  transform: translateY(-3px) rotate(-3deg);
+}
+
+.songcatch-entry-card .eyebrow {
+  margin: 0 0 7px;
+  color: var(--music2);
+  font-size: .78rem;
+  letter-spacing: .1em;
+}
+
+.songcatch-entry-card h1 {
+  margin: 0;
+  color: var(--music2);
+  font-size: clamp(2.7rem, 8vw, 4rem);
+  line-height: .95;
+  letter-spacing: -.07em;
+}
+
+.songcatch-entry-card .lead {
+  margin: 18px 0 26px;
+  font-size: .96rem;
+  line-height: 1.55;
+}
+
+.songcatch-mode-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.songcatch-mode-button {
+  min-height: 106px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 14px 12px;
+  border-radius: 16px;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+
+.songcatch-mode-button:hover {
+  transform: translateY(-3px);
+}
+
+.songcatch-mode-button.personal {
+  color: #fff;
+  background: linear-gradient(135deg, var(--music), #ff7a92);
+  box-shadow: 0 9px 22px rgba(255, 77, 117, .25);
+}
+
+.songcatch-mode-button.group {
+  color: #5141be;
+  background: #eeebff;
+}
+
+.songcatch-mode-button .mode-icon {
+  font-size: 1.35rem;
+}
+
+.songcatch-mode-button strong,
+.songcatch-mode-button small {
+  display: block;
+}
+
+.songcatch-mode-button strong {
+  font-size: 1rem;
+}
+
+.songcatch-mode-button small {
+  margin-top: 5px;
+  font-size: .68rem;
+  line-height: 1.35;
+  opacity: .82;
+}
+
+.songcatch-guide {
+  margin: 17px 0 0;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.songcatch-connection {
+  margin: 14px 0 -9px;
+  color: #a0a3ae;
+  font-size: .68rem;
+}
+
+.songcatch-connection span {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--good);
+}
+
+.songcatch-feature-strip {
+  width: min(700px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.songcatch-feature-strip div {
+  padding: 15px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, .7);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .72);
+  backdrop-filter: blur(10px);
+}
+
+.songcatch-feature-strip span,
+.songcatch-feature-strip strong,
+.songcatch-feature-strip small {
+  display: block;
+}
+
+.songcatch-feature-strip span {
+  font-size: 1.35rem;
+}
+
+.songcatch-feature-strip strong {
+  margin: 5px;
+  font-size: .8rem;
+}
+
+.songcatch-feature-strip small {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.songcatch-landing-shell > .copyright-note {
+  max-width: 700px;
+  margin: -12px auto 0;
+  border: 1px solid rgba(255, 227, 144, .75);
+  background: rgba(255, 248, 220, .86);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 760px) {
+  .songcatch-collection-header {
+    height: 56px;
+    padding: 0 18px;
+  }
+
+  .songcatch-landing-shell {
+    min-height: calc(100vh - 56px);
+    padding: 22px 12px;
+  }
+
+  .songcatch-entry-card {
+    padding: 30px 22px 28px;
+    border-radius: 24px;
+  }
+
+  .songcatch-mode-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .songcatch-mode-button {
+    min-height: 82px;
+    grid-template-columns: auto 1fr;
+    place-content: initial;
+    align-items: center;
+    text-align: left;
+    padding: 13px 18px;
+  }
+
+  .songcatch-feature-strip {
+    gap: 5px;
+  }
+
+  .songcatch-feature-strip div {
+    padding: 10px 4px;
+  }
+
+  .songcatch-feature-strip small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .songcatch-entry-card .songcatch-hero-logo,
+  .songcatch-mode-button {
+    transition: none;
+  }
+}

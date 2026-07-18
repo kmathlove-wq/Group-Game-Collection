@@ -26,7 +26,7 @@ public/room.js               방 상태 렌더링, 채팅, Canvas, 효과음
 public/style.css             공통·PC·모바일 전체 스타일
 public/assets/               두들팡 로고 이미지
 src/music/                   송캐치 SQLite·관리자·게임 서버
-public/music*.html/js        송캐치 개인전·단체전 화면
+public/music*.html/js/css    송캐치 첫 화면·개인전·단체전 화면
 public/admin*.html/js        숨겨진 송캐치 관리자 화면
 uploads/                     Git에 넣지 않는 관리자 음원·이미지
 test/server.test.js          실제 소켓을 여는 통합 테스트
@@ -119,6 +119,7 @@ CLAUDE.md                    상세 프로젝트 지식
 ## 클라이언트 UI 규칙
 - 전체 사이트명은 `그룹 게임 컬렉션`, 현재 게임명은 `두들팡`, 현재 게임 로고는 `doodlepang-logo-green.png`다.
 - 전체 사이트 탭/대표 로고는 `group-game-logo.png`, 게임 선택 기본 배경은 `group-game-background.png`, 송캐치 로고는 초록 배경의 `songcatch-logo.png`다.
+- 두들팡과 송캐치 첫 화면은 같은 상단 컬렉션 바와 중앙 카드 형식을 사용하며, 송캐치는 전용 `songcatch-background.png` 위에 개인/단체 모드를 함께 제공한다.
 - 송캐치 관리자 화면은 `admin.css`가 레이아웃·반응형·애니메이션을 담당하며 기능 ID는 `admin.js`와 맞춰 유지한다.
 - 관리자 로그인 숨은 진입은 G가 아니라 송캐치 로고를 1.8초 안에 5번 누르는 동작이다.
 - 사용자 생성 문자열은 `textContent`로 넣는다. 템플릿 `innerHTML`에는 사용자 값을 보간하지 않는다.
