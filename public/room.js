@@ -83,7 +83,7 @@ function renderRoom() {
   elements.readyButton.textContent = self?.ready ? '✓ 준비 완료' : '✓ 준비하기';
   elements.readyButton.classList.toggle('ready', Boolean(self?.ready));
   const canStartRound = isHost() && ['waiting', 'roundResult'].includes(room.state);
-  const canCloseRoom = isHost() && room.state === 'waiting';
+  const canCloseRoom = isHost() && ['waiting', 'roundResult', 'finished'].includes(room.state);
   const startLabel = room.state === 'roundResult' ? '▶ 다음 라운드' : '▶ 게임 시작';
   elements.startButton.classList.toggle('hidden', !canStartRound);
   elements.startButton.textContent = startLabel;
@@ -176,7 +176,7 @@ function appendChat(message) {
   knownChatIds.add(message.id);
   const row = document.createElement('div');
   row.className = `chat-row ${message.type}`;
-  if (message.type === 'system') {
+  if (['system', 'correct'].includes(message.type)) {
     const text = document.createElement('span'); text.textContent = message.text; row.append(text);
   } else {
     const name = document.createElement('b'); name.textContent = message.nickname;
@@ -286,6 +286,10 @@ function showResult(data) {
   const actions = document.createElement('div'); actions.className = 'result-actions';
   const closeButton = document.createElement('button'); closeButton.className = 'button secondary full'; closeButton.textContent = '결과 닫기'; closeButton.addEventListener('click', () => elements.resultDialog.close());
   actions.append(closeButton);
+  if (isHost()) {
+    const closeRoomButton = document.createElement('button'); closeRoomButton.className = 'button danger-outline full'; closeRoomButton.textContent = '방 종료'; closeRoomButton.addEventListener('click', closeRoom);
+    actions.append(closeRoomButton);
+  }
   if (data.finished) {
     const bestGuesser = [...data.ranking].sort((a, b) => b.correctCount - a.correctCount)[0];
     const bestDrawer = [...data.ranking].sort((a, b) => b.drawCount - a.drawCount)[0];

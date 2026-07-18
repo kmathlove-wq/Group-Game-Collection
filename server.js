@@ -196,8 +196,8 @@ function requireHost(socket, ack) {
   return membership;
 }
 
-function addSystemChat(room, text) {
-  room.chat.push({ id: `${Date.now()}-${Math.random()}`, type: 'system', text, at: Date.now() });
+function addSystemChat(room, text, type = 'system') {
+  room.chat.push({ id: `${Date.now()}-${Math.random()}`, type, text, at: Date.now() });
   if (room.chat.length > MAX_CHAT_HISTORY) room.chat.splice(0, room.chat.length - MAX_CHAT_HISTORY);
 }
 
@@ -576,7 +576,7 @@ io.on('connection', (socket) => {
         room.game.correctOrder.push({ userId: player.userId, nickname: player.nickname, points });
         const drawer = room.players.get(room.game.drawerId);
         if (drawer) drawer.score += 10;
-        addSystemChat(room, `${player.nickname}님이 정답을 맞혔습니다! (+${points}점)`);
+        addSystemChat(room, `${player.nickname}님이 정답을 맞혔습니다! (+${points}점)`, 'correct');
         io.to(room.code).emit('answer:correct', { userId: player.userId, nickname: player.nickname, points });
         emitRoomState(room);
         ack({ ok: true, correct: true });
