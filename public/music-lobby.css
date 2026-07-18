@@ -264,6 +264,30 @@
   margin-bottom: 16px;
 }
 
+.music-room-filters #roomSearch,
+.music-room-filters #roomSort {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  outline: none;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.music-room-filters #roomSearch:focus,
+.music-room-filters #roomSort:focus {
+  border-color: var(--music2);
+  box-shadow: 0 0 0 4px rgba(108, 76, 255, .12);
+}
+
+.music-room-filters #roomSearch::placeholder {
+  color: #9b9eaa;
+}
+
 .music-check-inline {
   display: flex;
   align-items: center;
