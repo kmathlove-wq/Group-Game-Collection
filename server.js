@@ -549,20 +549,20 @@ io.on('connection', (socket) => {
     const { room, player } = membership;
     const text = cleanText(payload.text, 120);
     if (!text) return ack({ ok: false, error: '메시지를 입력해 주세요.' });
+    if (room.state === 'playing' && player.userId === room.game.drawerId) {
+      return ack({ ok: false, error: '출제 중에는 채팅을 입력할 수 없습니다.' });
+    }
+    if (room.state === 'playing' && room.game.guessedIds.has(player.userId)) {
+      return ack({ ok: false, error: '정답을 맞힌 뒤에는 이번 라운드의 채팅을 입력할 수 없습니다.' });
+    }
     if (!rateLimit(player, 'chat', 5_000, 7)) return ack({ ok: false, error: '메시지를 너무 빠르게 보내고 있습니다.' });
 
     if (room.state === 'playing') {
       const guess = normalizeAnswer(text, room.settings.ignoreSpaces);
       const correct = room.game.acceptedAnswers.some((answer) => normalizeAnswer(answer, room.settings.ignoreSpaces) === guess);
-      // 출제자나 이미 맞힌 사람의 정답 문자열이 일반 채팅으로 새지 않게 막는다.
+      // 정답을 아는 진행 전용 방장이 정답 문자열을 일반 채팅으로 새지 않게 막는다.
       if (correct && player.userId === room.hostId && !room.settings.hostParticipates) {
         return ack({ ok: false, error: '진행 전용 방장은 정답에 참여할 수 없습니다.' });
-      }
-      if (correct && player.userId === room.game.drawerId) {
-        return ack({ ok: false, error: '현재 출제자는 정답을 입력할 수 없습니다.' });
-      }
-      if (correct && room.game.guessedIds.has(player.userId)) {
-        return ack({ ok: true, correct: true, alreadyGuessed: true });
       }
       if (correct) {
         const order = room.game.correctOrder.length;

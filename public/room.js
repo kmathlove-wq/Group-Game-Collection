@@ -16,7 +16,7 @@ const elements = {
   roundLabel: $('#roundLabel'), statusLabel: $('#statusLabel'), hintLabel: $('#hintLabel'), timerLabel: $('#timerLabel'),
   canvas: $('#drawingCanvas'), canvasSection: $('.canvas-section'), canvasOverlay: $('#canvasOverlay'), drawerTools: $('#drawerTools'), spectatorNotice: $('#spectatorNotice'),
   tabletCanvasActions: $('#tabletCanvasActions'), tabletStartButton: $('#tabletStartButton'), tabletCloseRoomButton: $('#tabletCloseRoomButton'),
-  chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), roundDialog: $('#roundDialog'),
+  chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), chatSendButton: $('.send-button'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
   playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote'),
   customWordList: $('[name="customWordList"]'), customWordCount: $('#customWordCount')
@@ -102,6 +102,7 @@ function renderRoom() {
   renderPlayers();
   renderChatHistory();
   renderGameStatus();
+  updateChatAccess();
   updateCanvasAccess();
   updateRoundForm();
   requestAnimationFrame(syncCanvasOverlay);
@@ -189,6 +190,19 @@ function appendChat(message) {
 }
 
 function renderChatHistory() { room.chat.forEach(appendChat); }
+
+function updateChatAccess() {
+  const self = me();
+  const isBlocked = room.state === 'playing' && (isDrawer() || self?.hasGuessed);
+  if (isBlocked) elements.chatInput.value = '';
+  elements.chatInput.disabled = Boolean(isBlocked);
+  elements.chatSendButton.disabled = Boolean(isBlocked);
+  elements.chatInput.placeholder = isDrawer()
+    ? '출제 중에는 채팅할 수 없어요.'
+    : self?.hasGuessed && room.state === 'playing'
+      ? '정답을 맞혀 이번 라운드 채팅이 잠겼어요.'
+      : '메시지 또는 정답 입력…';
+}
 
 function renderGameStatus() {
   const game = room.game;
