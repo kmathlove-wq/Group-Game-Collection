@@ -74,14 +74,6 @@
   letter-spacing: -.07em;
 }
 
-.songcatch-entry-card h1 small {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--ink);
-  font-size: .28em;
-  letter-spacing: -.02em;
-}
-
 .songcatch-entry-card .lead {
   margin: 18px 0 26px;
   font-size: .96rem;

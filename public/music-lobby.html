@@ -1,4 +1,81 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>그룹 게임 컬렉션-송캐치 단체전</title><link rel="icon" href="/assets/songcatch-logo.png"><link rel="stylesheet" href="/music.css"></head>
-<body><header class="music-header"><a href="/music" class="mini-brand">← 그룹 게임 컬렉션-송캐치 단체전</a></header><main class="lobby-layout">
-<section class="panel form-shell" style="margin:0;width:auto"><h1>방 만들기·참가</h1><div class="field"><label for="nickname">닉네임</label><input id="nickname" maxlength="30"></div><div class="field"><label for="title">방 제목</label><input id="title" maxlength="40" value="신나는 노래 퀴즈"></div><div class="field-row"><div class="field"><label for="maxPlayers">정원</label><input id="maxPlayers" type="number" min="2" max="30" value="10"></div><div class="field"><label for="totalRounds">문제 수</label><input id="totalRounds" type="number" min="1" max="50" value="10"></div></div><div class="field"><label for="setId">문제집</label><select id="setId"><option value="">전체 단체전 음원</option></select></div><div class="field"><label for="answerMode">정답</label><select id="answerMode"><option value="title">노래 제목</option><option value="artist">가수</option><option value="both">제목 + 가수</option></select></div><label class="check-row"><input id="isPublic" type="checkbox" checked> 공개 방</label><label class="check-row"><input id="allowLateJoin" type="checkbox"> 게임 중 입장 허용</label><button id="create" class="primary wide">새 방 만들기</button><div class="answer-row"><input id="code" maxlength="6" placeholder="6자리 방 코드"><button id="join" class="secondary">코드 입장</button></div><div id="notice" class="notice hidden"></div></section>
-<section class="panel room-list"><div class="scorebar"><h2>공개 방</h2><button id="refresh" class="secondary">새로고침</button></div><div id="rooms"></div></section></main><script src="/socket.io/socket.io.js"></script><script src="/music-common.js"></script><script src="/music-lobby.js"></script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ff4d75">
+  <title>그룹 게임 컬렉션-송캐치 단체전</title>
+  <link rel="icon" href="/assets/songcatch-logo.png">
+  <link rel="apple-touch-icon" href="/assets/songcatch-logo.png">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-lobby.css">
+</head>
+<body class="songcatch-lobby-page">
+  <header class="music-header songcatch-lobby-header"><a href="/music" class="mini-brand">← 송캐치 단체전</a></header>
+
+  <main class="songcatch-lobby-shell">
+    <section class="songcatch-lobby-card">
+      <div class="songcatch-lobby-logo"><img src="/assets/songcatch-logo.png" alt="송캐치 로고"></div>
+      <p class="eyebrow">그룹 게임 컬렉션</p>
+      <h1>송캐치</h1>
+      <p class="songcatch-lobby-copy">최대 30명이 노래를 듣고, 누구보다 빠르게 정답을 맞혀 보세요.</p>
+
+      <label class="songcatch-nickname-label" for="nickname">게임에서 사용할 닉네임</label>
+      <div class="songcatch-nickname-row">
+        <input id="nickname" maxlength="30" autocomplete="nickname" placeholder="자유롭게 닉네임 입력">
+        <span id="nicknameCount">0/30</span>
+      </div>
+      <p class="songcatch-field-help">이모지와 특수문자도 자유롭게 사용할 수 있어요.</p>
+
+      <div class="songcatch-main-actions">
+        <button id="openCreate" class="primary">＋ 방 만들기</button>
+        <button id="openRooms" class="secondary">🔎 공개 방 찾기</button>
+      </div>
+      <button id="openCode" class="songcatch-code-button">⌨ 방 코드로 입장</button>
+      <a class="songcatch-personal-link" href="/music/solo">🎧 개인 모드로 연습하기</a>
+      <p id="connectionStatus" class="songcatch-connection" role="status">● 서버에 연결하는 중…</p>
+    </section>
+
+    <aside class="songcatch-lobby-features" aria-label="단체전 특징">
+      <div><span>⚡</span><strong>실시간</strong><small>음악과 채팅을 바로 공유</small></div>
+      <div><span>🏆</span><strong>점수 경쟁</strong><small>빠르게 맞힐수록 고득점</small></div>
+      <div><span>📱</span><strong>어디서나</strong><small>PC와 모바일 모두 지원</small></div>
+    </aside>
+  </main>
+
+  <dialog id="createDialog" class="music-lobby-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">새로운 단체전</p><h2>방 만들기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="title">방 제목</label><input id="title" maxlength="40" value="신나는 노래 퀴즈"></div>
+    <div class="field-row">
+      <div class="field"><label for="maxPlayers">최대 인원</label><input id="maxPlayers" type="number" min="2" max="30" value="10"></div>
+      <div class="field"><label for="totalRounds">문제 수</label><input id="totalRounds" type="number" min="1" max="50" value="10"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="setId">문제집</label><select id="setId"><option value="">전체 단체전 음원</option></select></div>
+      <div class="field"><label for="answerMode">정답 방식</label><select id="answerMode"><option value="title">노래 제목</option><option value="artist">가수</option><option value="both">제목 + 가수</option></select></div>
+    </div>
+    <div class="songcatch-toggle-list">
+      <label><input id="isPublic" type="checkbox" checked><span>공개 방</span></label>
+      <label><input id="allowLateJoin" type="checkbox"><span>게임 중 입장 허용</span></label>
+    </div>
+    <button id="create" class="primary wide">방 만들고 입장</button>
+  </dialog>
+
+  <dialog id="roomsDialog" class="music-lobby-modal music-rooms-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">함께할 방</p><h2>공개 방 찾기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="music-room-list-heading"><p>지금 입장할 수 있는 방이에요.</p><button id="refresh" class="secondary">↻ 새로고침</button></div>
+    <div id="rooms" class="music-public-rooms"></div>
+  </dialog>
+
+  <dialog id="codeDialog" class="music-lobby-modal music-code-modal">
+    <div class="music-modal-heading"><h2>방 코드로 입장</h2><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="code">6자리 방 코드</label><input id="code" maxlength="6" autocomplete="off" placeholder="A7K3P2"></div>
+    <button id="join" class="primary wide">입장하기</button>
+  </dialog>
+
+  <div id="notice" class="notice songcatch-lobby-notice hidden" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/music-common.js"></script>
+  <script src="/music-lobby.js"></script>
+</body>
+</html>

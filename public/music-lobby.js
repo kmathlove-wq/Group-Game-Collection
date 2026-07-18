@@ -1,6 +1,16 @@
 (() => {
   const $ = (s) => document.querySelector(s); const socket = io(); const { userId, nickname, saveNickname, setNotice } = MusicCommon;
   $('#nickname').value = nickname();
+  const updateNicknameCount = () => { $('#nicknameCount').textContent = `${Array.from($('#nickname').value).length}/30`; };
+  updateNicknameCount(); $('#nickname').addEventListener('input', updateNicknameCount);
+  const openDialog = (dialog) => { try { identity(); setNotice($('#notice'), ''); dialog.showModal(); } catch (error) { setNotice($('#notice'), error.message, 'error'); $('#nickname').focus(); } };
+  $('#openCreate').onclick = () => openDialog($('#createDialog'));
+  $('#openRooms').onclick = () => { openDialog($('#roomsDialog')); socket.emit('music:rooms:list'); };
+  $('#openCode').onclick = () => openDialog($('#codeDialog'));
+  for (const button of document.querySelectorAll('.music-modal-close')) button.onclick = () => button.closest('dialog').close();
+  for (const dialog of document.querySelectorAll('.music-lobby-modal')) dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  socket.on('connect', () => { $('#connectionStatus').textContent = '● 서버 연결됨'; $('#connectionStatus').classList.add('connected'); });
+  socket.on('disconnect', () => { $('#connectionStatus').textContent = '● 서버 연결 끊김'; $('#connectionStatus').classList.remove('connected'); });
   MusicCommon.json('/api/music/options').then((data) => { for (const set of data.sets.filter((item) => item.useInGroup)) $('#setId').add(new Option(`${set.name} (${set.songCount}곡)`, set.id)); }).catch(() => {});
   function identity() { const value = $('#nickname').value.trim(); if (!value) throw new Error('닉네임을 입력해 주세요.'); saveNickname(value); return { nickname: value, userId: userId() }; }
   function enter(code) { location.href = `/music/room?code=${encodeURIComponent(code)}`; }
