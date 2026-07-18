@@ -81,15 +81,24 @@
 }
 
 .songcatch-nickname-row input {
-  padding-right: 60px;
+  width: 100%;
+  padding: 12px 60px 12px 14px;
   border: 1.5px solid var(--line);
   border-radius: 12px;
+  outline: none;
+  color: var(--ink);
+  background: #fff;
   font-size: 1rem;
+  transition: border-color .2s, box-shadow .2s;
 }
 
 .songcatch-nickname-row input:focus {
   border-color: var(--music2);
   box-shadow: 0 0 0 4px rgba(108, 76, 255, .12);
+}
+
+.songcatch-nickname-row input::placeholder {
+  color: #9b9eaa;
 }
 
 .songcatch-nickname-row span {
