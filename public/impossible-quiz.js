@@ -48,7 +48,7 @@
     const heading = el('h2', 'question-heading');
     if (question.type === 'tiny-clue') {
       heading.append(document.createTextNode(`${question.id}. 유치원에서 20명이 `), el('small', 'tiny-clue', '선생님 포함'), document.createTextNode('\n놀이동산에 왔을 때\n표를 몇 장 사야 할까요?'));
-    } else heading.textContent = `${question.id}. ${question.question}`;
+    } else heading.textContent = `${displayedNumber(question)}. ${question.question}`;
     questionView.append(heading);
     if (question.type === 'count-ones') renderOnesBoard();
     if (question.type === 'math-input') renderMath();
