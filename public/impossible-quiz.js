@@ -47,7 +47,9 @@
     if (question.preface) questionView.append(el('p', 'question-preface', question.preface));
     const heading = el('h2', 'question-heading');
     if (question.type === 'tiny-clue') {
-      heading.append(document.createTextNode(`${question.id}. 유치원에서 `), el('small', 'tiny-clue', '선생님 포함'), document.createTextNode(' 20명이 놀이동산에 왔을 때 표를 몇 장 사야 할까요?'));
+      const clueSlot = el('span', 'tiny-clue-slot');
+      clueSlot.append(el('small', 'tiny-clue', '선생님 포함'));
+      heading.append(document.createTextNode(`${question.id}. 유치원에서`), clueSlot, document.createTextNode('20명이 놀이동산에 왔을 때 표를 몇 장 사야 할까요?'));
     } else heading.textContent = `${displayedNumber(question)}. ${question.question}`;
     questionView.append(heading);
     if (question.type === 'count-ones') renderOnesBoard();
