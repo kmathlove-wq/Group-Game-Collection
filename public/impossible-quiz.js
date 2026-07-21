@@ -47,7 +47,7 @@
     if (question.preface) questionView.append(el('p', 'question-preface', question.preface));
     const heading = el('h2', 'question-heading');
     if (question.type === 'tiny-clue') {
-      heading.append(document.createTextNode(`${question.id}. 유치원에서 20명이 `), el('small', 'tiny-clue', '선생님 포함'), document.createTextNode('\n놀이동산에 왔을 때\n표를 몇 장 사야 할까요?'));
+      heading.append(document.createTextNode(`${question.id}. 유치원에서 20명이 `), el('small', 'tiny-clue', '선생님 포함'), document.createTextNode(' 놀이동산에 왔을 때 표를 몇 장 사야 할까요?'));
     } else heading.textContent = `${displayedNumber(question)}. ${question.question}`;
     questionView.append(heading);
     if (question.type === 'count-ones') renderOnesBoard();
