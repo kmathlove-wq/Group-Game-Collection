@@ -32,6 +32,7 @@ const roomTimers = new Map();
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
 app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/impossible-quiz', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'impossible-quiz.html')));
 app.get('/music', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music.html')));
 app.get('/music/solo', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-solo.html')));
 app.get('/music/lobby', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-lobby.html')));

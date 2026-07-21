@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="google-site-verification" content="Q4EmUncyt8VyzawpMmEXUYLSGtPbeu-U_Ll5iHgzODg">
+  <title>그룹 게임 컬렉션-절대 못 맞히는 퀴즈쇼</title>
+  <link rel="icon" type="image/png" href="/assets/group-game-logo.png">
+  <link rel="stylesheet" href="/impossible-quiz.css">
+  <script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']]},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  <script defer src="/impossible-quiz-data.js"></script>
+  <script defer src="/impossible-quiz.js"></script>
+</head>
+<body>
+  <nav class="quiz-toolbar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="toolbar-actions">
+      <button id="muteButton" type="button" aria-pressed="false">🔊 소리 켜짐</button>
+      <button id="resetButton" type="button">처음부터 다시 하기</button>
+    </div>
+  </nav>
+  <main class="exam-paper" id="examPaper">
+    <header class="exam-header">
+      <h1>절대 못 맞히는 퀴즈쇼</h1>
+      <div class="exam-meta"><span>총 20문항</span><strong id="progressText">현재 문항: 1 / 20</strong></div>
+      <p class="name-line">이름: <span aria-hidden="true"></span></p>
+    </header>
+    <section id="questionView" class="question-view" aria-live="polite"></section>
+    <section id="resultView" class="result-view" hidden></section>
+  </main>
+</body>
+</html>
