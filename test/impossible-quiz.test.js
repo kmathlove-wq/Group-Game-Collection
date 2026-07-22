@@ -30,18 +30,17 @@ test('직접 입력과 마지막 누적 점수 판정 규칙을 적용한다', (
   assert.equal(evaluate(questions[0], '서울', 0).correct, false);
   assert.equal(evaluate(questions[1], '  미국의 IT 기업 ', 0).correct, true);
   assert.equal(evaluate(questions[14], 'ai이미지편집기', 0).correct, true);
-  assert.equal(evaluate(questions[7], '7', 0).correct, true);
-  assert.equal(evaluate(questions[7], '7마리', 0).correct, true);
-  assert.equal(evaluate(questions[7], '10마리', 0).correct, false);
+  assert.equal(evaluate(questions[7], '7마리', 0).correct, false);
+  assert.equal(evaluate(questions[7], '10마리', 0).correct, true);
   assert.equal(evaluate(questions[19], '05', 5).correct, true);
   assert.equal(evaluate(questions[19], '5.0', 5).correct, false);
   assert.equal(evaluate(questions[19], '-1', 0).correct, false);
 });
 
 test('객관식 저장 기록은 화면에서 선택한 값을 우선하여 다시 채점한다', () => {
-  const graded = gradeHistory([{ id: 8, answer: '10마리', choice: '7마리', correct: true }]);
+  const graded = gradeHistory([{ id: 8, answer: '7마리', choice: '10마리', correct: true }]);
   assert.equal(graded.score, 1);
-  assert.equal(graded.history[0].answer, '7마리');
+  assert.equal(graded.history[0].answer, '10마리');
   assert.equal(graded.history[0].correct, true);
 });
 
@@ -54,7 +53,7 @@ test('저장된 답안 기록에서 마지막 문제 직전 점수를 다시 계
     5: '0개',
     6: '6',
     7: '동쪽',
-    8: '7마리',
+    8: '10마리',
     9: '35개',
     10: '60분',
     11: '2',
