@@ -15,7 +15,7 @@
     { id: 5, type: 'egg-trick', question: '달걀 3개가 있습니다.\n1개를 깨고, 1개를 굽고, 1개를 먹었습니다.\n몇 개가 남았을까요?', options: ['0개', '1개', '2개', '3개'], alwaysWrong: true, scorable: false },
     { id: 6, type: 'fleeing-answer', question: '2 × 3은?', options: ['5', '6', '7', '8'], correctAnswer: '6', correctMessage: '정답입니다.\n이걸 진짜 잡았네요? 집념이 대단하십니다ㅋㅋ', wrongMessage: '2 × 3도 모르시다니 수학을 잘 못하시는군요.' },
     { id: 7, type: 'moving-label', question: '태양은 어느 쪽에서 뜰까요?', options: ['동쪽', '서쪽', '남쪽', '북쪽'], correctAnswer: '동쪽', correctMessage: '정답입니다.\n계속 도망가는데도 동쪽을 잡으셨네요ㅋㅋ' },
-    { id: 8, type: 'multiple-choice', question: '어항에 물고기 10마리가 있습니다.\n그중 3마리가 죽었습니다.\n어항 안에는 몇 마리가 있을까요?', options: ['3마리', '7마리', '10마리', '13마리'], correctAnswer: '10마리', correctMessage: '정답입니다.\n근데 죽으면 사람이 치워서 7ㄱ... 아닙니다.', wrongMessage: '죽은 물고기도 아직은 어항 안에 있어요ㅋㅋ\n관리가 잘되면 곧 없어질 수도....' },
+    { id: 8, type: 'multiple-choice', question: '어항에 물고기 10마리가 있습니다.\n그중 3마리가 죽었습니다.\n어항 안에는 몇 마리가 있을까요?', options: ['3마리', '7마리', '10마리', '13마리'], accepted: ['7마리', '7'], correctMessage: '정답입니다.\n죽은 물고기는 어항에서 치웠으니 7마리입니다.', wrongMessage: '죽은 물고기 3마리는 어항에서 치웠습니다.\n정답은 7마리입니다.' },
     { id: 9, type: 'count-ones', question: '아래 영역 안에 있는 숫자 1은 모두 몇 개일까요?', options: ['33개', '34개', '35개', '36개'], correctAnswer: '35개', timeLimit: 60, correctMessage: '정답입니다.\n저걸 1분 안에 진짜 다 세셨나요? 눈이 무섭네요ㅋㅋ', wrongMessage: '정답은 35개였습니다.\n1분이나 드렸는데 다시 세고 싶으신가요ㅎㅎ' },
     { id: 10, type: 'multiple-choice', question: '의사가 알약 3개를 주며 30분마다 하나씩 먹으라고 했습니다.\n알약을 모두 먹는 데 걸리는 시간은?', options: ['30분', '60분', '90분', '120분'], correctAnswer: '60분', correctMessage: '약은 받자마자 바로 먹어야죠.', wrongMessage: '도대체 왜 30분을 기다리고 먹으세요ㅋㅋㅋ' },
     { id: 11, type: 'math-input', preface: '정답 2개', question: '다음 극한값 개 있는 사과의 개수를 구하세요.\n숫자만 입력하세요.', correctAnswer: '2', correctMessage: '정답입니다.\n설마 이걸 실제로 계산한 건 아니죠?\n위에 이미 정답 2개라고 써 놨는데ㅋㅋㅋㅋ', wrongMessage: '답을 알려줬는데도 못 맞혔내요ㅋㅋㅋㅋㅋㅋㅋㅎㅋㅎ\n정답은 2였습니다.' },
@@ -66,7 +66,8 @@
     for (const record of Array.isArray(history) ? history : []) {
       const question = questions.find((item) => item.id === record.id);
       if (!question) continue;
-      const answer = record.answer ?? record.choice ?? '';
+      const usesChoice = !['other-choice', 'math-input', 'image-input', 'score-input'].includes(question.type);
+      const answer = usesChoice ? (record.choice ?? record.answer ?? '') : (record.answer ?? record.choice ?? '');
       if (question.type === 'score-input' && scoreBeforeFinalQuestion === null) scoreBeforeFinalQuestion = score;
       const result = evaluate(question, answer, scoreBeforeFinalQuestion);
       if (result.correct && question.scorable !== false) score += 1;
