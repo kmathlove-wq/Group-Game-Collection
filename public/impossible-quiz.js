@@ -51,7 +51,13 @@
     resultView.hidden = true; questionView.hidden = false; questionView.replaceChildren();
     if (state.index >= TOTAL_QUESTIONS) return renderResults();
     const question = questions[state.index];
-    if (question.id === 20 && state.scoreBeforeFinalQuestion === null) { state.scoreBeforeFinalQuestion = state.score; save(); }
+    if (question.id === 20) {
+      const graded = gradeHistory(state.history.filter((record) => record.id !== 20));
+      state.history = graded.history;
+      state.score = graded.score;
+      state.scoreBeforeFinalQuestion = graded.score;
+      save();
+    }
     progressText.textContent = `현재 문항: ${displayedNumber(question)} / ${TOTAL_QUESTIONS}`;
     if (question.preface) questionView.append(el('p', 'question-preface', question.preface));
     const heading = el('h2', 'question-heading');
@@ -142,7 +148,19 @@
   function submitAnswer(question, forcedTimeout = false) {
     if (currentHistory(question)) return;
     const answer = forcedTimeout ? '시간 초과' : selectedAnswer(question); if (!answer) return;
+    if (question.type === 'score-input') {
+      const graded = gradeHistory(state.history.filter((record) => record.id !== question.id));
+      state.history = graded.history;
+      state.score = graded.score;
+      state.scoreBeforeFinalQuestion = graded.score;
+    }
     const result = evaluate(question, answer, state.scoreBeforeFinalQuestion);
+    if (question.type === 'score-input' && !result.correct) {
+      const missedIds = state.history
+        .filter((record) => !record.correct && questions[record.id - 1]?.scorable !== false)
+        .map((record) => `${record.id}번`);
+      if (missedIds.length) result.message += `\n점수로 인정되지 않은 문제: ${missedIds.join(', ')}`;
+    }
     if (result.correct && question.scorable !== false) state.score += 1;
     const record = { id: question.id, answer, choice: state.answers[question.id], correct: result.correct, message: result.message };
     state.history.push(record); state.q9Deadline = null; save(); clearTimer(); playTone(result.correct);
