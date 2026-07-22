@@ -59,6 +59,22 @@
     return { correct, message: correct ? question.correctMessage : question.wrongMessage };
   }
 
+  function gradeHistory(history) {
+    let score = 0;
+    let scoreBeforeFinalQuestion = null;
+    const gradedHistory = [];
+    for (const record of Array.isArray(history) ? history : []) {
+      const question = questions.find((item) => item.id === record.id);
+      if (!question) continue;
+      const answer = record.answer ?? record.choice ?? '';
+      if (question.type === 'score-input' && scoreBeforeFinalQuestion === null) scoreBeforeFinalQuestion = score;
+      const result = evaluate(question, answer, scoreBeforeFinalQuestion);
+      if (result.correct && question.scorable !== false) score += 1;
+      gradedHistory.push({ ...record, answer, correct: result.correct, message: result.message });
+    }
+    return { score, scoreBeforeFinalQuestion, history: gradedHistory };
+  }
+
   function trickMessage(id, value) {
     if (id === 4) return value === '파랑' ? '오답입니다.\n정답은 빨강입니다.\n글자를 봐야 할지 색을 봐야 할지 제가 말 안 했죠ㅎㅎ' : '오답입니다.\n정답은 파랑입니다.\n글자만 믿으시면 안 됩니다ㅋㅋ';
     return ({
@@ -69,5 +85,5 @@
     })[value];
   }
 
-  return { TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, compact, evaluate };
+  return { TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, compact, evaluate, gradeHistory };
 });

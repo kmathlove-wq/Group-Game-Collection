@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { TOTAL_QUESTIONS, MAX_SCORE, questions, evaluate } = window.ImpossibleQuizData;
+  const { TOTAL_QUESTIONS, MAX_SCORE, questions, evaluate, gradeHistory } = window.ImpossibleQuizData;
   const STORAGE_KEY = 'group-game:impossible-quiz:v1';
   const symbols = ['①', '②', '③', '④', '⑤'];
   const questionView = document.querySelector('#questionView');
@@ -20,7 +20,15 @@
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (!saved || !Number.isInteger(saved.index) || saved.index < 0 || saved.index > TOTAL_QUESTIONS || !Array.isArray(saved.history)) return freshState();
-      return { ...freshState(), ...saved, score: Math.max(0, Math.min(MAX_SCORE, Number(saved.score) || 0)) };
+      const graded = gradeHistory(saved.history);
+      const hasFinalAnswer = graded.history.some((record) => record.id === TOTAL_QUESTIONS);
+      return {
+        ...freshState(),
+        ...saved,
+        history: graded.history,
+        score: Math.max(0, Math.min(MAX_SCORE, graded.score)),
+        scoreBeforeFinalQuestion: hasFinalAnswer ? graded.scoreBeforeFinalQuestion : null
+      };
     } catch { return freshState(); }
   }
   let state = readState();
@@ -134,7 +142,7 @@
     if (currentHistory(question)) return;
     const answer = forcedTimeout ? '시간 초과' : selectedAnswer(question); if (!answer) return;
     const result = evaluate(question, answer, state.scoreBeforeFinalQuestion);
-    if (result.correct) state.score += 1;
+    if (result.correct && question.scorable !== false) state.score += 1;
     const record = { id: question.id, answer, choice: state.answers[question.id], correct: result.correct, message: result.message };
     state.history.push(record); state.q9Deadline = null; save(); clearTimer(); playTone(result.correct);
     if (question.type === 'tiny-clue') document.querySelector('.tiny-clue')?.classList.add('revealed');

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, evaluate
+  TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, evaluate, gradeHistory
 } = require('../public/impossible-quiz-data');
 
 test('절대 못 맞히는 퀴즈쇼는 20문제를 고정 순서와 18점 만점으로 제공한다', () => {
@@ -32,6 +32,37 @@ test('직접 입력과 마지막 누적 점수 판정 규칙을 적용한다', (
   assert.equal(evaluate(questions[19], '05', 5).correct, true);
   assert.equal(evaluate(questions[19], '5.0', 5).correct, false);
   assert.equal(evaluate(questions[19], '-1', 0).correct, false);
+});
+
+test('저장된 답안 기록에서 마지막 문제 직전 점수를 다시 계산한다', () => {
+  const answers = {
+    1: '서울특별시',
+    2: '미국의 기술 기업',
+    3: '2',
+    4: '파랑',
+    5: '0개',
+    6: '6',
+    7: '동쪽',
+    8: '10마리',
+    9: '35개',
+    10: '60분',
+    11: '2',
+    12: '20장',
+    13: '예',
+    14: '1살',
+    15: 'AI 이미지 편집기',
+    16: 'pneumonoultramicroscopicsilicovolcanoconiosis',
+    17: 'first',
+    18: '0점',
+    19: '19번째'
+  };
+  const gradedBeforeFinal = gradeHistory(Object.entries(answers).map(([id, answer]) => ({ id: Number(id), answer })));
+  assert.equal(gradedBeforeFinal.score, 17);
+  assert.equal(gradedBeforeFinal.scoreBeforeFinalQuestion, null);
+
+  const gradedWithFinal = gradeHistory([...gradedBeforeFinal.history, { id: 20, answer: '17' }]);
+  assert.equal(gradedWithFinal.scoreBeforeFinalQuestion, 17);
+  assert.equal(gradedWithFinal.score, 18);
 });
 
 test('특수 문제 데이터와 제공 이미지 경로가 완전하다', () => {
