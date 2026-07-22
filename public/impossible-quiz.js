@@ -7,6 +7,7 @@
   const resultView = document.querySelector('#resultView');
   const progressText = document.querySelector('#progressText');
   const examPaper = document.querySelector('#examPaper');
+  const playerName = document.querySelector('#playerName');
   const muteButton = document.querySelector('#muteButton');
   const resetButton = document.querySelector('#resetButton');
   let timerId = null;
@@ -15,7 +16,7 @@
   let labelMoveCount = 0;
   let fleeCount = 0;
 
-  function freshState() { return { index: 0, score: 0, history: [], answers: {}, scoreBeforeFinalQuestion: null, q9Deadline: null, muted: false }; }
+  function freshState() { return { index: 0, score: 0, history: [], answers: {}, scoreBeforeFinalQuestion: null, q9Deadline: null, muted: false, playerName: '' }; }
   function readState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -199,8 +200,10 @@
     rows.forEach(([label, value], index) => { const row = el('div', `score-row${index === 4 ? ' final-score' : ''}`); row.append(el('span', '', label), el('strong', '', value)); sheet.append(row); }); resultView.append(sheet, el('p', 'final-message', finalMessage(state.score)));
     const actions = el('div', 'result-actions'); const again = el('button', 'exam-button', '다시 풀기'); again.type = 'button'; again.addEventListener('click', resetGame); const home = el('a', 'exam-button', '그룹 게임 컬렉션으로 돌아가기'); home.href = '/'; actions.append(again, home); resultView.append(actions);
   }
-  function resetGame() { clearTimer(); const muted = state.muted; state = freshState(); state.muted = muted; save(); movingLabels = null; fleeCount = 0; labelMoveCount = 0; render(); window.scrollTo({ top: 0 }); }
+  function resetGame() { clearTimer(); const { muted, playerName: savedName } = state; state = freshState(); state.muted = muted; state.playerName = savedName; save(); movingLabels = null; fleeCount = 0; labelMoveCount = 0; render(); window.scrollTo({ top: 0 }); }
 
+  playerName.value = state.playerName;
+  playerName.addEventListener('input', () => { state.playerName = playerName.value; save(); });
   muteButton.addEventListener('click', () => { state.muted = !state.muted; save(); setMutedLabel(); });
   resetButton.addEventListener('click', () => { if (confirm('현재 진행 기록을 지우고 1번부터 다시 시작할까요?')) resetGame(); });
   setMutedLabel(); render();

@@ -7,6 +7,11 @@
   <title>그룹 게임 컬렉션-절대 못 맞히는 퀴즈쇼</title>
   <link rel="icon" type="image/png" href="/assets/group-game-logo.png">
   <link rel="stylesheet" href="/impossible-quiz.css">
+  <style>
+    .name-line label{flex:0 0 auto}
+    .name-line input{display:block;flex:1;max-width:380px;margin-left:8px;padding:1px 4px 3px;border:0;border-bottom:1px solid #444;border-radius:0;background:transparent;color:var(--ink);font:inherit;outline:0}
+    .name-line input:focus{border-bottom-color:#315ea8;box-shadow:0 2px 0 #315ea8}
+  </style>
   <script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']]},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};</script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
   <script defer src="/impossible-quiz-data.js"></script>
@@ -24,7 +29,10 @@
     <header class="exam-header">
       <h1>절대 못 맞히는 퀴즈쇼</h1>
       <div class="exam-meta"><span>총 20문항</span><strong id="progressText">현재 문항: 1 / 20</strong></div>
-      <p class="name-line">이름: <span aria-hidden="true"></span></p>
+      <div class="name-line">
+        <label for="playerName">이름:</label>
+        <input id="playerName" name="playerName" type="text" maxlength="30" autocomplete="name" aria-label="응시자 이름">
+      </div>
     </header>
     <section id="questionView" class="question-view" aria-live="polite"></section>
     <section id="resultView" class="result-view" hidden></section>
