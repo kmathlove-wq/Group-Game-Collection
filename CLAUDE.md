@@ -97,7 +97,7 @@ npm test          # node --test
 - `/impossible-quiz`는 서버 방 없이 `group-game:impossible-quiz:v1` 로컬 저장 상태를 사용하는 1인용 고정 순서 게임이다.
 - 퀴즈쇼는 총 20문항, 4·5번 항상 오답, 18점 만점이며 20번 제출 전까지 누적 점수를 화면에 노출하지 않는다.
 - 퀴즈쇼 저장 점수는 답안 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 저장된 `score` 대신 앞선 답안을 즉시 재채점한다.
-- 퀴즈쇼 9번은 35개의 1을 절대 위치로 불규칙 배치하고, Ctrl 두 번 숨은 창의 비밀번호가 맞으면 `public/assets/impossible-quiz/audio/` 음성을 문제→보기와 정오답 순서로 재생한다.
+- 퀴즈쇼 9번은 35개의 1을 절대 위치로 불규칙 배치하고, Ctrl 두 번 숨은 창의 비밀번호가 맞으면 퀴즈 음성을 문제→보기와 정오답 순서로 재생한다. 분기 오답 파일은 `WRONG_AUDIO_VARIANTS`로 명시한다.
 
 ## 사용자와 방 규칙
 - 브라우저별 임시 사용자 ID는 legacy 키 `catchmind:userId`로 `localStorage`에 저장한다.

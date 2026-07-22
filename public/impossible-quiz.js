@@ -5,6 +5,13 @@
   const AUDIO_BASE = '/assets/impossible-quiz/audio';
   const OPTION_AUDIO_IDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 19]);
   const CORRECT_AUDIO_IDS = new Set([1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+  const WRONG_AUDIO_VARIANTS = {
+    1: { '서울': 1, '부산': 2, '인천': 2, '대전': 2 },
+    2: { '사과': 1, '바나나': 2, '포도': 2, '수박': 2 },
+    4: { '파랑': 1, '빨강': 2 },
+    5: { '2개': 1, '0개': 2, '1개': 3, '3개': 4 },
+    7: { '서쪽': 1, '남쪽': 2, '북쪽': 3 }
+  };
   const symbols = ['①', '②', '③', '④', '⑤'];
   const questionView = document.querySelector('#questionView');
   const resultView = document.querySelector('#resultView');
@@ -75,9 +82,8 @@
     return files;
   }
   function wrongVoiceVariant(question, answer) {
-    if ([1, 2].includes(question.id)) return answer === question.options[0] ? 1 : 2;
-    if ([4, 5].includes(question.id)) return Math.max(1, question.options.indexOf(answer) + 1);
-    if (question.id === 7) return Math.max(1, question.options.filter((option) => option !== question.correctAnswer).indexOf(answer) + 1);
+    const variants = WRONG_AUDIO_VARIANTS[question.id];
+    if (variants) return variants[answer] || ([1, 2].includes(question.id) ? 2 : 1);
     return null;
   }
   function resultVoiceFile(question, answer, correct) {
