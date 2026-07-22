@@ -1,7 +1,10 @@
 (() => {
   'use strict';
-  const { TOTAL_QUESTIONS, MAX_SCORE, questions, evaluate, gradeHistory } = window.ImpossibleQuizData;
+  const { TOTAL_QUESTIONS, MAX_SCORE, questions, createOnePositions, evaluate, gradeHistory } = window.ImpossibleQuizData;
   const STORAGE_KEY = 'group-game:impossible-quiz:v1';
+  const AUDIO_BASE = '/assets/impossible-quiz/audio';
+  const OPTION_AUDIO_IDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 19]);
+  const CORRECT_AUDIO_IDS = new Set([1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   const symbols = ['①', '②', '③', '④', '⑤'];
   const questionView = document.querySelector('#questionView');
   const resultView = document.querySelector('#resultView');
@@ -10,11 +13,21 @@
   const playerName = document.querySelector('#playerName');
   const muteButton = document.querySelector('#muteButton');
   const resetButton = document.querySelector('#resetButton');
+  const voiceDialog = document.querySelector('#voiceDialog');
+  const voiceForm = document.querySelector('#voiceForm');
+  const voicePassword = document.querySelector('#voicePassword');
+  const voiceDialogError = document.querySelector('#voiceDialogError');
+  const voiceCancelButton = document.querySelector('#voiceCancelButton');
   let timerId = null;
   let movingLabels = null;
   let lastLabelMove = 0;
   let labelMoveCount = 0;
   let fleeCount = 0;
+  let voiceEnabled = false;
+  let lastControlPress = 0;
+  let lastNarratedQuestionId = null;
+  let voiceSequence = 0;
+  let activeVoiceAudio = null;
 
   function freshState() { return { index: 0, score: 0, history: [], answers: {}, scoreBeforeFinalQuestion: null, q9Deadline: null, muted: false, playerName: '' }; }
   function readState() {
@@ -36,8 +49,58 @@
   function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   function clearTimer() { if (timerId) clearInterval(timerId); timerId = null; }
   function setMutedLabel() { muteButton.textContent = state.muted ? '🔇 음소거됨' : '🔊 소리 켜짐'; muteButton.setAttribute('aria-pressed', String(state.muted)); }
+  function audioUrl(folder, filename) { return `${AUDIO_BASE}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`; }
+  function stopVoiceAudio() {
+    voiceSequence += 1;
+    if (activeVoiceAudio) { activeVoiceAudio.pause(); activeVoiceAudio.currentTime = 0; activeVoiceAudio = null; }
+  }
+  async function playVoiceFiles(files) {
+    if (!voiceEnabled || state.muted || !files.length) return;
+    stopVoiceAudio();
+    const sequence = voiceSequence;
+    for (const file of files) {
+      if (sequence !== voiceSequence || !voiceEnabled || state.muted) return;
+      const audio = new Audio(file); activeVoiceAudio = audio;
+      await new Promise((resolve) => {
+        const finish = () => { audio.removeEventListener('ended', finish); audio.removeEventListener('error', finish); resolve(); };
+        audio.addEventListener('ended', finish); audio.addEventListener('error', finish);
+        audio.play().catch(finish);
+      });
+    }
+    if (sequence === voiceSequence) activeVoiceAudio = null;
+  }
+  function questionVoiceFiles(question) {
+    const files = [audioUrl('문제', `${question.id}번 문제.mp3`)];
+    if (OPTION_AUDIO_IDS.has(question.id)) files.push(audioUrl('보기', `${question.id}번 문제 보기.mp3`));
+    return files;
+  }
+  function wrongVoiceVariant(question, answer) {
+    if ([1, 2].includes(question.id)) return answer === question.options[0] ? 1 : 2;
+    if ([4, 5].includes(question.id)) return Math.max(1, question.options.indexOf(answer) + 1);
+    if (question.id === 7) return Math.max(1, question.options.filter((option) => option !== question.correctAnswer).indexOf(answer) + 1);
+    return null;
+  }
+  function resultVoiceFile(question, answer, correct) {
+    if (correct && CORRECT_AUDIO_IDS.has(question.id)) return audioUrl('정답메시지', `${question.id}번 문제 정답메시지.mp3`);
+    if (correct || question.id === 14) return null;
+    const variant = wrongVoiceVariant(question, answer);
+    return audioUrl('오답메시지', `${question.id}번 문제 오답메시지${variant || ''}.mp3`);
+  }
+  function narrateQuestion(question) {
+    if (!voiceEnabled || state.muted || lastNarratedQuestionId === question.id) return;
+    lastNarratedQuestionId = question.id;
+    playVoiceFiles(questionVoiceFiles(question));
+  }
+  function narrateCurrentState() {
+    const question = questions[state.index]; if (!question) return;
+    const answered = currentHistory(question);
+    if (answered) {
+      const file = resultVoiceFile(question, answered.answer, answered.correct);
+      if (file) playVoiceFiles([file]);
+    } else { lastNarratedQuestionId = null; narrateQuestion(question); }
+  }
   function playTone(correct) {
-    if (state.muted || !window.AudioContext) return;
+    if (state.muted || voiceEnabled || !window.AudioContext) return;
     const context = new AudioContext(); const oscillator = context.createOscillator(); const gain = context.createGain();
     oscillator.frequency.value = correct ? 560 : 180; gain.gain.setValueAtTime(.035, context.currentTime); gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + .13);
     oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + .13); oscillator.onended = () => context.close();
@@ -83,6 +146,7 @@
     form.addEventListener('submit', (event) => { event.preventDefault(); submitAnswer(question); });
     if (question.type === 'count-ones' && !answered) startTimer(question);
     if (question.type === 'math-input' && window.MathJax?.typesetPromise) window.MathJax.typesetPromise([questionView]).catch(() => {});
+    if (!answered) narrateQuestion(question);
   }
 
   function renderOptions(form, question, answered) {
@@ -165,7 +229,9 @@
     const record = { id: question.id, answer, choice: state.answers[question.id], correct: result.correct, message: result.message };
     state.history.push(record); state.q9Deadline = null; save(); clearTimer(); playTone(result.correct);
     if (question.type === 'tiny-clue') document.querySelector('.tiny-clue')?.classList.add('revealed');
-    render(); examPaper.classList.toggle('gentle-shake', !result.correct); setTimeout(() => examPaper.classList.remove('gentle-shake'), 260);
+    render();
+    const voiceFile = resultVoiceFile(question, answer, result.correct); if (voiceFile) playVoiceFiles([voiceFile]);
+    examPaper.classList.toggle('gentle-shake', !result.correct); setTimeout(() => examPaper.classList.remove('gentle-shake'), 260);
   }
   function showFeedback(record, question, announce = true) {
     const feedback = el('div', `feedback ${record.correct ? 'correct' : 'wrong'}`, record.message); feedback.setAttribute('role', announce ? 'alert' : 'status'); questionView.append(feedback);
@@ -175,11 +241,11 @@
 
   function renderOnesBoard() {
     const timer = el('p', 'timer', '남은 시간: 60초'); timer.id = 'questionTimer'; questionView.append(timer);
-    const board = el('div', 'ones-board'); board.setAttribute('aria-label', '숫자 1이 흩어져 있는 자료 영역');
-    for (let index = 0; index < 35; index += 1) {
-      const mark = el('span', 'one-mark', '1'); const rotation = ((index * 37) % 31) - 15; const scaleX = index % 6 === 0 ? -1 : 1; const scaleY = index % 9 === 0 ? -1 : 1;
-      mark.style.cssText = `font-size:${17 + (index * 7) % 19}px;opacity:${.62 + (index % 5) * .08};transform:rotate(${rotation}deg) scale(${scaleX},${scaleY})`; board.append(mark);
-    }
+    const board = el('div', 'ones-board irregular-ones'); board.setAttribute('aria-label', '숫자 1이 불규칙하게 흩어져 있는 자료 영역');
+    createOnePositions(35).forEach((position) => {
+      const mark = el('span', 'one-mark', '1');
+      mark.style.cssText = `left:${position.x.toFixed(2)}%;top:${position.y.toFixed(2)}%;font-size:${position.size}px;opacity:${position.opacity.toFixed(2)};transform:translate(-50%,-50%) rotate(${position.rotation}deg)`; board.append(mark);
+    });
     console.assert(board.children.length === 35, '9번 자료 영역에는 숫자 1이 정확히 35개여야 합니다.'); questionView.append(board);
   }
   function startTimer(question) {
@@ -218,11 +284,26 @@
     rows.forEach(([label, value], index) => { const row = el('div', `score-row${index === 4 ? ' final-score' : ''}`); row.append(el('span', '', label), el('strong', '', value)); sheet.append(row); }); resultView.append(sheet, el('p', 'final-message', finalMessage(state.score)));
     const actions = el('div', 'result-actions'); const again = el('button', 'exam-button', '다시 풀기'); again.type = 'button'; again.addEventListener('click', resetGame); const home = el('a', 'exam-button', '그룹 게임 컬렉션으로 돌아가기'); home.href = '/'; actions.append(again, home); resultView.append(actions);
   }
-  function resetGame() { clearTimer(); const { muted, playerName: savedName } = state; state = freshState(); state.muted = muted; state.playerName = savedName; save(); movingLabels = null; fleeCount = 0; labelMoveCount = 0; render(); window.scrollTo({ top: 0 }); }
+  function resetGame() { clearTimer(); stopVoiceAudio(); const { muted, playerName: savedName } = state; state = freshState(); state.muted = muted; state.playerName = savedName; save(); movingLabels = null; fleeCount = 0; labelMoveCount = 0; lastNarratedQuestionId = null; render(); window.scrollTo({ top: 0 }); }
 
   playerName.value = state.playerName;
   playerName.addEventListener('input', () => { state.playerName = playerName.value; save(); });
-  muteButton.addEventListener('click', () => { state.muted = !state.muted; save(); setMutedLabel(); });
+  muteButton.addEventListener('click', () => { state.muted = !state.muted; if (state.muted) stopVoiceAudio(); save(); setMutedLabel(); });
   resetButton.addEventListener('click', () => { if (confirm('현재 진행 기록을 지우고 1번부터 다시 시작할까요?')) resetGame(); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Control' || event.repeat) return;
+    const now = Date.now();
+    if (now - lastControlPress <= 500) {
+      lastControlPress = 0;
+      if (!voiceDialog.open) { voiceDialogError.hidden = true; voicePassword.value = ''; voiceDialog.showModal(); queueMicrotask(() => voicePassword.focus()); }
+    } else lastControlPress = now;
+  });
+  voiceForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (voicePassword.value !== '1+1=1') { voiceDialogError.hidden = false; voicePassword.select(); return; }
+    voiceEnabled = true; voiceDialog.close(); narrateCurrentState();
+  });
+  voicePassword.addEventListener('input', () => { voiceDialogError.hidden = true; });
+  voiceCancelButton.addEventListener('click', () => voiceDialog.close());
   setMutedLabel(); render();
 })();

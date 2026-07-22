@@ -11,6 +11,11 @@
     .name-line label{flex:0 0 auto}
     .name-line input{display:block;flex:1;max-width:380px;margin-left:8px;padding:1px 4px 3px;border:0;border-bottom:1px solid #444;border-radius:0;background:transparent;color:var(--ink);font:inherit;outline:0}
     .name-line input:focus{border-bottom-color:#315ea8;box-shadow:0 2px 0 #315ea8}
+    .ones-board.irregular-ones{position:relative;display:block}
+    .irregular-ones .one-mark{position:absolute;line-height:1;transform-origin:center;user-select:none}
+    .voice-dialog{width:min(430px,calc(100% - 28px));padding:0;border:1px solid #76766f;border-radius:4px;background:var(--paper);color:var(--ink);box-shadow:0 18px 55px #0004}
+    .voice-dialog::backdrop{background:#19191980;backdrop-filter:blur(2px)}
+    .voice-dialog form{padding:28px}.voice-dialog h2{margin:0 0 10px;font-family:serif;font-size:26px}.voice-dialog p{margin:0 0 18px;line-height:1.55}.voice-dialog label{display:block;margin-bottom:7px;font-weight:800}.voice-dialog input{width:100%;min-height:48px;padding:10px 12px;border:1px solid #aaa;border-radius:3px;background:#fff;color:var(--ink);font-size:16px}.voice-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.voice-dialog-error{margin-top:10px!important;color:var(--red);font-weight:750}.voice-dialog-error[hidden]{display:none}
   </style>
   <script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']]},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};</script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
@@ -37,5 +42,18 @@
     <section id="questionView" class="question-view" aria-live="polite"></section>
     <section id="resultView" class="result-view" hidden></section>
   </main>
+  <dialog id="voiceDialog" class="voice-dialog" aria-labelledby="voiceDialogTitle">
+    <form id="voiceForm">
+      <h2 id="voiceDialogTitle">음성 기능</h2>
+      <p>비밀번호를 입력하면 문제와 보기, 정답·오답 음성이 재생됩니다.</p>
+      <label for="voicePassword">비밀번호</label>
+      <input id="voicePassword" type="password" autocomplete="off" required>
+      <p id="voiceDialogError" class="voice-dialog-error" role="alert" hidden>비밀번호가 올바르지 않습니다.</p>
+      <div class="voice-dialog-actions">
+        <button id="voiceCancelButton" type="button" class="quiz-toolbar-button">취소</button>
+        <button type="submit" class="exam-button">음성 기능 켜기</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

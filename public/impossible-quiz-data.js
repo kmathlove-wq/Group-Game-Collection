@@ -35,6 +35,27 @@
   ];
 
   function compact(value) { return String(value ?? '').trim().replace(/\s+/g, '').toLocaleLowerCase('ko-KR'); }
+  function createOnePositions(count = 35) {
+    let seed = 91357;
+    const random = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
+    const positions = [];
+    while (positions.length < count) {
+      let candidate = null;
+      for (let attempt = 0; attempt < 500; attempt += 1) {
+        const next = { x: 4 + random() * 89, y: 5 + random() * 83 };
+        const clear = positions.every((point) => Math.hypot((next.x - point.x) * 6.2, (next.y - point.y) * 3.3) >= 30);
+        if (clear) { candidate = next; break; }
+      }
+      if (!candidate) candidate = { x: 4 + random() * 89, y: 5 + random() * 83 };
+      positions.push({
+        ...candidate,
+        size: 16 + Math.round(random() * 19),
+        rotation: -68 + Math.round(random() * 136),
+        opacity: .62 + random() * .36
+      });
+    }
+    return positions;
+  }
   function evaluate(question, answer, scoreBeforeFinalQuestion) {
     const value = String(answer ?? '');
     if (ALWAYS_WRONG_QUESTION_IDS.includes(question.id)) return { correct: false, message: trickMessage(question.id, value) };
@@ -86,5 +107,5 @@
     })[value];
   }
 
-  return { TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, compact, evaluate, gradeHistory };
+  return { TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, compact, createOnePositions, evaluate, gradeHistory };
 });

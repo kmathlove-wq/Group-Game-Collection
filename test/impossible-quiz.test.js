@@ -2,8 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const {
-  TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, evaluate, gradeHistory
+  TOTAL_QUESTIONS, MAX_SCORE, ALWAYS_WRONG_QUESTION_IDS, questions, createOnePositions, evaluate, gradeHistory
 } = require('../public/impossible-quiz-data');
 
 test('절대 못 맞히는 퀴즈쇼는 20문제를 고정 순서와 18점 만점으로 제공한다', () => {
@@ -85,6 +86,33 @@ test('특수 문제 데이터와 제공 이미지 경로가 완전하다', () =>
   assert.equal(questions[16].correctAnswer, 'first');
   const assets = ['ai-image-editor-logo.png', 'hanja-scroll.png', 'hanja-grid.png', 'hanja-black.png'];
   for (const name of assets) assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'impossible-quiz', name)), true, `${name} 파일이 필요합니다.`);
+  const secondImage = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'impossible-quiz', 'hanja-grid.png'));
+  assert.equal(crypto.createHash('sha256').update(secondImage).digest('hex'), '357fd5b1b6f374b9527ed5b8c63f3a6ff1898acfee2a76dbdf88fcc174e592bd');
+});
+
+test('9번의 숫자 1은 35개를 겹치지 않는 불규칙 위치로 만든다', () => {
+  const positions = createOnePositions();
+  assert.equal(positions.length, 35);
+  assert.equal(new Set(positions.map(({ x, y }) => `${x.toFixed(2)}:${y.toFixed(2)}`)).size, 35);
+  assert.ok(new Set(positions.map(({ x }) => Math.round(x))).size >= 25);
+  assert.ok(new Set(positions.map(({ y }) => Math.round(y))).size >= 25);
+  for (const position of positions) {
+    assert.ok(position.x >= 4 && position.x <= 93);
+    assert.ok(position.y >= 5 && position.y <= 88);
+  }
+});
+
+test('숨은 음성 기능에 필요한 문제·보기·정오답 파일이 모두 포함된다', () => {
+  const audioRoot = path.join(__dirname, '..', 'public', 'assets', 'impossible-quiz', 'audio');
+  const expectedCounts = { 문제: 20, 보기: 16, 정답메시지: 18, 오답메시지: 27 };
+  for (const [folder, count] of Object.entries(expectedCounts)) {
+    const files = fs.readdirSync(path.join(audioRoot, folder)).filter((name) => name.endsWith('.mp3'));
+    assert.equal(files.length, count, `${folder} 음성 파일 수가 맞아야 한다`);
+  }
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'impossible-quiz.html'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'impossible-quiz.js'), 'utf8');
+  assert.match(html, /id="voiceDialog"/);
+  assert.match(script, /voicePassword\.value !== '1\+1=1'/);
 });
 
 test('게임 선택 화면에 새 1인용 게임 진입 카드가 있다', () => {
