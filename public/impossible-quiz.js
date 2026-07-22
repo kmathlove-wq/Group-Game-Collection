@@ -51,7 +51,7 @@
     resultView.hidden = true; questionView.hidden = false; questionView.replaceChildren();
     if (state.index >= TOTAL_QUESTIONS) return renderResults();
     const question = questions[state.index];
-    if (question.id === 20) {
+    if (question.id === 20 && !currentHistory(question)) {
       const graded = gradeHistory(state.history.filter((record) => record.id !== 20));
       state.history = graded.history;
       state.score = graded.score;

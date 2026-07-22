@@ -84,3 +84,8 @@ test('게임 선택 화면에 새 1인용 게임 진입 카드가 있다', () =>
   assert.match(html, /절대 못 맞히는 퀴즈쇼/);
   assert.match(html, /혼자 하기 · 총 20문제/);
 });
+
+test('20번 제출 후 저장된 답안을 화면 재렌더링에서 제거하지 않는다', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'impossible-quiz.js'), 'utf8');
+  assert.match(script, /question\.id === 20 && !currentHistory\(question\)/);
+});
