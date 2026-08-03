@@ -15,14 +15,33 @@
   const PLAYER_SIZE = 40;
   const GRAVITY = 2200;
   const JUMP_VELOCITY = -760;
-  const START_SPEED = 300;
-  const MAX_SPEED = 520;
+  const START_SPEED = 380;
+  const MAX_SPEED = 640;
   const SPEED_RAMP_SECONDS = 45;
-  const GAP_MIN = 230;
-  const GAP_MAX = 420;
+  const GAP_MIN = 260;
+  const GAP_MAX = 460;
   const HITBOX_INSET = 6;
   const MAX_DELTA = 1 / 30;
   const MILESTONE_STEP = 1000; // distance 단위, 100m마다
+
+  // 비행 구간: 누르고 있으면 위로, 떼면 아래로 떨어지는 자체 제작 "날기" 모드.
+  const FLIGHT_TOP = 25;
+  const FLIGHT_BOTTOM = GROUND_Y;
+  const FLIGHT_GRAVITY = 1200;
+  const FLIGHT_THRUST = 2400;
+  const FLIGHT_MAX_VY = 240;
+  const FLIGHT_CORRIDOR_GAP = 170;
+  const FLIGHT_CENTER_MIN = 115;
+  const FLIGHT_CENTER_MAX = 190;
+  const FLIGHT_ZONE_MIN_LEN = 1000;
+  const FLIGHT_ZONE_MAX_LEN = 1500;
+  const FLIGHT_COOLDOWN_MIN = 1500;
+  const FLIGHT_COOLDOWN_MAX = 2400;
+  const FLIGHT_PAIR_GAP_MIN = 260;
+  const FLIGHT_PAIR_GAP_MAX = 360;
+  const FLIGHT_ENTRY_BUFFER = 260;
+  const FLIGHT_EXIT_BUFFER = 80;
+  const FLIGHT_WALL_WIDTH = 46;
 
   const canvas = document.querySelector('#gdCanvas');
   const ctx = canvas.getContext('2d');
@@ -56,6 +75,11 @@
   let shakeMagnitude = 0;
   let flashTime = 0;
   let nextMilestoneAt = MILESTONE_STEP;
+  let jumpHeld = false;
+  let groundCursorX = 0;
+  let flightCursorX = 0;
+  let flightZones = [];
+  let flightCenterY = (FLIGHT_CENTER_MIN + FLIGHT_CENTER_MAX) / 2;
 
   nameInput.value = localStorage.getItem(NICKNAME_KEY) || '';
 
@@ -245,12 +269,43 @@
   }
 
   function ensureObstacles() {
-    while (!obstacles.length || obstacles[obstacles.length - 1].x < CANVAS_W + 220) {
-      const prev = obstacles[obstacles.length - 1];
-      const gap = randomRange(GAP_MIN, GAP_MAX);
-      const startX = prev ? prev.x + prev.width + gap : CANVAS_W + 260;
-      obstacles.push(createObstacle(startX));
+    while (groundCursorX < CANVAS_W + 220) {
+      const blockingZone = flightZones.find((zone) => groundCursorX >= zone.x - 40 && groundCursorX < zone.x + zone.width + 40);
+      if (blockingZone) {
+        groundCursorX = blockingZone.x + blockingZone.width + 60;
+        continue;
+      }
+      const obstacle = createObstacle(groundCursorX);
+      obstacles.push(obstacle);
+      groundCursorX = obstacle.x + obstacle.width + randomRange(GAP_MIN, GAP_MAX);
     }
+  }
+
+  function ensureFlightZones() {
+    while (flightCursorX < CANVAS_W + 400) {
+      const length = randomRange(FLIGHT_ZONE_MIN_LEN, FLIGHT_ZONE_MAX_LEN);
+      flightZones.push({ x: flightCursorX, width: length, spawnCursor: flightCursorX + FLIGHT_ENTRY_BUFFER });
+      flightCursorX += length + randomRange(FLIGHT_COOLDOWN_MIN, FLIGHT_COOLDOWN_MAX);
+    }
+  }
+
+  function ensureFlightObstacles() {
+    flightZones.forEach((zone) => {
+      while (zone.spawnCursor < zone.x + zone.width - FLIGHT_EXIT_BUFFER) {
+        flightCenterY = Math.max(FLIGHT_CENTER_MIN, Math.min(FLIGHT_CENTER_MAX, flightCenterY + randomRange(-25, 25)));
+        const top = flightCenterY - FLIGHT_CORRIDOR_GAP / 2;
+        const bottom = flightCenterY + FLIGHT_CORRIDOR_GAP / 2;
+        obstacles.push({ type: 'flight-ceiling', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: top - FLIGHT_TOP });
+        obstacles.push({ type: 'flight-floor', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: FLIGHT_BOTTOM - bottom });
+        zone.spawnCursor += FLIGHT_WALL_WIDTH + randomRange(FLIGHT_PAIR_GAP_MIN, FLIGHT_PAIR_GAP_MAX);
+      }
+    });
+  }
+
+  function isInFlightZone() {
+    const left = PLAYER_X + HITBOX_INSET;
+    const right = PLAYER_X + PLAYER_SIZE - HITBOX_INSET;
+    return flightZones.some((zone) => zone.x < right && zone.x + zone.width > left);
   }
 
   function createBackdropShapes() {
@@ -278,7 +333,14 @@
     shakeTime = 0;
     flashTime = 0;
     nextMilestoneAt = MILESTONE_STEP;
+    jumpHeld = false;
+    groundCursorX = CANVAS_W + 260;
+    flightCursorX = CANVAS_W + 900;
+    flightZones = [];
+    flightCenterY = (FLIGHT_CENTER_MIN + FLIGHT_CENTER_MAX) / 2;
     ensureObstacles();
+    ensureFlightZones();
+    ensureFlightObstacles();
     scoreText.textContent = '0';
   }
 
@@ -313,6 +375,12 @@
   }
 
   function obstacleHitbox(obstacle) {
+    if (obstacle.type === 'flight-ceiling') {
+      return { x: obstacle.x + 3, y: FLIGHT_TOP, width: obstacle.width - 6, height: obstacle.height };
+    }
+    if (obstacle.type === 'flight-floor') {
+      return { x: obstacle.x + 3, y: FLIGHT_BOTTOM - obstacle.height, width: obstacle.width - 6, height: obstacle.height };
+    }
     return {
       x: obstacle.x + 3,
       y: GROUND_Y - obstacle.height,
@@ -368,35 +436,59 @@
     scoreText.textContent = String(Math.floor(distance / 10));
     checkMilestone();
 
-    player.vy += GRAVITY * dt;
-    player.y += player.vy * dt;
-    const overPit = isOverPit();
-    if (player.y >= GROUND_Y - PLAYER_SIZE) {
-      if (overPit) {
-        player.grounded = false;
-        if (player.y >= GROUND_Y - PLAYER_SIZE + 10) { endGame(); return; }
-      } else {
-        player.y = GROUND_Y - PLAYER_SIZE;
-        if (!player.grounded) {
-          spawnBurst(PLAYER_X + PLAYER_SIZE / 2, GROUND_Y, 5, ['#3dd6ff'], 110);
-          playTone(180, 0.05, 'triangle', 0.05);
-        }
-        player.vy = 0;
-        player.grounded = true;
+    const inFlight = isInFlightZone();
+    if (inFlight) {
+      const accel = jumpHeld ? FLIGHT_GRAVITY - FLIGHT_THRUST : FLIGHT_GRAVITY;
+      player.vy = Math.max(-FLIGHT_MAX_VY, Math.min(FLIGHT_MAX_VY, player.vy + accel * dt));
+      player.y += player.vy * dt;
+      player.grounded = false;
+      player.rotation = (player.vy / FLIGHT_MAX_VY) * 0.5;
+      if (player.y < FLIGHT_TOP) { player.y = FLIGHT_TOP; player.vy = Math.max(0, player.vy); }
+      if (player.y > FLIGHT_BOTTOM - PLAYER_SIZE) { player.y = FLIGHT_BOTTOM - PLAYER_SIZE; player.vy = Math.min(0, player.vy); }
+      if (jumpHeld && Math.random() < dt * 40) {
+        particles.push({
+          x: PLAYER_X, y: player.y + PLAYER_SIZE / 2, vx: -speed * 0.5, vy: randomRange(-30, 30),
+          life: 0.3, maxLife: 0.3, color: 'rgba(139,91,255,0.7)'
+        });
       }
-    }
-    player.rotation = player.grounded ? 0 : player.rotation + dt * 9;
+    } else {
+      player.vy += GRAVITY * dt;
+      player.y += player.vy * dt;
+      const overPit = isOverPit();
+      if (player.y >= GROUND_Y - PLAYER_SIZE) {
+        if (overPit) {
+          player.grounded = false;
+          if (player.y >= GROUND_Y - PLAYER_SIZE + 10) { endGame(); return; }
+        } else {
+          player.y = GROUND_Y - PLAYER_SIZE;
+          if (!player.grounded) {
+            spawnBurst(PLAYER_X + PLAYER_SIZE / 2, GROUND_Y, 5, ['#3dd6ff'], 110);
+            playTone(180, 0.05, 'triangle', 0.05);
+          }
+          player.vy = 0;
+          player.grounded = true;
+        }
+      }
+      player.rotation = player.grounded ? 0 : player.rotation + dt * 9;
 
-    if (player.grounded && Math.random() < dt * 22) {
-      particles.push({
-        x: PLAYER_X, y: player.y + PLAYER_SIZE - 4, vx: -speed * 0.4, vy: -20,
-        life: 0.25, maxLife: 0.25, color: 'rgba(61,214,255,0.6)'
-      });
+      if (player.grounded && Math.random() < dt * 22) {
+        particles.push({
+          x: PLAYER_X, y: player.y + PLAYER_SIZE - 4, vx: -speed * 0.4, vy: -20,
+          life: 0.25, maxLife: 0.25, color: 'rgba(61,214,255,0.6)'
+        });
+      }
     }
 
     obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; });
     obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > -20);
+    groundCursorX -= speed * dt;
     ensureObstacles();
+
+    flightCursorX -= speed * dt;
+    flightZones.forEach((zone) => { zone.x -= speed * dt; zone.spawnCursor -= speed * dt; });
+    flightZones = flightZones.filter((zone) => zone.x + zone.width > -20);
+    ensureFlightZones();
+    ensureFlightObstacles();
 
     backdropShapes.forEach((shape) => {
       shape.x -= speed * 0.15 * dt;
@@ -496,11 +588,12 @@
   function drawPlayer() {
     const cx = PLAYER_X + PLAYER_SIZE / 2;
     const cy = player.y + PLAYER_SIZE / 2;
+    const flying = isInFlightZone();
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(player.rotation);
-    ctx.fillStyle = '#3dd6ff';
-    ctx.shadowColor = 'rgba(61,214,255,0.65)';
+    ctx.fillStyle = flying ? '#c79bff' : '#3dd6ff';
+    ctx.shadowColor = flying ? 'rgba(139,91,255,0.65)' : 'rgba(61,214,255,0.65)';
     ctx.shadowBlur = 14 + Math.sin(elapsed * 8) * 4;
     ctx.fillRect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
     ctx.shadowBlur = 0;
@@ -579,9 +672,41 @@
     }
   }
 
+  function drawFlightWall(obstacle) {
+    const isCeiling = obstacle.type === 'flight-ceiling';
+    const y = isCeiling ? FLIGHT_TOP : FLIGHT_BOTTOM - obstacle.height;
+    const gradient = ctx.createLinearGradient(0, y, 0, y + obstacle.height);
+    gradient.addColorStop(0, isCeiling ? '#8b5bff' : '#4d2fb0');
+    gradient.addColorStop(1, isCeiling ? '#4d2fb0' : '#8b5bff');
+    ctx.save();
+    ctx.shadowColor = 'rgba(139,91,255,0.55)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = gradient;
+    ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    const chevronY = isCeiling ? y + obstacle.height - 14 : y + 4;
+    for (let cx = obstacle.x + 6; cx < obstacle.x + obstacle.width - 6; cx += 14) {
+      ctx.beginPath();
+      if (isCeiling) {
+        ctx.moveTo(cx, chevronY);
+        ctx.lineTo(cx + 6, chevronY + 10);
+        ctx.lineTo(cx + 12, chevronY);
+      } else {
+        ctx.moveTo(cx, chevronY + 10);
+        ctx.lineTo(cx + 6, chevronY);
+        ctx.lineTo(cx + 12, chevronY + 10);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawObstacle(obstacle) {
     if (obstacle.type === 'pit') return;
     if (obstacle.type === 'block') { drawBlockObstacle(obstacle); return; }
+    if (obstacle.type === 'flight-ceiling' || obstacle.type === 'flight-floor') { drawFlightWall(obstacle); return; }
     drawSpikeCluster(obstacle);
   }
 
@@ -611,6 +736,10 @@
       ctx.fillStyle = `rgba(255,255,255,${flashTime / 0.15 * 0.35})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
+    if (isInFlightZone()) {
+      ctx.fillStyle = 'rgba(139,91,255,0.08)';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    }
   }
 
   function loop(time) {
@@ -635,21 +764,33 @@
     rafId = requestAnimationFrame(loop);
   }
 
-  function handleJumpInput(event) {
-    if (event) event.preventDefault();
+  function handlePressStart() {
     if (!running) return;
+    if (isInFlightZone()) { jumpHeld = true; return; }
     jump();
+  }
+
+  function handlePressEnd() {
+    jumpHeld = false;
   }
 
   document.addEventListener('keydown', (event) => {
     if (event.code !== 'Space' && event.code !== 'ArrowUp') return;
-    if (!running) return;
-    handleJumpInput(event);
+    event.preventDefault();
+    handlePressStart();
   });
-  canvas.addEventListener('pointerdown', handleJumpInput);
+  document.addEventListener('keyup', (event) => {
+    if (event.code !== 'Space' && event.code !== 'ArrowUp') return;
+    handlePressEnd();
+  });
+  canvas.addEventListener('pointerdown', (event) => { event.preventDefault(); handlePressStart(); });
+  canvas.addEventListener('pointerup', handlePressEnd);
+  canvas.addEventListener('pointercancel', handlePressEnd);
+  canvas.addEventListener('pointerleave', handlePressEnd);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       running = false;
+      jumpHeld = false;
       stopBgm();
     }
   });
