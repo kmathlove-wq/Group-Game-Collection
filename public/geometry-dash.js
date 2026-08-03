@@ -37,11 +37,16 @@
   const FLIGHT_ZONE_MAX_LEN = 1500;
   const FLIGHT_COOLDOWN_MIN = 1500;
   const FLIGHT_COOLDOWN_MAX = 2400;
-  const FLIGHT_PAIR_GAP_MIN = 260;
-  const FLIGHT_PAIR_GAP_MAX = 360;
+  const FLIGHT_PAIR_GAP_MIN = 350;
+  const FLIGHT_PAIR_GAP_MAX = 480;
   const FLIGHT_ENTRY_BUFFER = 260;
   const FLIGHT_EXIT_BUFFER = 80;
   const FLIGHT_WALL_WIDTH = 46;
+  const FLIGHT_HOLE_WIDTH = 50;
+  const FLIGHT_HOLE_GAP = FLIGHT_CORRIDOR_GAP;
+  const FLIGHT_SPIKE_WIDTH = 34;
+  const FLIGHT_SPIKE_HEIGHT_MIN = 50;
+  const FLIGHT_SPIKE_HEIGHT_MAX = 80;
   const FLIGHT_APPROACH_CLEARANCE = 200; // 비행 구간 시작 전 장애물 없는 구간
   const FLIGHT_LANDING_RECOVERY_MIN = 450; // 비행 구간이 끝난 뒤 착지할 여유 거리
   const FLIGHT_LANDING_RECOVERY_MAX = 650;
@@ -295,12 +300,30 @@
   function ensureFlightObstacles() {
     flightZones.forEach((zone) => {
       while (zone.spawnCursor < zone.x + zone.width - FLIGHT_EXIT_BUFFER) {
-        flightCenterY = Math.max(FLIGHT_CENTER_MIN, Math.min(FLIGHT_CENTER_MAX, flightCenterY + randomRange(-25, 25)));
-        const top = flightCenterY - FLIGHT_CORRIDOR_GAP / 2;
-        const bottom = flightCenterY + FLIGHT_CORRIDOR_GAP / 2;
-        obstacles.push({ type: 'flight-ceiling', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: top - FLIGHT_TOP });
-        obstacles.push({ type: 'flight-floor', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: FLIGHT_BOTTOM - bottom });
-        zone.spawnCursor += FLIGHT_WALL_WIDTH + randomRange(FLIGHT_PAIR_GAP_MIN, FLIGHT_PAIR_GAP_MAX);
+        const roll = Math.random();
+        if (roll < 0.45) {
+          flightCenterY = Math.max(FLIGHT_CENTER_MIN, Math.min(FLIGHT_CENTER_MAX, flightCenterY + randomRange(-25, 25)));
+          const top = flightCenterY - FLIGHT_CORRIDOR_GAP / 2;
+          const bottom = flightCenterY + FLIGHT_CORRIDOR_GAP / 2;
+          obstacles.push({ type: 'flight-ceiling', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: top - FLIGHT_TOP });
+          obstacles.push({ type: 'flight-floor', x: zone.spawnCursor, width: FLIGHT_WALL_WIDTH, height: FLIGHT_BOTTOM - bottom });
+          zone.spawnCursor += FLIGHT_WALL_WIDTH + randomRange(FLIGHT_PAIR_GAP_MIN, FLIGHT_PAIR_GAP_MAX);
+        } else if (roll < 0.8) {
+          const fromCeiling = Math.random() < 0.5;
+          const height = randomRange(FLIGHT_SPIKE_HEIGHT_MIN, FLIGHT_SPIKE_HEIGHT_MAX);
+          obstacles.push({
+            type: fromCeiling ? 'flight-spike-ceiling' : 'flight-spike-floor',
+            x: zone.spawnCursor, width: FLIGHT_SPIKE_WIDTH, height
+          });
+          zone.spawnCursor += FLIGHT_SPIKE_WIDTH + randomRange(FLIGHT_PAIR_GAP_MIN, FLIGHT_PAIR_GAP_MAX);
+        } else {
+          flightCenterY = Math.max(FLIGHT_CENTER_MIN, Math.min(FLIGHT_CENTER_MAX, flightCenterY + randomRange(-25, 25)));
+          const top = flightCenterY - FLIGHT_HOLE_GAP / 2;
+          const bottom = flightCenterY + FLIGHT_HOLE_GAP / 2;
+          obstacles.push({ type: 'flight-hole-top', x: zone.spawnCursor, width: FLIGHT_HOLE_WIDTH, height: top - FLIGHT_TOP });
+          obstacles.push({ type: 'flight-hole-bottom', x: zone.spawnCursor, width: FLIGHT_HOLE_WIDTH, height: FLIGHT_BOTTOM - bottom });
+          zone.spawnCursor += FLIGHT_HOLE_WIDTH + randomRange(FLIGHT_PAIR_GAP_MIN, FLIGHT_PAIR_GAP_MAX);
+        }
       }
     });
   }
@@ -377,11 +400,14 @@
     };
   }
 
+  const FLIGHT_TOP_TYPES = new Set(['flight-ceiling', 'flight-spike-ceiling', 'flight-hole-top']);
+  const FLIGHT_BOTTOM_TYPES = new Set(['flight-floor', 'flight-spike-floor', 'flight-hole-bottom']);
+
   function obstacleHitbox(obstacle) {
-    if (obstacle.type === 'flight-ceiling') {
+    if (FLIGHT_TOP_TYPES.has(obstacle.type)) {
       return { x: obstacle.x + 3, y: FLIGHT_TOP, width: obstacle.width - 6, height: obstacle.height };
     }
-    if (obstacle.type === 'flight-floor') {
+    if (FLIGHT_BOTTOM_TYPES.has(obstacle.type)) {
       return { x: obstacle.x + 3, y: FLIGHT_BOTTOM - obstacle.height, width: obstacle.width - 6, height: obstacle.height };
     }
     return {
@@ -706,10 +732,53 @@
     ctx.restore();
   }
 
+  function drawFlightSpike(obstacle) {
+    const fromCeiling = obstacle.type === 'flight-spike-ceiling';
+    const baseY = fromCeiling ? FLIGHT_TOP : FLIGHT_BOTTOM;
+    const tipY = fromCeiling ? FLIGHT_TOP + obstacle.height : FLIGHT_BOTTOM - obstacle.height;
+    const gradient = ctx.createLinearGradient(0, baseY, 0, tipY);
+    gradient.addColorStop(0, '#ffb23d');
+    gradient.addColorStop(1, '#ffe0a3');
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,178,61,0.55)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(obstacle.x, baseY);
+    ctx.lineTo(obstacle.x + obstacle.width / 2, tipY);
+    ctx.lineTo(obstacle.x + obstacle.width, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFlightHole(obstacle) {
+    const isTop = obstacle.type === 'flight-hole-top';
+    const y = isTop ? FLIGHT_TOP : FLIGHT_BOTTOM - obstacle.height;
+    const gradient = ctx.createLinearGradient(0, y, 0, y + obstacle.height);
+    gradient.addColorStop(0, '#2fb87a');
+    gradient.addColorStop(1, '#5be8ab');
+    ctx.save();
+    ctx.shadowColor = 'rgba(91,232,171,0.5)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = gradient;
+    ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(11,12,20,0.4)';
+    ctx.lineWidth = 3;
+    const ringY = isTop ? y + obstacle.height : y;
+    ctx.beginPath();
+    ctx.arc(obstacle.x + obstacle.width / 2, ringY, obstacle.width / 2 - 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawObstacle(obstacle) {
     if (obstacle.type === 'pit') return;
     if (obstacle.type === 'block') { drawBlockObstacle(obstacle); return; }
     if (obstacle.type === 'flight-ceiling' || obstacle.type === 'flight-floor') { drawFlightWall(obstacle); return; }
+    if (obstacle.type === 'flight-spike-ceiling' || obstacle.type === 'flight-spike-floor') { drawFlightSpike(obstacle); return; }
+    if (obstacle.type === 'flight-hole-top' || obstacle.type === 'flight-hole-bottom') { drawFlightHole(obstacle); return; }
     drawSpikeCluster(obstacle);
   }
 
