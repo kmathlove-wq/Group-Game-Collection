@@ -42,6 +42,9 @@
   const FLIGHT_ENTRY_BUFFER = 260;
   const FLIGHT_EXIT_BUFFER = 80;
   const FLIGHT_WALL_WIDTH = 46;
+  const FLIGHT_APPROACH_CLEARANCE = 200; // 비행 구간 시작 전 장애물 없는 구간
+  const FLIGHT_LANDING_RECOVERY_MIN = 450; // 비행 구간이 끝난 뒤 착지할 여유 거리
+  const FLIGHT_LANDING_RECOVERY_MAX = 650;
 
   const canvas = document.querySelector('#gdCanvas');
   const ctx = canvas.getContext('2d');
@@ -270,9 +273,9 @@
 
   function ensureObstacles() {
     while (groundCursorX < CANVAS_W + 220) {
-      const blockingZone = flightZones.find((zone) => groundCursorX >= zone.x - 40 && groundCursorX < zone.x + zone.width + 40);
+      const blockingZone = flightZones.find((zone) => groundCursorX >= zone.x - FLIGHT_APPROACH_CLEARANCE && groundCursorX < zone.x + zone.width + 40);
       if (blockingZone) {
-        groundCursorX = blockingZone.x + blockingZone.width + 60;
+        groundCursorX = blockingZone.x + blockingZone.width + randomRange(FLIGHT_LANDING_RECOVERY_MIN, FLIGHT_LANDING_RECOVERY_MAX);
         continue;
       }
       const obstacle = createObstacle(groundCursorX);
