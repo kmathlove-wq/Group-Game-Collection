@@ -230,12 +230,18 @@
     return min + Math.random() * (max - min);
   }
 
+  const SPIKE_COUNTS = { spike: 1, 'spike-double': 2, 'spike-triple': 3 };
+
   function createObstacle(x) {
     const roll = Math.random();
-    if (roll < 0.55) return { type: 'spike', x, width: 34, height: 38 };
-    if (roll < 0.8) return { type: 'spike-double', x, width: 64, height: 38 };
-    const height = 40 + Math.round(Math.random() * 30);
-    return { type: 'block', x, width: 42, height };
+    if (roll < 0.4) return { type: 'spike', x, width: 34, height: 38 };
+    if (roll < 0.6) return { type: 'spike-double', x, width: 64, height: 38 };
+    if (roll < 0.72) return { type: 'spike-triple', x, width: 94, height: 38 };
+    if (roll < 0.88) {
+      const height = 40 + Math.round(Math.random() * 55);
+      return { type: 'block', x, width: 42, height };
+    }
+    return { type: 'pit', x, width: Math.round(randomRange(90, 150)) };
   }
 
   function ensureObstacles() {
@@ -321,7 +327,13 @@
 
   function checkCollision() {
     const hitbox = playerHitbox();
-    return obstacles.some((obstacle) => boxesOverlap(hitbox, obstacleHitbox(obstacle)));
+    return obstacles.some((obstacle) => obstacle.type !== 'pit' && boxesOverlap(hitbox, obstacleHitbox(obstacle)));
+  }
+
+  function isOverPit() {
+    const left = PLAYER_X + HITBOX_INSET;
+    const right = PLAYER_X + PLAYER_SIZE - HITBOX_INSET;
+    return obstacles.some((obstacle) => obstacle.type === 'pit' && obstacle.x < right && obstacle.x + obstacle.width > left);
   }
 
   function endGame() {
@@ -358,14 +370,20 @@
 
     player.vy += GRAVITY * dt;
     player.y += player.vy * dt;
+    const overPit = isOverPit();
     if (player.y >= GROUND_Y - PLAYER_SIZE) {
-      player.y = GROUND_Y - PLAYER_SIZE;
-      if (!player.grounded) {
-        spawnBurst(PLAYER_X + PLAYER_SIZE / 2, GROUND_Y, 5, ['#3dd6ff'], 110);
-        playTone(180, 0.05, 'triangle', 0.05);
+      if (overPit) {
+        player.grounded = false;
+        if (player.y >= GROUND_Y - PLAYER_SIZE + 10) { endGame(); return; }
+      } else {
+        player.y = GROUND_Y - PLAYER_SIZE;
+        if (!player.grounded) {
+          spawnBurst(PLAYER_X + PLAYER_SIZE / 2, GROUND_Y, 5, ['#3dd6ff'], 110);
+          playTone(180, 0.05, 'triangle', 0.05);
+        }
+        player.vy = 0;
+        player.grounded = true;
       }
-      player.vy = 0;
-      player.grounded = true;
     }
     player.rotation = player.grounded ? 0 : player.rotation + dt * 9;
 
@@ -446,6 +464,17 @@
       ctx.lineTo(x + 14, GROUND_Y + 14);
       ctx.stroke();
     }
+    obstacles.forEach((obstacle) => {
+      if (obstacle.type !== 'pit') return;
+      const voidGradient = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_H);
+      voidGradient.addColorStop(0, '#05060a');
+      voidGradient.addColorStop(1, '#0b0c14');
+      ctx.fillStyle = voidGradient;
+      ctx.fillRect(obstacle.x, GROUND_Y, obstacle.width, GROUND_H);
+      ctx.fillStyle = '#ff3d63';
+      ctx.fillRect(obstacle.x - 3, GROUND_Y, 4, 12);
+      ctx.fillRect(obstacle.x + obstacle.width - 1, GROUND_Y, 4, 12);
+    });
   }
 
   function drawSpeedLines() {
@@ -481,31 +510,79 @@
     ctx.restore();
   }
 
-  function drawObstacle(obstacle) {
-    const baseY = GROUND_Y;
-    if (obstacle.type === 'block') {
-      ctx.fillStyle = '#ff6a3d';
-      ctx.shadowColor = 'rgba(255,106,61,0.5)';
-      ctx.shadowBlur = 10;
-      ctx.fillRect(obstacle.x, baseY - obstacle.height, obstacle.width, obstacle.height);
-      ctx.shadowBlur = 0;
-      return;
-    }
-    const spikeCount = obstacle.type === 'spike-double' ? 2 : 1;
-    const spikeWidth = obstacle.width / spikeCount;
-    ctx.fillStyle = '#ff3d63';
-    ctx.shadowColor = 'rgba(255,61,99,0.55)';
+  function drawBlockObstacle(obstacle) {
+    const x = obstacle.x;
+    const y = GROUND_Y - obstacle.height;
+    const gradient = ctx.createLinearGradient(0, y, 0, GROUND_Y);
+    gradient.addColorStop(0, '#ff9a6b');
+    gradient.addColorStop(1, '#ff6a3d');
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,106,61,0.5)';
     ctx.shadowBlur = 10;
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, obstacle.width, obstacle.height);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(x, y, obstacle.width, 4);
+    ctx.strokeStyle = 'rgba(11,12,20,0.28)';
+    ctx.lineWidth = 1;
+    const rows = Math.max(1, Math.round(obstacle.height / 18));
+    for (let r = 1; r < rows; r += 1) {
+      const ly = y + (obstacle.height / rows) * r;
+      ctx.beginPath();
+      ctx.moveTo(x, ly);
+      ctx.lineTo(x + obstacle.width, ly);
+      ctx.stroke();
+    }
+    const cols = Math.max(1, Math.round(obstacle.width / 18));
+    for (let c = 1; c < cols; c += 1) {
+      const lx = x + (obstacle.width / cols) * c;
+      ctx.beginPath();
+      ctx.moveTo(lx, y);
+      ctx.lineTo(lx, GROUND_Y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawSpikeCluster(obstacle) {
+    const baseY = GROUND_Y;
+    const spikeCount = SPIKE_COUNTS[obstacle.type] || 1;
+    const spikeWidth = obstacle.width / spikeCount;
     for (let i = 0; i < spikeCount; i += 1) {
       const startX = obstacle.x + i * spikeWidth;
+      const tipX = startX + spikeWidth / 2;
+      const gradient = ctx.createLinearGradient(startX, baseY, tipX, baseY - obstacle.height);
+      gradient.addColorStop(0, '#ff3d63');
+      gradient.addColorStop(1, '#ff9fb3');
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(startX, baseY);
-      ctx.lineTo(startX + spikeWidth / 2, baseY - obstacle.height);
+      ctx.lineTo(tipX, baseY - obstacle.height);
       ctx.lineTo(startX + spikeWidth, baseY);
       ctx.closePath();
+      ctx.shadowColor = 'rgba(255,61,99,0.55)';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = gradient;
       ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(11,12,20,0.35)';
+      ctx.lineWidth = 3;
+      for (let sx = startX - obstacle.height; sx < startX + spikeWidth + obstacle.height; sx += 9) {
+        ctx.beginPath();
+        ctx.moveTo(sx, baseY);
+        ctx.lineTo(sx + obstacle.height, baseY - obstacle.height);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.shadowBlur = 0;
+  }
+
+  function drawObstacle(obstacle) {
+    if (obstacle.type === 'pit') return;
+    if (obstacle.type === 'block') { drawBlockObstacle(obstacle); return; }
+    drawSpikeCluster(obstacle);
   }
 
   function drawParticles() {
