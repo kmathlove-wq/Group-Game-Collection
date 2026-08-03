@@ -56,6 +56,7 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
     const response = await fetch(`${url}${route}`);
     assert.equal(response.status, 200, `${route} 진입 화면이 열려야 한다`);
   }
+
   const host = await connect(url);
   const guest = await connect(url);
   const duplicate = await connect(url);
@@ -64,6 +65,26 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
     rooms.clear();
     await new Promise((resolve) => io.close(resolve));
   });
+
+  const invalidScore = await fetch(`${url}/api/geometry-dash/scores`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '테스터', score: -1 })
+  });
+  assert.equal(invalidScore.status, 400);
+  const uniqueName = `통합테스터-${Date.now()}`;
+  const submitted = await fetch(`${url}/api/geometry-dash/scores`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 19999 })
+  });
+  assert.equal(submitted.status, 200);
+  const submittedBody = await submitted.json();
+  assert.ok(submittedBody.rank >= 1 && submittedBody.rank <= 20, '순위표 상위 20위 안에 들어야 한다');
+  assert.ok(submittedBody.scores.some((entry) => entry.name === uniqueName && entry.score === 19999));
+  const rateLimited = await fetch(`${url}/api/geometry-dash/scores`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 200 })
+  });
+  assert.equal(rateLimited.status, 429);
+  const scoreList = await fetch(`${url}/api/geometry-dash/scores`);
+  assert.equal(scoreList.status, 200);
+  assert.ok((await scoreList.json()).scores.some((entry) => entry.name === uniqueName));
 
   const created = await emitAck(host, 'room:create', {
     userId: 'host-id', nickname: '방장님',

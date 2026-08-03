@@ -4,6 +4,7 @@ npm-debug.log*
 .DS_Store
 coverage/
 data/music-game.db*
+data/geometry-dash-scores.json
 uploads/audio/*
 uploads/images/*
 !uploads/audio/.gitkeep

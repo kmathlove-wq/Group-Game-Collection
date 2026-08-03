@@ -24,10 +24,12 @@ Express와 Socket.IO가 서로 분리된 두 게임의 방과 상태를 동기�
 ├── CLAUDE.md                       # Claude용 프로젝트 지식
 ├── AGENTS.md                       # Codex/에이전트용 작업 지침
 ├── lib/
-│   └── memory-room-store.js        # 교체 가능한 메모리 방 저장소
+│   ├── memory-room-store.js        # 교체 가능한 메모리 방 저장소
+│   └── geometry-dash-scores.js     # 지오메트리 대쉬 전체 순위 파일 저장소
 ├── data/
 │   ├── words.json                  # easy/normal/hard 제시어 목록
-│   └── music-game.db               # Git 제외, 송캐치 메타데이터
+│   ├── music-game.db               # Git 제외, 송캐치 메타데이터
+│   └── geometry-dash-scores.json   # Git 제외, 지오메트리 대쉬 전체 순위
 ├── src/music/                      # 송캐치 DB·관리자·게임 서버
 ├── uploads/                        # Git 제외, 음원·이미지
 ├── public/
@@ -96,8 +98,10 @@ npm test          # node --test
 - 실제 두 번째 게임을 추가하기 전에는 기능 없는 빈 게임 카드나 작동하지 않는 선택지를 노출하지 않는다.
 - `/impossible-quiz`는 서버 방 없이 `group-game:impossible-quiz:v1` 로컬 저장 상태를 사용하는 1인용 고정 순서 게임이다.
 - `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은
-  쓰지 않고 자체 도형·WebAudio 효과음만 사용하며, 최고 10개 기록을 `group-game:geometry-dash:scores:v1`
-  로컬 저장소에 순위(내림차순)로 저장한다. 점프 물리 상수를 바꾸면 `GAP_MIN`/`GAP_MAX` 간격도
+  쓰지 않고 자체 도형·WebAudio 효과음·배경음악만 사용한다. 순위는 `lib/geometry-dash-scores.js`가
+  `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며,
+  `GET/POST /api/geometry-dash/scores`로 조회·제출한다. 제출은 점수 상한과 IP당 2초 쿨다운으로만
+  검사하고 서버가 물리를 재현하지는 않는다. 점프 물리 상수를 바꾸면 `GAP_MIN`/`GAP_MAX` 간격도
   항상 점프로 통과 가능한지 같이 검증한다.
 - 퀴즈쇼는 총 20문항, 4·5번 항상 오답, 18점 만점이며 20번 제출 전까지 누적 점수를 화면에 노출하지 않는다.
 - 퀴즈쇼 저장 점수는 답안 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 저장된 `score` 대신 앞선 답안을 즉시 재채점한다.

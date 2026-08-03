@@ -18,6 +18,7 @@ npm test          # Socket.IO 통합 테스트
 ```text
 server.js                    Express/Socket.IO, 방·라운드·점수·권한
 lib/memory-room-store.js     메모리 방 저장소 경계
+lib/geometry-dash-scores.js  지오메트리 대쉬 전체 순위 파일 저장소
 data/words.json              난이도별 기본 제시어
 public/index.html            첫 화면과 방 생성/검색 모달
 public/main.js               닉네임, 사용자 ID, 공개 방 목록
@@ -52,9 +53,11 @@ CLAUDE.md                    상세 프로젝트 지식
 - 아직 구현하지 않은 게임은 선택 화면에 작동하는 것처럼 노출하지 않는다.
 - `/impossible-quiz`는 서버 방 없이 브라우저 `localStorage`로 진행을 복구하는 고정 순서 20문제 1인용 게임이다.
 - `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은
-  쓰지 않고 자체 도형·WebAudio 효과음만 사용하며, 최고 10개 기록을 `group-game:geometry-dash:scores:v1`
-  로컬 저장소에 순위(내림차순)로 저장한다. 점프 물리 상수를 바꾸면 `GAP_MIN`/`GAP_MAX` 간격도
-  항상 점프로 통과 가능한지 같이 검증한다.
+  쓰지 않고 자체 도형·WebAudio 효과음·배경음악만 사용한다. 순위는 개인 저장이 아니라
+  `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는
+  전체 통합 순위이며, `GET/POST /api/geometry-dash/scores`로 조회·제출한다. 제출은 점수 상한
+  `SCORE_MAX`와 IP당 2초 쿨다운으로만 검사하고 물리를 서버가 재현하지는 않는다. 점프 물리 상수를
+  바꾸면 `GAP_MIN`/`GAP_MAX` 간격도 항상 점프로 통과 가능한지 같이 검증한다.
 - 퀴즈쇼 4·5번은 항상 오답이며 최고 가능 점수는 18점이다. 진행 중 실제 점수는 20번 판정 때문에 공개하지 않는다.
 - 퀴즈쇼 저장 점수는 신뢰하지 않고 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 앞선 답안을 즉시 재채점한다.
 - 퀴즈쇼 9번은 35개의 1을 불규칙 배치하며, Ctrl을 500ms 안에 두 번 누르고 비밀번호를 통과하면 문제·보기·정오답 MP3를 순서대로 재생한다. 여러 오답 파일은 `WRONG_AUDIO_VARIANTS`의 선택지별 번호를 따른다.

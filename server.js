@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const words = require('./data/words.json');
 const { MemoryRoomStore } = require('./lib/memory-room-store');
 const { setupMusicGame } = require('./src/music');
+const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_CHAT_HISTORY = 100;
@@ -28,8 +29,12 @@ const io = new Server(server, {
 
 const rooms = new MemoryRoomStore();
 const roomTimers = new Map();
+const geometryDashScores = createGeometryDashScoreStore(path.join(__dirname, 'data', 'geometry-dash-scores.json'));
+const geometryDashSubmitAt = new Map();
+const GEOMETRY_DASH_SUBMIT_COOLDOWN_MS = 2_000;
 
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
+app.use(express.json({ limit: '2kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
 app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/impossible-quiz', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'impossible-quiz.html')));
@@ -40,6 +45,24 @@ app.get('/music/lobby', (_req, res) => res.sendFile(path.join(__dirname, 'public
 app.get('/music/room', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-room.html')));
 app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/api/geometry-dash/scores', (_req, res) => {
+  res.json({ scores: geometryDashScores.getTop(20) });
+});
+app.post('/api/geometry-dash/scores', (req, res) => {
+  const score = Number(req.body?.score);
+  if (!Number.isInteger(score) || score < 0 || score > SCORE_MAX) {
+    return res.status(400).json({ error: '유효하지 않은 점수입니다.' });
+  }
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const lastSubmitAt = geometryDashSubmitAt.get(ip) || 0;
+  if (now - lastSubmitAt < GEOMETRY_DASH_SUBMIT_COOLDOWN_MS) {
+    return res.status(429).json({ error: '너무 빠르게 제출했습니다. 잠시 후 다시 시도하세요.' });
+  }
+  geometryDashSubmitAt.set(ip, now);
+  const { rank } = geometryDashScores.addScore(req.body?.name, score);
+  res.json({ scores: geometryDashScores.getTop(20), rank });
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size }));
 

@@ -34,6 +34,10 @@ body{margin:0;min-height:100vh;background:var(--gd-bg);color:var(--gd-ink);font-
 .gd-overlay-card{width:min(420px,100%);text-align:center}
 .gd-overlay-card h2{margin:0 0 10px;font-size:clamp(24px,4vw,32px)}
 .gd-overlay-card p{margin:0 0 18px;color:var(--gd-muted);line-height:1.6}
+.gd-name-label{display:block;margin:0 0 8px;font-size:13px;color:var(--gd-muted);text-align:left}
+.gd-name-input{width:100%;min-height:46px;margin-bottom:18px;padding:0 14px;border:1px solid var(--gd-line);border-radius:10px;background:#191c2c;color:var(--gd-ink);font:inherit;font-size:15px}
+.gd-name-input:focus{outline:2px solid var(--gd-accent2)}
+.gd-primary-btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
 .gd-rank-text{color:var(--gd-accent)!important;font-weight:800}
 .gd-primary-btn{min-height:52px;padding:0 32px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--gd-accent),#ff9a3d);color:#1a0e06;font-weight:900;font-size:17px;cursor:pointer}
 .gd-primary-btn:hover{filter:brightness(1.06)}
@@ -41,9 +45,11 @@ body{margin:0;min-height:100vh;background:var(--gd-bg);color:var(--gd-ink);font-
 .gd-leaderboard{width:min(560px,100%);margin:28px auto 0;padding:20px 22px;border:1px solid var(--gd-line);border-radius:14px;background:var(--gd-panel);text-align:left}
 .gd-leaderboard-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .gd-leaderboard-head h2{margin:0;font-size:18px}
+.gd-leaderboard-note{margin:6px 0 0;color:var(--gd-muted);font-size:13px}
 .gd-text-btn{border:0;background:transparent;color:var(--gd-muted);font-size:13px;cursor:pointer;text-decoration:underline}
 .gd-leaderboard-list{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
-.gd-leaderboard-list li{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:9px;background:#191c2c;font-variant-numeric:tabular-nums}
+.gd-leaderboard-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;background:#191c2c;font-variant-numeric:tabular-nums}
+.gd-rank-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .gd-leaderboard-list li.gd-rank-1{background:linear-gradient(135deg,#3a2a10,#191c2c);color:#ffd27a}
 .gd-leaderboard-list li.gd-rank-2{color:#d8dbe8}
 .gd-leaderboard-list li.gd-rank-3{color:#e0b28c}

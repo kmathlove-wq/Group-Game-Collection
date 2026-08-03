@@ -11,8 +11,8 @@
   <nav class="gd-toolbar" aria-label="게임 메뉴">
     <a href="/">← 그룹 게임 컬렉션</a>
     <div class="gd-toolbar-actions">
-      <span class="gd-best">최고 기록 <strong id="bestScoreText">0</strong>m</span>
-      <button id="gdMuteButton" type="button" aria-pressed="false">🔊 효과음 켜짐</button>
+      <span class="gd-best">1위 기록 <strong id="bestScoreText">0</strong>m</span>
+      <button id="gdMuteButton" type="button" aria-pressed="false">🔊 소리 켜짐</button>
     </div>
   </nav>
 
@@ -32,6 +32,8 @@
         <div class="gd-overlay-card">
           <h2>준비됐나요?</h2>
           <p>스페이스바 · 클릭 · 화면 터치로 점프합니다.<br>가시와 블록에 닿으면 게임이 끝나요.</p>
+          <label class="gd-name-label" for="gdNameInput">순위에 표시할 이름</label>
+          <input id="gdNameInput" class="gd-name-input" type="text" maxlength="20" placeholder="이름을 입력하세요" autocomplete="off">
           <button id="gdStartButton" class="gd-primary-btn" type="button">시작하기</button>
         </div>
       </div>
@@ -46,13 +48,14 @@
       </div>
     </div>
 
-    <section class="gd-leaderboard" aria-label="순위 기록">
+    <section class="gd-leaderboard" aria-label="전체 순위">
       <div class="gd-leaderboard-head">
-        <h2>내 순위 기록</h2>
-        <button id="gdClearScoresButton" class="gd-text-btn" type="button">기록 초기화</button>
+        <h2>전체 순위</h2>
+        <button id="gdRefreshScoresButton" class="gd-text-btn" type="button">새로고침</button>
       </div>
+      <p class="gd-leaderboard-note">이 사이트에서 플레이한 모든 사람의 기록이에요.</p>
       <ol id="gdLeaderboardList" class="gd-leaderboard-list">
-        <li class="gd-leaderboard-empty">아직 기록이 없어요. 첫 게임을 시작해 보세요!</li>
+        <li class="gd-leaderboard-empty">기록을 불러오는 중…</li>
       </ol>
     </section>
   </main>

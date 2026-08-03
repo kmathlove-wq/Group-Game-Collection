@@ -2,10 +2,10 @@
   'use strict';
 
   // 원작 게임의 그래픽·음원을 쓰지 않는 독자 구현. "네모가 점프해서
-  // 장애물을 피한다"는 장르 규칙만 참고하고, 도형과 효과음은 새로 만든다.
-  const SCORES_KEY = 'group-game:geometry-dash:scores:v1';
+  // 장애물을 피한다"는 장르 규칙만 참고하고, 도형·배경음악·효과음은 전부 새로 만든다.
+  const NICKNAME_KEY = 'catchmind:nickname';
   const MUTE_KEY = 'group-game:geometry-dash:muted:v1';
-  const MAX_SCORES = 10;
+  const BEST_LOCAL_KEY = 'group-game:geometry-dash:bestLocal:v1';
 
   const CANVAS_W = 900;
   const CANVAS_H = 340;
@@ -22,6 +22,7 @@
   const GAP_MAX = 420;
   const HITBOX_INSET = 6;
   const MAX_DELTA = 1 / 30;
+  const MILESTONE_STEP = 1000; // distance 단위, 100m마다
 
   const canvas = document.querySelector('#gdCanvas');
   const ctx = canvas.getContext('2d');
@@ -35,62 +36,104 @@
   const rankText = document.querySelector('#gdRankText');
   const muteButton = document.querySelector('#gdMuteButton');
   const leaderboardList = document.querySelector('#gdLeaderboardList');
-  const clearScoresButton = document.querySelector('#gdClearScoresButton');
+  const refreshScoresButton = document.querySelector('#gdRefreshScoresButton');
+  const nameInput = document.querySelector('#gdNameInput');
 
   let muted = localStorage.getItem(MUTE_KEY) === '1';
   let audioCtx = null;
+  let bgmState = null;
   let player = null;
   let obstacles = [];
   let particles = [];
+  let backdropShapes = [];
   let speed = START_SPEED;
   let elapsed = 0;
   let distance = 0;
   let running = false;
   let lastTime = 0;
   let rafId = 0;
+  let shakeTime = 0;
+  let shakeMagnitude = 0;
+  let flashTime = 0;
+  let nextMilestoneAt = MILESTONE_STEP;
 
-  function loadScores() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(SCORES_KEY) || '[]');
-      if (!Array.isArray(raw)) return [];
-      return raw.filter((n) => Number.isFinite(n)).sort((a, b) => b - a).slice(0, MAX_SCORES);
-    } catch {
-      return [];
-    }
-  }
+  nameInput.value = localStorage.getItem(NICKNAME_KEY) || '';
 
-  function saveScore(score) {
-    const scores = loadScores();
-    scores.push(score);
-    scores.sort((a, b) => b - a);
-    const top = scores.slice(0, MAX_SCORES);
-    localStorage.setItem(SCORES_KEY, JSON.stringify(top));
-    return top;
-  }
-
+  // ---------- 순위(전체 통합) ----------
   function renderLeaderboard(scores) {
-    const list = scores || loadScores();
-    bestScoreText.textContent = list.length ? list[0] : 0;
-    if (!list.length) {
-      leaderboardList.innerHTML = '<li class="gd-leaderboard-empty">아직 기록이 없어요. 첫 게임을 시작해 보세요!</li>';
+    leaderboardList.innerHTML = '';
+    if (!scores || !scores.length) {
+      const empty = document.createElement('li');
+      empty.className = 'gd-leaderboard-empty';
+      empty.textContent = '아직 기록이 없어요. 첫 게임을 시작해 보세요!';
+      leaderboardList.append(empty);
+      bestScoreText.textContent = '0';
       return;
     }
-    leaderboardList.innerHTML = list
-      .map((score, index) => `
-        <li class="gd-rank-${index + 1}">
-          <span class="gd-rank-badge">${index + 1}위</span>
-          <span>${score}m</span>
-        </li>
-      `)
-      .join('');
+    bestScoreText.textContent = String(scores[0].score);
+    scores.forEach((item, index) => {
+      const li = document.createElement('li');
+      li.className = `gd-rank-${index + 1}`;
+      const badge = document.createElement('span');
+      badge.className = 'gd-rank-badge';
+      badge.textContent = `${index + 1}위`;
+      const name = document.createElement('span');
+      name.className = 'gd-rank-name';
+      name.textContent = item.name;
+      const score = document.createElement('span');
+      score.textContent = `${item.score}m`;
+      li.append(badge, name, score);
+      leaderboardList.append(li);
+    });
   }
 
+  async function fetchLeaderboard() {
+    try {
+      const response = await fetch('/api/geometry-dash/scores');
+      if (!response.ok) throw new Error('bad response');
+      const data = await response.json();
+      renderLeaderboard(data.scores);
+    } catch {
+      leaderboardList.innerHTML = '';
+      const errorItem = document.createElement('li');
+      errorItem.className = 'gd-leaderboard-empty';
+      errorItem.textContent = '순위를 불러오지 못했어요. 새로고침 버튼을 눌러 주세요.';
+      leaderboardList.append(errorItem);
+    }
+  }
+
+  async function submitScore(score) {
+    const name = nameInput.value.trim() || '이름없음';
+    localStorage.setItem(NICKNAME_KEY, name);
+    try {
+      const response = await fetch('/api/geometry-dash/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, score })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'submit failed');
+      renderLeaderboard(data.scores);
+      rankText.textContent = data.rank ? `전체 순위 ${data.rank}위에 올랐어요!` : '';
+    } catch {
+      rankText.textContent = '순위 제출에 실패했어요. 인터넷 연결을 확인해 주세요.';
+      fetchLeaderboard();
+    }
+    const bestLocal = Number(localStorage.getItem(BEST_LOCAL_KEY) || 0);
+    if (score > bestLocal) localStorage.setItem(BEST_LOCAL_KEY, String(score));
+  }
+
+  // ---------- 오디오: 전부 WebAudio로 합성한 자체 효과음·배경음악 ----------
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     return audioCtx;
   }
 
-  function playTone(freq, duration, type = 'square') {
+  function noteFreq(semitoneFromA4) {
+    return 440 * (2 ** (semitoneFromA4 / 12));
+  }
+
+  function playTone(freq, duration, type = 'square', volume = 0.12) {
     if (muted) return;
     try {
       const context = getAudioCtx();
@@ -98,7 +141,7 @@
       const gain = context.createGain();
       oscillator.type = type;
       oscillator.frequency.value = freq;
-      gain.gain.setValueAtTime(0.12, context.currentTime);
+      gain.gain.setValueAtTime(volume, context.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
       oscillator.connect(gain).connect(context.destination);
       oscillator.start();
@@ -108,11 +151,77 @@
     }
   }
 
+  function playScheduledTone(context, freq, time, duration, type, volume) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(time);
+    oscillator.stop(time + duration);
+  }
+
+  function playScheduledTick(context, time) {
+    const bufferSize = Math.floor(context.sampleRate * 0.03);
+    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const noise = context.createBufferSource();
+    noise.buffer = buffer;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.05, time);
+    noise.connect(gain).connect(context.destination);
+    noise.start(time);
+  }
+
+  // 신나는 8비트풍 반주: 베이스 + 아르페지오 + 하이햇, 전부 이 프로젝트에서 직접 작곡한 패턴이다.
+  const BGM_BPM = 148;
+  const BGM_STEP_SECONDS = 60 / BGM_BPM / 2;
+  const BGM_BASS_STEPS = [-24, -24, -21, -19, -24, -24, -21, -22];
+  const BGM_LEAD_STEPS = [0, 7, 10, 12, 10, 7, 3, 0, -5, 0, 7, 10, 12, 10, 7, 3];
+
+  function scheduleBgmStep(context, time, step) {
+    const bassSemi = BGM_BASS_STEPS[step % BGM_BASS_STEPS.length];
+    playScheduledTone(context, noteFreq(bassSemi), time, BGM_STEP_SECONDS * 1.8, 'square', 0.05);
+    const leadSemi = BGM_LEAD_STEPS[step % BGM_LEAD_STEPS.length];
+    playScheduledTone(context, noteFreq(leadSemi + 12), time, BGM_STEP_SECONDS * 0.85, 'square', 0.035);
+    if (step % 2 === 1) playScheduledTick(context, time);
+  }
+
+  function startBgm() {
+    if (muted || bgmState) return;
+    const context = getAudioCtx();
+    let step = 0;
+    let nextNoteTime = context.currentTime + 0.05;
+    const state = { timerId: 0, stopped: false };
+    function schedulerTick() {
+      if (state.stopped) return;
+      while (nextNoteTime < context.currentTime + 0.15) {
+        scheduleBgmStep(context, nextNoteTime, step);
+        nextNoteTime += BGM_STEP_SECONDS;
+        step += 1;
+      }
+      state.timerId = window.setTimeout(schedulerTick, 60);
+    }
+    bgmState = state;
+    schedulerTick();
+  }
+
+  function stopBgm() {
+    if (!bgmState) return;
+    bgmState.stopped = true;
+    window.clearTimeout(bgmState.timerId);
+    bgmState = null;
+  }
+
   function updateMuteButton() {
-    muteButton.textContent = muted ? '🔇 효과음 꺼짐' : '🔊 효과음 켜짐';
+    muteButton.textContent = muted ? '🔇 소리 꺼짐' : '🔊 소리 켜짐';
     muteButton.setAttribute('aria-pressed', String(muted));
   }
 
+  // ---------- 게임 상태 ----------
   function createPlayer() {
     return { y: GROUND_Y - PLAYER_SIZE, vy: 0, grounded: true, rotation: 0 };
   }
@@ -123,14 +232,8 @@
 
   function createObstacle(x) {
     const roll = Math.random();
-    if (roll < 0.55) {
-      const width = 34;
-      return { type: 'spike', x, width, height: 38 };
-    }
-    if (roll < 0.8) {
-      const width = 64;
-      return { type: 'spike-double', x, width, height: 38 };
-    }
+    if (roll < 0.55) return { type: 'spike', x, width: 34, height: 38 };
+    if (roll < 0.8) return { type: 'spike-double', x, width: 64, height: 38 };
     const height = 40 + Math.round(Math.random() * 30);
     return { type: 'block', x, width: 42, height };
   }
@@ -144,13 +247,31 @@
     }
   }
 
+  function createBackdropShapes() {
+    const shapes = [];
+    for (let i = 0; i < 6; i += 1) {
+      shapes.push({
+        x: randomRange(0, CANVAS_W),
+        y: randomRange(20, GROUND_Y - 60),
+        size: randomRange(30, 90),
+        kind: Math.random() < 0.5 ? 'circle' : 'diamond',
+        hue: Math.random() < 0.5 ? 'rgba(61,214,255,0.06)' : 'rgba(255,106,61,0.06)'
+      });
+    }
+    return shapes;
+  }
+
   function resetGame() {
     player = createPlayer();
     obstacles = [];
     particles = [];
+    backdropShapes = createBackdropShapes();
     speed = START_SPEED;
     elapsed = 0;
     distance = 0;
+    shakeTime = 0;
+    flashTime = 0;
+    nextMilestoneAt = MILESTONE_STEP;
     ensureObstacles();
     scoreText.textContent = '0';
   }
@@ -162,14 +283,16 @@
     playTone(520, 0.09, 'square');
   }
 
-  function spawnLandingParticles() {
-    for (let i = 0; i < 6; i += 1) {
+  function spawnBurst(x, y, count, colors, speedRange) {
+    for (let i = 0; i < count; i += 1) {
       particles.push({
-        x: PLAYER_X + PLAYER_SIZE / 2,
-        y: GROUND_Y,
-        vx: randomRange(-90, 90),
-        vy: randomRange(-160, -40),
-        life: 0.4
+        x,
+        y,
+        vx: randomRange(-speedRange, speedRange),
+        vy: randomRange(-speedRange, speedRange * 0.4),
+        life: randomRange(0.35, 0.7),
+        maxLife: 0.7,
+        color: colors[Math.floor(Math.random() * colors.length)]
       });
     }
   }
@@ -204,16 +327,26 @@
   function endGame() {
     running = false;
     cancelAnimationFrame(rafId);
-    playTone(140, 0.35, 'sawtooth');
+    stopBgm();
+    playTone(300, 0.12, 'sawtooth', 0.14);
+    window.setTimeout(() => playTone(220, 0.14, 'sawtooth', 0.13), 90);
+    window.setTimeout(() => playTone(140, 0.3, 'sawtooth', 0.12), 190);
+    shakeTime = 0.4;
+    shakeMagnitude = 10;
+    spawnBurst(PLAYER_X + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, 26, ['#3dd6ff', '#ff6a3d', '#ff3d63'], 260);
     const finalScore = Math.floor(distance / 10);
     finalScoreText.textContent = String(finalScore);
-    const top = saveScore(finalScore);
-    const rank = top.indexOf(finalScore);
-    rankText.textContent = rank >= 0 && rank < MAX_SCORES
-      ? `내 순위 기록 ${rank + 1}위에 올랐어요!`
-      : '';
-    renderLeaderboard(top);
+    rankText.textContent = '순위를 확인하는 중…';
     overOverlay.hidden = false;
+    submitScore(finalScore);
+  }
+
+  function checkMilestone() {
+    if (distance < nextMilestoneAt) return;
+    nextMilestoneAt += MILESTONE_STEP;
+    flashTime = 0.15;
+    playTone(880, 0.12, 'triangle', 0.08);
+    spawnBurst(PLAYER_X + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, 10, ['#ffd27a', '#3dd6ff'], 140);
   }
 
   function update(dt) {
@@ -221,28 +354,47 @@
     speed = START_SPEED + (MAX_SPEED - START_SPEED) * Math.min(1, elapsed / SPEED_RAMP_SECONDS);
     distance += speed * dt;
     scoreText.textContent = String(Math.floor(distance / 10));
+    checkMilestone();
 
     player.vy += GRAVITY * dt;
     player.y += player.vy * dt;
     if (player.y >= GROUND_Y - PLAYER_SIZE) {
       player.y = GROUND_Y - PLAYER_SIZE;
-      if (!player.grounded) spawnLandingParticles();
+      if (!player.grounded) {
+        spawnBurst(PLAYER_X + PLAYER_SIZE / 2, GROUND_Y, 5, ['#3dd6ff'], 110);
+        playTone(180, 0.05, 'triangle', 0.05);
+      }
       player.vy = 0;
       player.grounded = true;
     }
     player.rotation = player.grounded ? 0 : player.rotation + dt * 9;
 
+    if (player.grounded && Math.random() < dt * 22) {
+      particles.push({
+        x: PLAYER_X, y: player.y + PLAYER_SIZE - 4, vx: -speed * 0.4, vy: -20,
+        life: 0.25, maxLife: 0.25, color: 'rgba(61,214,255,0.6)'
+      });
+    }
+
     obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; });
     obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > -20);
     ensureObstacles();
 
+    backdropShapes.forEach((shape) => {
+      shape.x -= speed * 0.15 * dt;
+      if (shape.x < -100) shape.x = CANVAS_W + 100;
+    });
+
     particles.forEach((particle) => {
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
-      particle.vy += GRAVITY * 0.6 * dt;
+      particle.vy += GRAVITY * 0.5 * dt;
       particle.life -= dt;
     });
     particles = particles.filter((particle) => particle.life > 0);
+
+    if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
+    if (flashTime > 0) flashTime = Math.max(0, flashTime - dt);
 
     if (checkCollision()) endGame();
   }
@@ -253,6 +405,21 @@
     gradient.addColorStop(1, '#0b0c14');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    backdropShapes.forEach((shape) => {
+      ctx.fillStyle = shape.hue;
+      if (shape.kind === 'circle') {
+        ctx.beginPath();
+        ctx.arc(shape.x, shape.y, shape.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.save();
+        ctx.translate(shape.x, shape.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-shape.size / 2, -shape.size / 2, shape.size, shape.size);
+        ctx.restore();
+      }
+    });
 
     ctx.strokeStyle = 'rgba(61,214,255,0.08)';
     ctx.lineWidth = 1;
@@ -281,6 +448,22 @@
     }
   }
 
+  function drawSpeedLines() {
+    if (speed < START_SPEED + 40) return;
+    const intensity = Math.min(1, (speed - START_SPEED) / (MAX_SPEED - START_SPEED));
+    ctx.strokeStyle = `rgba(244,245,251,${0.05 + intensity * 0.12})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i += 1) {
+      const y = 30 + i * 70 + Math.sin(elapsed * 3 + i) * 6;
+      const length = 40 + intensity * 60;
+      const x = (CANVAS_W - ((distance * 2 + i * 150) % (CANVAS_W + length)));
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + length, y);
+      ctx.stroke();
+    }
+  }
+
   function drawPlayer() {
     const cx = PLAYER_X + PLAYER_SIZE / 2;
     const cy = player.y + PLAYER_SIZE / 2;
@@ -289,7 +472,7 @@
     ctx.rotate(player.rotation);
     ctx.fillStyle = '#3dd6ff';
     ctx.shadowColor = 'rgba(61,214,255,0.65)';
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 14 + Math.sin(elapsed * 8) * 4;
     ctx.fillRect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#0b0c14';
@@ -326,20 +509,31 @@
   }
 
   function drawParticles() {
-    ctx.fillStyle = 'rgba(61,214,255,0.8)';
     particles.forEach((particle) => {
-      ctx.globalAlpha = Math.max(0, particle.life / 0.4);
-      ctx.fillRect(particle.x - 2, particle.y - 2, 4, 4);
+      ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+      ctx.fillStyle = particle.color;
+      ctx.fillRect(particle.x - 2.5, particle.y - 2.5, 5, 5);
     });
     ctx.globalAlpha = 1;
   }
 
   function draw() {
+    ctx.save();
+    if (shakeTime > 0) {
+      const magnitude = shakeMagnitude * (shakeTime / 0.4);
+      ctx.translate(randomRange(-magnitude, magnitude), randomRange(-magnitude, magnitude));
+    }
     drawBackground();
+    drawSpeedLines();
     obstacles.forEach(drawObstacle);
     drawGround();
     drawParticles();
     drawPlayer();
+    ctx.restore();
+    if (flashTime > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${flashTime / 0.15 * 0.35})`;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    }
   }
 
   function loop(time) {
@@ -352,12 +546,15 @@
   }
 
   function startGame() {
+    const name = nameInput.value.trim();
+    if (name) localStorage.setItem(NICKNAME_KEY, name);
     resetGame();
     running = true;
     lastTime = performance.now();
     startOverlay.hidden = true;
     overOverlay.hidden = true;
     draw();
+    startBgm();
     rafId = requestAnimationFrame(loop);
   }
 
@@ -374,7 +571,10 @@
   });
   canvas.addEventListener('pointerdown', handleJumpInput);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) running = false;
+    if (document.hidden) {
+      running = false;
+      stopBgm();
+    }
   });
 
   startButton.addEventListener('click', startGame);
@@ -383,14 +583,14 @@
     muted = !muted;
     localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
     updateMuteButton();
+    if (muted) stopBgm();
+    else if (running) startBgm();
   });
-  clearScoresButton.addEventListener('click', () => {
-    localStorage.removeItem(SCORES_KEY);
-    renderLeaderboard([]);
-  });
+  refreshScoresButton.addEventListener('click', fetchLeaderboard);
 
   updateMuteButton();
-  renderLeaderboard();
+  fetchLeaderboard();
   player = createPlayer();
+  backdropShapes = createBackdropShapes();
   draw();
 })();
