@@ -52,7 +52,7 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
-  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz']) {
+  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz', '/geometry-dash']) {
     const response = await fetch(`${url}${route}`);
     assert.equal(response.status, 200, `${route} 진입 화면이 열려야 한다`);
   }

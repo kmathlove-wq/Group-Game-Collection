@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>그룹 게임 컬렉션-지오메트리 대쉬</title>
+  <link rel="icon" type="image/png" href="/assets/group-game-logo.png">
+  <link rel="stylesheet" href="/geometry-dash.css">
+</head>
+<body>
+  <nav class="gd-toolbar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="gd-toolbar-actions">
+      <span class="gd-best">최고 기록 <strong id="bestScoreText">0</strong>m</span>
+      <button id="gdMuteButton" type="button" aria-pressed="false">🔊 효과음 켜짐</button>
+    </div>
+  </nav>
+
+  <main class="gd-shell">
+    <h1>지오메트리 대쉬</h1>
+    <p class="gd-lead">스페이스바 또는 화면을 눌러 점프! 장애물에 닿으면 끝나요.</p>
+
+    <div class="gd-stage-wrap">
+      <canvas id="gdCanvas" width="900" height="340" aria-label="지오메트리 대쉬 게임 화면"></canvas>
+
+      <div class="gd-hud">
+        <span class="gd-score-label">거리</span>
+        <strong id="gdScoreText">0</strong>m
+      </div>
+
+      <div id="gdStartOverlay" class="gd-overlay">
+        <div class="gd-overlay-card">
+          <h2>준비됐나요?</h2>
+          <p>스페이스바 · 클릭 · 화면 터치로 점프합니다.<br>가시와 블록에 닿으면 게임이 끝나요.</p>
+          <button id="gdStartButton" class="gd-primary-btn" type="button">시작하기</button>
+        </div>
+      </div>
+
+      <div id="gdOverOverlay" class="gd-overlay" hidden>
+        <div class="gd-overlay-card">
+          <h2>게임 오버</h2>
+          <p>이번 기록: <strong id="gdFinalScoreText">0</strong>m</p>
+          <p id="gdRankText" class="gd-rank-text"></p>
+          <button id="gdRetryButton" class="gd-primary-btn" type="button">다시 시작</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="gd-leaderboard" aria-label="순위 기록">
+      <div class="gd-leaderboard-head">
+        <h2>내 순위 기록</h2>
+        <button id="gdClearScoresButton" class="gd-text-btn" type="button">기록 초기화</button>
+      </div>
+      <ol id="gdLeaderboardList" class="gd-leaderboard-list">
+        <li class="gd-leaderboard-empty">아직 기록이 없어요. 첫 게임을 시작해 보세요!</li>
+      </ol>
+    </section>
+  </main>
+
+  <script src="/geometry-dash.js"></script>
+</body>
+</html>
