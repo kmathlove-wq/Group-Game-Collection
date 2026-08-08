@@ -46,7 +46,7 @@ app.get('/music/room', (_req, res) => res.sendFile(path.join(__dirname, 'public'
 app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/api/geometry-dash/scores', (_req, res) => {
-  res.json({ scores: geometryDashScores.getTop(20) });
+  res.json({ scores: geometryDashScores.getTop(10) });
 });
 app.post('/api/geometry-dash/scores', (req, res) => {
   const score = Number(req.body?.score);
@@ -61,7 +61,7 @@ app.post('/api/geometry-dash/scores', (req, res) => {
   }
   geometryDashSubmitAt.set(ip, now);
   const { rank } = geometryDashScores.addScore(req.body?.name, score);
-  res.json({ scores: geometryDashScores.getTop(20), rank });
+  res.json({ scores: geometryDashScores.getTop(10), rank });
 });
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size }));

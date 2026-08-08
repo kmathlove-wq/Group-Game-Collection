@@ -54,8 +54,10 @@ body{margin:0;min-height:100vh;background:var(--gd-bg);color:var(--gd-ink);font-
 .gd-leaderboard-list li.gd-rank-2{color:#d8dbe8}
 .gd-leaderboard-list li.gd-rank-3{color:#e0b28c}
 .gd-leaderboard-empty{color:var(--gd-muted);background:transparent!important;justify-content:center!important}
-.gd-rank-badge{font-weight:800;color:var(--gd-muted);width:28px}
+.gd-rank-badge{font-weight:800;color:var(--gd-muted);min-width:34px;white-space:nowrap;flex-shrink:0}
 .gd-rank-1 .gd-rank-badge{color:#ffd27a}
+.gd-my-rank{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--gd-line);color:var(--gd-accent2);font-weight:700;font-size:14px}
+.gd-my-rank:empty{display:none}
 
 @media (max-width:640px){
   .gd-toolbar{flex-direction:column;align-items:flex-start}

@@ -6,6 +6,7 @@
   const NICKNAME_KEY = 'catchmind:nickname';
   const MUTE_KEY = 'group-game:geometry-dash:muted:v1';
   const BEST_LOCAL_KEY = 'group-game:geometry-dash:bestLocal:v1';
+  const MY_BEST_RANK_KEY = 'group-game:geometry-dash:bestRank:v1';
 
   const CANVAS_W = 900;
   const CANVAS_H = 340;
@@ -63,6 +64,7 @@
   const rankText = document.querySelector('#gdRankText');
   const muteButton = document.querySelector('#gdMuteButton');
   const leaderboardList = document.querySelector('#gdLeaderboardList');
+  const myBestRankText = document.querySelector('#gdMyBestRankText');
   const refreshScoresButton = document.querySelector('#gdRefreshScoresButton');
   const nameInput = document.querySelector('#gdNameInput');
 
@@ -119,6 +121,19 @@
     });
   }
 
+  function renderMyBestRank() {
+    const raw = localStorage.getItem(MY_BEST_RANK_KEY);
+    if (!raw) { myBestRankText.textContent = ''; return; }
+    try {
+      const { name, score, rank } = JSON.parse(raw);
+      myBestRankText.textContent = rank
+        ? `내 최고 기록: ${name} · ${score}m · 전체 ${rank}위`
+        : `내 최고 기록: ${name} · ${score}m · 순위표 50위 밖`;
+    } catch {
+      myBestRankText.textContent = '';
+    }
+  }
+
   async function fetchLeaderboard() {
     try {
       const response = await fetch('/api/geometry-dash/scores');
@@ -137,6 +152,8 @@
   async function submitScore(score) {
     const name = nameInput.value.trim() || '이름없음';
     localStorage.setItem(NICKNAME_KEY, name);
+    const bestLocal = Number(localStorage.getItem(BEST_LOCAL_KEY) || 0);
+    const isNewBest = score > bestLocal;
     try {
       const response = await fetch('/api/geometry-dash/scores', {
         method: 'POST',
@@ -147,12 +164,15 @@
       if (!response.ok) throw new Error(data?.error || 'submit failed');
       renderLeaderboard(data.scores);
       rankText.textContent = data.rank ? `전체 순위 ${data.rank}위에 올랐어요!` : '';
+      if (isNewBest) {
+        localStorage.setItem(MY_BEST_RANK_KEY, JSON.stringify({ name, score, rank: data.rank || null }));
+        renderMyBestRank();
+      }
     } catch {
       rankText.textContent = '순위 제출에 실패했어요. 인터넷 연결을 확인해 주세요.';
       fetchLeaderboard();
     }
-    const bestLocal = Number(localStorage.getItem(BEST_LOCAL_KEY) || 0);
-    if (score > bestLocal) localStorage.setItem(BEST_LOCAL_KEY, String(score));
+    if (isNewBest) localStorage.setItem(BEST_LOCAL_KEY, String(score));
   }
 
   // ---------- 오디오: 전부 WebAudio로 합성한 자체 효과음·배경음악 ----------
@@ -752,23 +772,37 @@
     ctx.restore();
   }
 
-  function drawFlightHole(obstacle) {
-    const isTop = obstacle.type === 'flight-hole-top';
-    const y = isTop ? FLIGHT_TOP : FLIGHT_BOTTOM - obstacle.height;
-    const gradient = ctx.createLinearGradient(0, y, 0, y + obstacle.height);
+  // 위·아래 조각을 따로 그리지 않고, 천장부터 바닥까지 이어진 판 하나를 그린 뒤
+  // 지나가야 하는 구간만 실제로 도려내어(destination-out) 배경이 비치는 진짜 구멍처럼 보이게 한다.
+  function drawFlightHolePair(topObstacle, bottomObstacle) {
+    const x = topObstacle.x;
+    const width = topObstacle.width;
+    const holeTop = FLIGHT_TOP + topObstacle.height;
+    const holeBottom = FLIGHT_BOTTOM - bottomObstacle.height;
+    const holeCenterY = (holeTop + holeBottom) / 2;
+    const holeRadiusY = Math.max(4, (holeBottom - holeTop) / 2 - 2);
+    const holeRadiusX = Math.max(4, width / 2 - 2);
+
+    const gradient = ctx.createLinearGradient(0, FLIGHT_TOP, 0, FLIGHT_BOTTOM);
     gradient.addColorStop(0, '#2fb87a');
     gradient.addColorStop(1, '#5be8ab');
     ctx.save();
     ctx.shadowColor = 'rgba(91,232,171,0.5)';
     ctx.shadowBlur = 10;
     ctx.fillStyle = gradient;
-    ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
+    ctx.fillRect(x, FLIGHT_TOP, width, FLIGHT_BOTTOM - FLIGHT_TOP);
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(11,12,20,0.4)';
-    ctx.lineWidth = 3;
-    const ringY = isTop ? y + obstacle.height : y;
+
+    ctx.globalCompositeOperation = 'destination-out';
     ctx.beginPath();
-    ctx.arc(obstacle.x + obstacle.width / 2, ringY, obstacle.width / 2 - 4, 0, Math.PI * 2);
+    ctx.ellipse(x + width / 2, holeCenterY, holeRadiusX, holeRadiusY, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.strokeStyle = 'rgba(11,12,20,0.45)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(x + width / 2, holeCenterY, holeRadiusX, holeRadiusY, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -778,7 +812,12 @@
     if (obstacle.type === 'block') { drawBlockObstacle(obstacle); return; }
     if (obstacle.type === 'flight-ceiling' || obstacle.type === 'flight-floor') { drawFlightWall(obstacle); return; }
     if (obstacle.type === 'flight-spike-ceiling' || obstacle.type === 'flight-spike-floor') { drawFlightSpike(obstacle); return; }
-    if (obstacle.type === 'flight-hole-top' || obstacle.type === 'flight-hole-bottom') { drawFlightHole(obstacle); return; }
+    if (obstacle.type === 'flight-hole-top') {
+      const partner = obstacles.find((other) => other.type === 'flight-hole-bottom' && other.x === obstacle.x);
+      if (partner) drawFlightHolePair(obstacle, partner);
+      return;
+    }
+    if (obstacle.type === 'flight-hole-bottom') return; // 짝인 flight-hole-top이 한 번에 같이 그린다.
     drawSpikeCluster(obstacle);
   }
 
@@ -880,6 +919,7 @@
 
   updateMuteButton();
   fetchLeaderboard();
+  renderMyBestRank();
   player = createPlayer();
   backdropShapes = createBackdropShapes();
   draw();
