@@ -42,7 +42,7 @@ Express와 Socket.IO가 서로 분리된 두 게임의 방과 상태를 동기�
 │   ├── music*.html/js              # 송캐치 개인전·단체전
 │   ├── impossible-quiz.*            # 20문제 1인용 퀴즈쇼
 │   ├── admin*.html/js              # 숨겨진 관리자 화면
-│   └── assets/                     # 두들팡 로고 PNG
+│   └── assets/                     # 두들팡 로고 PNG, geometry-dash/ 게임 그림
 └── test/
     └── server.test.js              # 실제 Socket.IO 통합 테스트
 ```
@@ -97,13 +97,7 @@ npm test          # node --test
 - 두들팡 방·Canvas·정답 로직은 게임 전용 모듈로 이동할 수 있게 새 공통 코드와 결합도를 낮게 유지한다.
 - 실제 두 번째 게임을 추가하기 전에는 기능 없는 빈 게임 카드나 작동하지 않는 선택지를 노출하지 않는다.
 - `/impossible-quiz`는 서버 방 없이 `group-game:impossible-quiz:v1` 로컬 저장 상태를 사용하는 1인용 고정 순서 게임이다.
-- `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은
-  쓰지 않고 자체 도형·WebAudio 효과음·배경음악만 사용한다. 순위는 `lib/geometry-dash-scores.js`가
-  `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며,
-  `GET/POST /api/geometry-dash/scores`로 조회·제출한다. 제출은 점수 상한과 IP당 2초 쿨다운으로만
-  검사하고 서버가 물리를 재현하지는 않는다. 가시·블록·구덩이 외에 누르고 있으면 뜨고 떼면
-  떨어지는 비행 구간(`flight-ceiling`/`flight-floor`)이 있다. 점프·비행 물리 상수를 바꾸면
-  통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다(임의 컨트롤러로 실패율 0%가 기준).
+- `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은 쓰지 않는다. 배경·캐릭터·장애물은 `public/assets/geometry-dash/`의 자체 제작 그림(AI 생성 후 투명 배경·워터마크 보정)을 `drawImage`로 그리고(로드 실패 시 단색 도형 대체, 구덩이는 항상 벡터), 비행 구간 장애물은 그림 하나를 위아래로 뒤집어 재사용한다. 효과음·배경음악은 WebAudio로 직접 합성한다. 순위는 `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며, `GET/POST /api/geometry-dash/scores`로 조회·제출한다. 제출은 점수 상한과 IP당 2초 쿨다운으로만 검사하고 서버가 물리를 재현하지는 않는다. 가시·블록·구덩이 외에 누르고 있으면 뜨고 떼면 떨어지는 비행 구간(`flight-ceiling`/`flight-floor`)이 있다. 점프·비행 물리 상수를 바꾸면 통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다(임의 컨트롤러로 실패율 0%가 기준).
 - 퀴즈쇼는 총 20문항, 4·5번 항상 오답, 18점 만점이며 20번 제출 전까지 누적 점수를 화면에 노출하지 않는다.
 - 퀴즈쇼 저장 점수는 답안 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 저장된 `score` 대신 앞선 답안을 즉시 재채점한다.
 - 퀴즈쇼 9번은 35개의 1을 절대 위치로 불규칙 배치하고, Ctrl 두 번 숨은 창의 비밀번호가 맞으면 퀴즈 음성을 문제→보기와 정오답 순서로 재생한다. 분기 오답 파일은 `WRONG_AUDIO_VARIANTS`로 명시한다.

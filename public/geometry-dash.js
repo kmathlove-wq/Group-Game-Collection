@@ -52,6 +52,42 @@
   const FLIGHT_LANDING_RECOVERY_MIN = 450; // 비행 구간이 끝난 뒤 착지할 여유 거리
   const FLIGHT_LANDING_RECOVERY_MAX = 650;
 
+  // flight-hole.png 원본 그림에서 "구멍"이 차지하는 세로 비율(0~1). 실제 통과 폭은
+  // 매번 달라지므로, 이 비율로 그림을 위/아래로 잘라 늘려서 진짜 통과 지점에 맞춘다.
+  const FLIGHT_HOLE_TOP_FRAC = 0.2956;
+  const FLIGHT_HOLE_BOTTOM_FRAC = 0.7014;
+
+  // ---------- 나노바나나로 만든 게임 그림 ----------
+  const ASSET_SOURCES = {
+    background: '/assets/geometry-dash/background.png',
+    playerGround: '/assets/geometry-dash/player-ground.png',
+    playerFlight: '/assets/geometry-dash/player-flight.png',
+    spike: '/assets/geometry-dash/spike.png',
+    block: '/assets/geometry-dash/block.png',
+    flightWall: '/assets/geometry-dash/flight-wall.png',
+    flightSpike: '/assets/geometry-dash/flight-spike.png',
+    flightHole: '/assets/geometry-dash/flight-hole.png',
+    groundStrip: '/assets/geometry-dash/ground-strip.png'
+  };
+  const assets = {};
+
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null); // 못 불러와도 게임은 계속 진행한다.
+      img.src = src;
+    });
+  }
+
+  async function loadAssets() {
+    const entries = Object.entries(ASSET_SOURCES);
+    const images = await Promise.all(entries.map(([, src]) => loadImage(src)));
+    entries.forEach(([key], index) => { assets[key] = images[index]; });
+    startButton.disabled = false;
+    startButton.textContent = '시작하기';
+  }
+
   const canvas = document.querySelector('#gdCanvas');
   const ctx = canvas.getContext('2d');
   const scoreText = document.querySelector('#gdScoreText');
@@ -74,7 +110,6 @@
   let player = null;
   let obstacles = [];
   let particles = [];
-  let backdropShapes = [];
   let speed = START_SPEED;
   let elapsed = 0;
   let distance = 0;
@@ -354,25 +389,10 @@
     return flightZones.some((zone) => zone.x < right && zone.x + zone.width > left);
   }
 
-  function createBackdropShapes() {
-    const shapes = [];
-    for (let i = 0; i < 6; i += 1) {
-      shapes.push({
-        x: randomRange(0, CANVAS_W),
-        y: randomRange(20, GROUND_Y - 60),
-        size: randomRange(30, 90),
-        kind: Math.random() < 0.5 ? 'circle' : 'diamond',
-        hue: Math.random() < 0.5 ? 'rgba(61,214,255,0.06)' : 'rgba(255,106,61,0.06)'
-      });
-    }
-    return shapes;
-  }
-
   function resetGame() {
     player = createPlayer();
     obstacles = [];
     particles = [];
-    backdropShapes = createBackdropShapes();
     speed = START_SPEED;
     elapsed = 0;
     distance = 0;
@@ -539,11 +559,6 @@
     ensureFlightZones();
     ensureFlightObstacles();
 
-    backdropShapes.forEach((shape) => {
-      shape.x -= speed * 0.15 * dt;
-      if (shape.x < -100) shape.x = CANVAS_W + 100;
-    });
-
     particles.forEach((particle) => {
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
@@ -559,51 +574,29 @@
   }
 
   function drawBackground() {
-    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-    gradient.addColorStop(0, '#141728');
-    gradient.addColorStop(1, '#0b0c14');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-    backdropShapes.forEach((shape) => {
-      ctx.fillStyle = shape.hue;
-      if (shape.kind === 'circle') {
-        ctx.beginPath();
-        ctx.arc(shape.x, shape.y, shape.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.save();
-        ctx.translate(shape.x, shape.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-shape.size / 2, -shape.size / 2, shape.size, shape.size);
-        ctx.restore();
-      }
-    });
-
-    ctx.strokeStyle = 'rgba(61,214,255,0.08)';
-    ctx.lineWidth = 1;
-    const scroll = (distance * 0.4) % 40;
-    for (let x = -scroll; x < CANVAS_W; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, GROUND_Y);
-      ctx.stroke();
+    const img = assets.background;
+    if (!img) {
+      ctx.fillStyle = '#0b0c14';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      return;
     }
+    // 배경 그림 한 장을 두 번 나란히 그려서 옆으로 계속 이어지게 만든다(이음매는 약간 보일 수 있음).
+    const scroll = (distance * 0.15) % CANVAS_W;
+    ctx.drawImage(img, -scroll, 0, CANVAS_W, CANVAS_H);
+    ctx.drawImage(img, CANVAS_W - scroll, 0, CANVAS_W, CANVAS_H);
   }
 
   function drawGround() {
-    ctx.fillStyle = '#12141f';
-    ctx.fillRect(0, GROUND_Y, CANVAS_W, GROUND_H);
-    ctx.fillStyle = '#ff6a3d';
-    ctx.fillRect(0, GROUND_Y, CANVAS_W, 3);
-    ctx.strokeStyle = 'rgba(255,106,61,0.35)';
-    ctx.lineWidth = 2;
-    const scroll = distance % 30;
-    for (let x = -scroll; x < CANVAS_W; x += 30) {
-      ctx.beginPath();
-      ctx.moveTo(x, GROUND_Y + 14);
-      ctx.lineTo(x + 14, GROUND_Y + 14);
-      ctx.stroke();
+    const img = assets.groundStrip;
+    if (img) {
+      const tileWidth = GROUND_H * (img.width / img.height);
+      const scroll = distance % tileWidth;
+      for (let x = -scroll; x < CANVAS_W; x += tileWidth) {
+        ctx.drawImage(img, x, GROUND_Y, tileWidth, GROUND_H);
+      }
+    } else {
+      ctx.fillStyle = '#12141f';
+      ctx.fillRect(0, GROUND_Y, CANVAS_W, GROUND_H);
     }
     obstacles.forEach((obstacle) => {
       if (obstacle.type !== 'pit') return;
@@ -638,173 +631,122 @@
     const cx = PLAYER_X + PLAYER_SIZE / 2;
     const cy = player.y + PLAYER_SIZE / 2;
     const flying = isInFlightZone();
+    const img = flying ? assets.playerFlight : assets.playerGround;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(player.rotation);
-    ctx.fillStyle = flying ? '#c79bff' : '#3dd6ff';
-    ctx.shadowColor = flying ? 'rgba(139,91,255,0.65)' : 'rgba(61,214,255,0.65)';
-    ctx.shadowBlur = 14 + Math.sin(elapsed * 8) * 4;
-    ctx.fillRect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#0b0c14';
-    ctx.fillRect(-PLAYER_SIZE / 2 + 8, -PLAYER_SIZE / 2 + 8, 9, 9);
-    ctx.fillRect(PLAYER_SIZE / 2 - 17, -PLAYER_SIZE / 2 + 8, 9, 9);
+    if (img) {
+      // 그림 비율을 유지하면서 정사각형 판정 영역 안에 맞춘다.
+      const scale = PLAYER_SIZE / Math.max(img.width, img.height);
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
+      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    } else {
+      ctx.fillStyle = flying ? '#c79bff' : '#3dd6ff';
+      ctx.fillRect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
+    }
     ctx.restore();
   }
 
   function drawBlockObstacle(obstacle) {
+    const img = assets.block;
     const x = obstacle.x;
     const y = GROUND_Y - obstacle.height;
-    const gradient = ctx.createLinearGradient(0, y, 0, GROUND_Y);
-    gradient.addColorStop(0, '#ff9a6b');
-    gradient.addColorStop(1, '#ff6a3d');
-    ctx.save();
-    ctx.shadowColor = 'rgba(255,106,61,0.5)';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, y, obstacle.width, obstacle.height);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    ctx.fillRect(x, y, obstacle.width, 4);
-    ctx.strokeStyle = 'rgba(11,12,20,0.28)';
-    ctx.lineWidth = 1;
-    const rows = Math.max(1, Math.round(obstacle.height / 18));
-    for (let r = 1; r < rows; r += 1) {
-      const ly = y + (obstacle.height / rows) * r;
-      ctx.beginPath();
-      ctx.moveTo(x, ly);
-      ctx.lineTo(x + obstacle.width, ly);
-      ctx.stroke();
+    if (img) {
+      ctx.drawImage(img, x, y, obstacle.width, obstacle.height);
+    } else {
+      ctx.fillStyle = '#ff6a3d';
+      ctx.fillRect(x, y, obstacle.width, obstacle.height);
     }
-    const cols = Math.max(1, Math.round(obstacle.width / 18));
-    for (let c = 1; c < cols; c += 1) {
-      const lx = x + (obstacle.width / cols) * c;
-      ctx.beginPath();
-      ctx.moveTo(lx, y);
-      ctx.lineTo(lx, GROUND_Y);
-      ctx.stroke();
-    }
-    ctx.restore();
   }
 
   function drawSpikeCluster(obstacle) {
-    const baseY = GROUND_Y;
+    const img = assets.spike;
     const spikeCount = SPIKE_COUNTS[obstacle.type] || 1;
     const spikeWidth = obstacle.width / spikeCount;
     for (let i = 0; i < spikeCount; i += 1) {
       const startX = obstacle.x + i * spikeWidth;
-      const tipX = startX + spikeWidth / 2;
-      const gradient = ctx.createLinearGradient(startX, baseY, tipX, baseY - obstacle.height);
-      gradient.addColorStop(0, '#ff3d63');
-      gradient.addColorStop(1, '#ff9fb3');
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(startX, baseY);
-      ctx.lineTo(tipX, baseY - obstacle.height);
-      ctx.lineTo(startX + spikeWidth, baseY);
-      ctx.closePath();
-      ctx.shadowColor = 'rgba(255,61,99,0.55)';
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = gradient;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.clip();
-      ctx.strokeStyle = 'rgba(11,12,20,0.35)';
-      ctx.lineWidth = 3;
-      for (let sx = startX - obstacle.height; sx < startX + spikeWidth + obstacle.height; sx += 9) {
+      if (img) {
+        ctx.drawImage(img, startX, GROUND_Y - obstacle.height, spikeWidth, obstacle.height);
+      } else {
+        ctx.fillStyle = '#ff3d63';
         ctx.beginPath();
-        ctx.moveTo(sx, baseY);
-        ctx.lineTo(sx + obstacle.height, baseY - obstacle.height);
-        ctx.stroke();
+        ctx.moveTo(startX, GROUND_Y);
+        ctx.lineTo(startX + spikeWidth / 2, GROUND_Y - obstacle.height);
+        ctx.lineTo(startX + spikeWidth, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
       }
-      ctx.restore();
     }
   }
 
   function drawFlightWall(obstacle) {
+    const img = assets.flightWall;
     const isCeiling = obstacle.type === 'flight-ceiling';
     const y = isCeiling ? FLIGHT_TOP : FLIGHT_BOTTOM - obstacle.height;
-    const gradient = ctx.createLinearGradient(0, y, 0, y + obstacle.height);
-    gradient.addColorStop(0, isCeiling ? '#8b5bff' : '#4d2fb0');
-    gradient.addColorStop(1, isCeiling ? '#4d2fb0' : '#8b5bff');
+    if (!img) {
+      ctx.fillStyle = '#8b5bff';
+      ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
+      return;
+    }
     ctx.save();
-    ctx.shadowColor = 'rgba(139,91,255,0.55)';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = gradient;
-    ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    const chevronY = isCeiling ? y + obstacle.height - 14 : y + 4;
-    for (let cx = obstacle.x + 6; cx < obstacle.x + obstacle.width - 6; cx += 14) {
-      ctx.beginPath();
-      if (isCeiling) {
-        ctx.moveTo(cx, chevronY);
-        ctx.lineTo(cx + 6, chevronY + 10);
-        ctx.lineTo(cx + 12, chevronY);
-      } else {
-        ctx.moveTo(cx, chevronY + 10);
-        ctx.lineTo(cx + 6, chevronY);
-        ctx.lineTo(cx + 12, chevronY + 10);
-      }
-      ctx.closePath();
-      ctx.fill();
+    if (isCeiling) {
+      ctx.drawImage(img, obstacle.x, y, obstacle.width, obstacle.height);
+    } else {
+      // 그림은 천장에 붙는 모양이라, 바닥용은 위아래로 뒤집어서 그대로 재사용한다.
+      ctx.translate(obstacle.x, y + obstacle.height);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, obstacle.width, obstacle.height);
     }
     ctx.restore();
   }
 
   function drawFlightSpike(obstacle) {
+    const img = assets.flightSpike;
     const fromCeiling = obstacle.type === 'flight-spike-ceiling';
-    const baseY = fromCeiling ? FLIGHT_TOP : FLIGHT_BOTTOM;
-    const tipY = fromCeiling ? FLIGHT_TOP + obstacle.height : FLIGHT_BOTTOM - obstacle.height;
-    const gradient = ctx.createLinearGradient(0, baseY, 0, tipY);
-    gradient.addColorStop(0, '#ffb23d');
-    gradient.addColorStop(1, '#ffe0a3');
+    const y = fromCeiling ? FLIGHT_TOP : FLIGHT_BOTTOM - obstacle.height;
+    if (!img) {
+      ctx.fillStyle = '#ffb23d';
+      ctx.fillRect(obstacle.x, y, obstacle.width, obstacle.height);
+      return;
+    }
     ctx.save();
-    ctx.shadowColor = 'rgba(255,178,61,0.55)';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(obstacle.x, baseY);
-    ctx.lineTo(obstacle.x + obstacle.width / 2, tipY);
-    ctx.lineTo(obstacle.x + obstacle.width, baseY);
-    ctx.closePath();
-    ctx.fill();
+    if (fromCeiling) {
+      ctx.drawImage(img, obstacle.x, y, obstacle.width, obstacle.height);
+    } else {
+      // 그림은 천장에서 아래로 향한 가시라, 바닥용은 뒤집어서 위로 향하게 한다.
+      ctx.translate(obstacle.x, y + obstacle.height);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, obstacle.width, obstacle.height);
+    }
     ctx.restore();
   }
 
-  // 위·아래 조각을 따로 그리지 않고, 천장부터 바닥까지 이어진 판 하나를 그린 뒤
-  // 지나가야 하는 구간만 실제로 도려내어(destination-out) 배경이 비치는 진짜 구멍처럼 보이게 한다.
+  // 그림 속 "구멍"은 세로 위치가 고정돼 있지만, 실제로 지나갈 수 있는 위치는 매번 달라진다.
+  // 그림을 구멍 위/아래로 잘라서(source crop) 실제 통과 지점에 맞춰 늘려 그리면 위치가 항상 맞는다.
   function drawFlightHolePair(topObstacle, bottomObstacle) {
+    const img = assets.flightHole;
     const x = topObstacle.x;
     const width = topObstacle.width;
     const holeTop = FLIGHT_TOP + topObstacle.height;
     const holeBottom = FLIGHT_BOTTOM - bottomObstacle.height;
-    const holeCenterY = (holeTop + holeBottom) / 2;
-    const holeRadiusY = Math.max(4, (holeBottom - holeTop) / 2 - 2);
-    const holeRadiusX = Math.max(4, width / 2 - 2);
-
-    const gradient = ctx.createLinearGradient(0, FLIGHT_TOP, 0, FLIGHT_BOTTOM);
-    gradient.addColorStop(0, '#2fb87a');
-    gradient.addColorStop(1, '#5be8ab');
-    ctx.save();
-    ctx.shadowColor = 'rgba(91,232,171,0.5)';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, FLIGHT_TOP, width, FLIGHT_BOTTOM - FLIGHT_TOP);
-    ctx.shadowBlur = 0;
-
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    ctx.ellipse(x + width / 2, holeCenterY, holeRadiusX, holeRadiusY, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-
-    ctx.strokeStyle = 'rgba(11,12,20,0.45)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(x + width / 2, holeCenterY, holeRadiusX, holeRadiusY, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    if (!img) {
+      ctx.fillStyle = '#2fb87a';
+      if (holeTop > FLIGHT_TOP) ctx.fillRect(x, FLIGHT_TOP, width, holeTop - FLIGHT_TOP);
+      if (FLIGHT_BOTTOM > holeBottom) ctx.fillRect(x, holeBottom, width, FLIGHT_BOTTOM - holeBottom);
+      return;
+    }
+    const srcHoleTop = img.height * FLIGHT_HOLE_TOP_FRAC;
+    const srcHoleBottom = img.height * FLIGHT_HOLE_BOTTOM_FRAC;
+    if (holeTop > FLIGHT_TOP) {
+      ctx.drawImage(img, 0, 0, img.width, srcHoleTop, x, FLIGHT_TOP, width, holeTop - FLIGHT_TOP);
+    }
+    if (FLIGHT_BOTTOM > holeBottom) {
+      ctx.drawImage(
+        img, 0, srcHoleBottom, img.width, img.height - srcHoleBottom,
+        x, holeBottom, width, FLIGHT_BOTTOM - holeBottom
+      );
+    }
   }
 
   function drawObstacle(obstacle) {
@@ -921,6 +863,7 @@
   fetchLeaderboard();
   renderMyBestRank();
   player = createPlayer();
-  backdropShapes = createBackdropShapes();
-  draw();
+  startButton.disabled = true;
+  startButton.textContent = '그림 불러오는 중…';
+  loadAssets().then(draw);
 })();

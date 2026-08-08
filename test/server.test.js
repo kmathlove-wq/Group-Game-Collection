@@ -76,15 +76,22 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   });
   assert.equal(submitted.status, 200);
   const submittedBody = await submitted.json();
-  assert.ok(submittedBody.rank >= 1 && submittedBody.rank <= 20, '순위표 상위 20위 안에 들어야 한다');
-  assert.ok(submittedBody.scores.some((entry) => entry.name === uniqueName && entry.score === 19999));
+  assert.ok(submittedBody.rank >= 1 && submittedBody.rank <= 50, '전체 순위(최대 50위) 안에 들어야 한다');
+  assert.ok(submittedBody.scores.length <= 10, '순위표는 10위까지만 내려줘야 한다');
+  if (submittedBody.rank <= 10) {
+    assert.ok(submittedBody.scores.some((entry) => entry.name === uniqueName && entry.score === 19999));
+  }
   const rateLimited = await fetch(`${url}/api/geometry-dash/scores`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 200 })
   });
   assert.equal(rateLimited.status, 429);
   const scoreList = await fetch(`${url}/api/geometry-dash/scores`);
   assert.equal(scoreList.status, 200);
-  assert.ok((await scoreList.json()).scores.some((entry) => entry.name === uniqueName));
+  const scoreListBody = await scoreList.json();
+  assert.ok(scoreListBody.scores.length <= 10, '순위표는 10위까지만 내려줘야 한다');
+  if (submittedBody.rank <= 10) {
+    assert.ok(scoreListBody.scores.some((entry) => entry.name === uniqueName));
+  }
 
   const created = await emitAck(host, 'room:create', {
     userId: 'host-id', nickname: '방장님',
