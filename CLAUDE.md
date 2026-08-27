@@ -27,7 +27,7 @@ Express와 Socket.IO가 서로 분리된 두 게임의 방과 상태를 동기�
 │   ├── memory-room-store.js        # 교체 가능한 메모리 방 저장소
 │   └── geometry-dash-scores.js     # 지오메트리 대쉬 전체 순위 파일 저장소
 ├── data/
-│   ├── words.json                  # easy/normal/hard 제시어 목록
+│   ├── words.json                  # easy/normal/hard 제시어 목록 (난이도별 40개)
 │   ├── music-game.db               # Git 제외, 송캐치 메타데이터
 │   └── geometry-dash-scores.json   # Git 제외, 지오메트리 대쉬 전체 순위
 ├── src/music/                      # 송캐치 DB·관리자·게임 서버
@@ -117,11 +117,13 @@ npm test          # node --test
 - 게임 시작, 설정 변경, 강퇴, 방장 위임, 방 종료는 서버에서 방장 권한을 검사한다.
 - `hostParticipates`가 꺼진 방장은 진행 전용이며 출제·정답 판정·점수·순위에서 제외되고 정답을 볼 수 있다.
 - `hostParticipates`가 켜진 방장은 일반 참가자처럼 출제와 정답 맞히기에 참여하며, 출제자가 아닐 때는 정답을 받지 않는다.
-- 참여 방장이 게임을 시작할 때는 최종 정답을 미리 알 수 없도록 기본 무작위 또는 사용자 목록 무작위 제시어만 허용한다.
+- 참여 방장이 게임을 시작할 때는 최종 정답을 미리 알 수 없도록 무작위 계열 제시어(`random`·`customList`, 또는 무작위 후보를 쓰는 `choose`)만 허용한다.
 - 사용자 단어 목록은 한 줄에 하나씩 10~100개를 입력하며, 서버가 공백·대소문자를 정규화해 중복과 항목당 30자 제한을 검사한다.
+- `wordMode` `choose`는 후보 2~5개(무작위 또는 방장 직접 입력)를 `game:choose-word`로 출제자에게만 보내고, 출제자의 `game:pick-word` 또는 15초 자동 선택 뒤 `endAt`이 시작된다. 그 전까지는 그리기·정답이 잠긴다.
+- 한 게임에서 이미 나온 무작위 제시어는 `room.game.usedWords`로 기억해 남은 후보가 있으면 다시 뽑지 않는다.
 - 참가자 이름 옆 점 세 개 버튼은 방장 넘기기/강퇴하기 팝업 메뉴를 연다.
 - 대기실의 방 종료 버튼은 방장에게만 보인다.
-- 방장이 30초 안에 재접속하지 않으면 다음 참가자에게 방장을 자동 위임한다.
+- 방장이 나가거나 30초 안에 재접속하지 않으면 접속 중인 다음 참가자에게 방장을 자동 위임하고, 진행 전용이면 정답을 다시 보낸다.
 - 방 종료 시 `room:closed`, 강퇴 시 `room:kicked`를 대상에게 전송한다.
 - 방 종료 버튼은 대기실·라운드 결과·최종 결과와 결과 모달에서 사용할 수 있고 진행 중 라운드에서는 숨긴다.
 - 직접 퇴장과 강퇴는 첫 화면에서 서로 다른 일회성 알림을 표시한다.
@@ -131,6 +133,7 @@ npm test          # node --test
 - `room:state`와 공개 방 목록에는 정답 문자열을 절대 포함하지 않는다.
 - 정답은 `game:secret`으로 현재 출제자와 진행 전용 방장의 개인 socket ID에만 전송한다.
 - 정답 비교는 앞뒤 공백, 대소문자, 연속 공백을 정규화하고 설정에 따라 모든 공백을 무시한다.
+- 정답(2글자 이상)과 정확히 한 글자 차이인 오답은 그 사람에게만 `answer:close`로 알리고 채팅 기록·다른 참가자에게는 남기지 않는다.
 - 출제자와 이미 맞힌 참가자가 정답 문자열을 보내도 일반 채팅으로 노출하지 않는다.
 - 라운드 진행 중 출제자와 이미 맞힌 참가자는 채팅 입력 전체를 사용할 수 없고 서버도 `chat:send`를 거부한다.
 - 점수는 1등 100, 2등 80, 3등 60, 이후 40점에 남은 시간 보너스를 더한다.
@@ -151,7 +154,8 @@ npm test          # node --test
 - 대기 안내 오버레이는 `ResizeObserver`로 실제 Canvas의 화면상 경계에 맞춰 두 겹 그림판처럼 보이지 않게 한다.
 
 ## 재접속과 성능
-- 연결 해제 후 30초 동안 참가자, 점수와 역할을 유지한다.
+- 연결이 끊기면 3초 뒤에 이탈 알림·오프라인 표시·라운드 정리(출제자면 라운드 종료)를 하며, 그 안에 재접속하면 조용히 복구한다. 이후 30초 동안 참가자, 점수와 역할을 유지한다.
+- 첫 화면(`main.js`)은 서버에 미리 입장하지 않고, 게임 화면(`room.js`)에서만 `room:join`한다. 위 3초 지연이 화면 이동 중 오탐 알림을 막는다.
 - 같은 `userId`가 돌아오면 기존 socket ID를 교체하고 방/Canvas/비밀 제시어 상태를 복구한다.
 - 채팅은 방마다 최근 100개까지만 저장한다.
 - 채팅은 사용자별 5초당 7개, 그림 요청은 초당 70개로 제한한다.
@@ -163,8 +167,8 @@ npm test          # node --test
 |---|---|---|
 | 방 | `rooms:request`, `room:create`, `room:join`, `room:leave` | `rooms:list`, `room:state` |
 | 관리 | `room:ready`, `room:settings`, `room:transfer`, `room:kick`, `room:close` | `room:kicked`, `room:closed` |
-| 게임 | `game:start`, `game:restart`, `game:lobby` | `game:secret`, `game:hint`, `round:ended` |
-| 채팅 | `chat:send` | `chat:message`, `answer:correct` |
+| 게임 | `game:start`, `game:restart`, `game:lobby`, `game:pick-word` | `game:secret`, `game:hint`, `game:choose-word`, `round:ended` |
+| 채팅 | `chat:send` | `chat:message`, `answer:correct`, `answer:close` |
 | 그림 | `canvas:draw`, `canvas:action` | `canvas:draw`, `canvas:sync` |
 
 ## 작업 규칙

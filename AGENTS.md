@@ -78,7 +78,7 @@ CLAUDE.md                    상세 프로젝트 지식
 - `requireMember()` 없이 방 내부 변경 이벤트를 처리하지 않는다.
 - 방장 작업은 반드시 `requireHost()`를 통과한다.
 - `hostParticipates=false`인 방장은 진행 전용으로 출제·정답 판정·점수·순위에서 제외하고 정답을 받을 수 있다.
-- `hostParticipates=true`인 방장은 일반 참가자와 같은 정답 비공개 규칙을 적용하며 기본 무작위 또는 사용자 목록 무작위 제시어만 허용한다.
+- `hostParticipates=true`인 방장은 일반 참가자와 같은 정답 비공개 규칙을 적용하며 무작위 계열(`random`·`customList`, 무작위 후보 `choose`) 제시어만 허용한다.
 - Canvas 이벤트는 서버에서 `playing`과 `drawerId`를 검사한다.
 - 정답 판정, 점수 계산, 라운드 종료는 서버만 수행한다.
 - 클라이언트가 보낸 점수, 정답 여부, 역할을 신뢰하지 않는다.
@@ -92,6 +92,7 @@ CLAUDE.md                    상세 프로젝트 지식
 - 힌트는 `maskAnswer()`가 만든 마스킹 문자열만 전송한다.
 - 공백을 제외한 정답이 2글자 이하면 시간이 지나도 글자 힌트를 공개하지 않는다.
 - 출제자나 이미 맞힌 사람이 정답 문자열을 채팅에 입력해도 일반 채팅으로 방송하지 않는다.
+- 정답(2글자 이상)과 정확히 한 글자 차이인 오답은 `answer:close`로 그 소켓에만 보내고 방송·기록하지 않는다(`isOneEditApart`).
 - 라운드 진행 중 출제자와 이미 정답을 맞힌 참가자는 어떤 채팅도 보낼 수 없으며 클라이언트와 서버에서 모두 차단한다.
 - 라운드 종료 후에만 `round:ended`로 정답을 공개하고 서버의 현재 정답을 지운다.
 
@@ -99,16 +100,19 @@ CLAUDE.md                    상세 프로젝트 지식
 - 방 코드는 혼동 문자를 제외한 6자리 영문 대문자·숫자다.
 - 닉네임은 최대 30자, 공백만 입력 및 제어문자 금지다. 이모지/특수문자는 허용한다.
 - 같은 방의 닉네임 중복은 `ko-KR` 소문자 비교로 막는다.
-- 연결 해제 즉시 삭제하지 않고 30초 유예 후 `leaveImmediately()`를 호출한다.
-- 유예 내 재접속은 socket ID, 방 상태, Canvas, 필요 시 비밀 제시어를 복구한다.
-- 방장이 유예 후 나가면 첫 번째 남은 참가자에게 자동 위임한다.
+- 연결 해제 뒤 3초(`DISCONNECT_ANNOUNCE_MS`)까지는 알림·오프라인 처리를 미루고 그 안에 재접속하면 조용히 복구한다. 이후 30초 유예 뒤 `leaveImmediately()`, 3초 뒤에도 출제자가 없으면 `endRound('drawer-left')`.
+- 유예 내 재접속은 socket ID, 방 상태, Canvas, 필요 시 비밀 제시어와 `game:choose-word` 후보를 복구한다.
+- 방장이 나가거나 유예 후에도 없으면 접속 중인 첫 참가자에게 위임하고 진행 전용이면 `sendSecret()`을 다시 보낸다. 첫 화면(`main.js`)은 미리 입장하지 않고 게임 화면에서만 `room:join`한다.
 - 참가자가 0명이 되면 타이머와 방을 즉시 삭제한다.
 
 ## 라운드와 점수
 - 전체 라운드 설정은 1~100회 범위로 서버에서 제한한다.
 - 출제자는 직접 선택, 무작위, 이전 출제자 제외 무작위로 고른다.
-- 제시어는 직접 입력, 준비 목록 선택, 난이도별 무작위, 방장이 입력한 사용자 목록 무작위를 지원한다.
+- 제시어는 직접 입력, 준비 목록 선택, 난이도별 무작위, 사용자 목록 무작위, 출제자가 후보에서 고르기(`choose`)를 지원한다.
 - 사용자 단어 목록은 서버에서 10~100개의 서로 다른 항목과 항목당 최대 30자를 검사하며 방 상태로 방송하지 않는다.
+- `choose`는 후보 2~5개(무작위 또는 방장 입력, 참여 방장은 무작위만)를 `game:choose-word`로 출제자에게만 보내고, `game:pick-word` 또는 15초(`WORD_CHOICE_MS`) 자동 선택 시 `beginDrawing()`으로 `endAt`을 시작한다. 그 전에는 그리기·정답·힌트가 잠긴다.
+- 한 게임의 무작위 제시어는 `room.game.usedWords`로 기억해 남은 후보가 있으면 중복 출제하지 않는다(`pickFresh`).
+- `data/words.json`은 난이도별 40개다.
 - 제한 시간은 서버의 `endAt`과 서버 timeout이 기준이다.
 - 기본 점수는 100/80/60/40이고 남은 시간 보너스를 더한다.
 - 출제자는 정답자 한 명당 10점을 얻는다.
@@ -154,8 +158,8 @@ CLAUDE.md                    상세 프로젝트 지식
 ## 이벤트 체크리스트
 - 방: `room:create`, `room:join`, `room:leave`, `room:state`, `rooms:list`
 - 방장: `room:settings`, `room:transfer`, `room:kick`, `room:close`
-- 게임: `game:start`, `game:restart`, `game:lobby`, `game:secret`, `game:hint`, `round:ended`
-- 채팅: `chat:send`, `chat:message`, `answer:correct`
+- 게임: `game:start`, `game:restart`, `game:lobby`, `game:pick-word`, `game:secret`, `game:hint`, `game:choose-word`, `round:ended`
+- 채팅: `chat:send`, `chat:message`, `answer:correct`, `answer:close`
 - 그림: `canvas:draw`, `canvas:action`, `canvas:sync`
 - 새 이벤트에는 서버 검증, ack 성공/실패, 대상 범위, 재접속 복구 여부를 모두 고려한다.
 

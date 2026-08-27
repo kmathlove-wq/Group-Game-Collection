@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { io: createClient } = require('socket.io-client');
 const {
   server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount
+  hintRevealCount, isOneEditApart
 } = require('../server');
 
 function emitAck(socket, event, payload = {}) {
@@ -38,6 +38,11 @@ test('입력 정규화와 설정 범위를 서버에서 제한한다', () => {
   assert.equal(hintRevealCount('곰', 0.9), 0);
   assert.equal(hintRevealCount('학교', 0.9), 0);
   assert.equal(hintRevealCount('자동차', 0.5), 1);
+
+  assert.equal(isOneEditApart('자전거', '자전차'), true);
+  assert.equal(isOneEditApart('자전거', '자전거'), false);
+  assert.equal(isOneEditApart('자전거', '자전거야'), true);
+  assert.equal(isOneEditApart('자전거', '오토바이'), false);
 
   const room = { hostId: 'host-id', settings: { hostParticipates: false }, game: { drawerId: 'drawer-id' } };
   assert.equal(canSeeSecret(room, 'host-id'), true);
@@ -173,6 +178,32 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   const result = await roundEnded;
   assert.equal(result.ranking.some((entry) => entry.userId === 'host-id'), false);
   assert.equal(rooms.get(created.code).state, 'roundResult');
+
+  // 출제자가 후보 중에서 제시어를 고르는 모드
+  const chooseOffer = new Promise((resolve) => guest.once('game:choose-word', resolve));
+  const chooseStart = await emitAck(host, 'game:start', {
+    drawerMode: 'selected', drawerId: 'guest-id', wordMode: 'choose', chooseSource: 'custom',
+    chooseWords: ['가나다', '라마바', '사아자']
+  });
+  assert.equal(chooseStart.ok, true);
+  const offer = await chooseOffer;
+  assert.deepEqual([...offer.candidates].sort(), ['가나다', '라마바', '사아자'].sort());
+  const chooseRoom = rooms.get(created.code);
+  assert.equal(chooseRoom.game.choosing, true);
+  assert.equal(chooseRoom.game.endAt, null);
+  assert.equal((await emitAck(guest, 'game:pick-word', { word: '없는후보' })).ok, false);
+  assert.equal((await emitAck(host, 'game:pick-word', { word: '가나다' })).ok, false);
+  const pickedSecret = new Promise((resolve) => guest.once('game:secret', resolve));
+  assert.equal((await emitAck(guest, 'game:pick-word', { word: '라마바' })).ok, true);
+  assert.equal((await pickedSecret).answer, '라마바');
+  assert.equal(chooseRoom.game.choosing, false);
+  assert.ok(chooseRoom.game.endAt > Date.now());
+  const closeNote = new Promise((resolve) => duplicate.once('answer:close', resolve));
+  const closeGuess = await emitAck(duplicate, 'chat:send', { text: '라마사' });
+  assert.equal(closeGuess.correct, false);
+  assert.equal((await closeNote).text, '라마사');
+  assert.equal((await emitAck(duplicate, 'chat:send', { text: '라마바' })).correct, true);
+
   assert.equal((await emitAck(host, 'room:close')).ok, true);
   assert.equal(rooms.has(created.code), false);
 

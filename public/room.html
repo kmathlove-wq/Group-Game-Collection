@@ -78,10 +78,34 @@
       <fieldset><legend>그림을 그릴 사람</legend><div class="segmented"><label><input type="radio" name="drawerMode" value="random" checked><span>무작위</span></label><label><input type="radio" name="drawerMode" value="different"><span>이전과 다르게</span></label><label><input type="radio" name="drawerMode" value="selected"><span>직접 선택</span></label></div><select id="drawerSelect" name="drawerId"></select></fieldset>
       <fieldset>
         <legend>제시어</legend>
-        <div class="segmented word-modes"><label><input type="radio" name="wordMode" value="random" checked><span>기본 무작위</span></label><label><input type="radio" name="wordMode" value="customList"><span>내 목록 무작위</span></label><label><input type="radio" name="wordMode" value="selected"><span>목록에서 선택</span></label><label><input type="radio" name="wordMode" value="custom"><span>직접 입력</span></label></div>
-        <div class="form-grid"><label>무작위 난이도<select name="difficulty"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label><label>준비된 제시어<select name="preparedWord"><optgroup label="쉬움"><option>고양이</option><option>강아지</option><option>자동차</option><option>해바라기</option><option>축구공</option></optgroup><optgroup label="보통"><option>자전거</option><option>소방차</option><option>놀이공원</option><option>잠수함</option><option>보물상자</option></optgroup><optgroup label="어려움"><option>시간여행</option><option>인공지능</option><option>우주정거장</option><option>오케스트라</option><option>텔레파시</option></optgroup></select></label></div>
-        <label class="custom-word-list">사용자 단어 목록<textarea name="customWordList" rows="7" maxlength="6100" placeholder="한 줄에 한 단어씩 10~100개를 입력하세요.&#10;사과&#10;바나나&#10;고양이"></textarea><small id="customWordCount">0개 / 최소 10개 · 중복 불가</small></label>
-        <label>직접 제시어<input name="customWord" maxlength="30" placeholder="직접 입력 선택 시"></label><label>추가 허용 답안<input name="acceptedAnswers" maxlength="100" placeholder="쉼표로 구분 (선택)"></label>
+        <div class="segmented word-modes">
+          <label><input type="radio" name="wordMode" value="random" checked><span>기본 무작위</span></label>
+          <label><input type="radio" name="wordMode" value="customList"><span>내 목록 무작위</span></label>
+          <label><input type="radio" name="wordMode" value="choose"><span>출제자가 고르기</span></label>
+          <label><input type="radio" name="wordMode" value="selected"><span>목록에서 선택</span></label>
+          <label><input type="radio" name="wordMode" value="custom"><span>직접 입력</span></label>
+        </div>
+        <div class="word-mode-panel" data-modes="random choose">
+          <label>무작위 난이도<select name="difficulty"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label>
+        </div>
+        <div class="word-mode-panel" data-modes="choose">
+          <label>출제자에게 줄 후보 개수<select name="chooseCount"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+          <div class="segmented choose-source"><label><input type="radio" name="chooseSource" value="random" checked><span>무작위로 뽑기</span></label><label><input type="radio" name="chooseSource" value="custom"><span>방장이 직접 입력</span></label></div>
+          <p class="participation-note" data-choose-source="random">위 ‘무작위 난이도’에서 후보를 뽑아 출제자에게만 보여줘요.</p>
+          <label class="custom-word-list" data-choose-source="custom">후보 단어<textarea name="chooseWords" rows="5" maxlength="200" placeholder="한 줄에 하나씩 2~5개&#10;사자&#10;호랑이&#10;코끼리"></textarea></label>
+        </div>
+        <div class="word-mode-panel" data-modes="customList">
+          <label class="custom-word-list">사용자 단어 목록<textarea name="customWordList" rows="7" maxlength="6100" placeholder="한 줄에 한 단어씩 10~100개를 입력하세요.&#10;사과&#10;바나나&#10;고양이"></textarea><small id="customWordCount">0개 / 최소 10개 · 중복 불가</small></label>
+        </div>
+        <div class="word-mode-panel" data-modes="selected">
+          <label>준비된 제시어<select name="preparedWord"><optgroup label="쉬움"><option>고양이</option><option>강아지</option><option>자동차</option><option>해바라기</option><option>축구공</option></optgroup><optgroup label="보통"><option>자전거</option><option>소방차</option><option>놀이공원</option><option>잠수함</option><option>보물상자</option></optgroup><optgroup label="어려움"><option>시간여행</option><option>인공지능</option><option>우주정거장</option><option>오케스트라</option><option>텔레파시</option></optgroup></select></label>
+        </div>
+        <div class="word-mode-panel" data-modes="custom">
+          <label>직접 제시어<input name="customWord" maxlength="30" placeholder="직접 입력 선택 시"></label>
+        </div>
+        <div class="word-mode-panel" data-modes="selected custom">
+          <label>추가 허용 답안<input name="acceptedAnswers" maxlength="100" placeholder="쉼표로 구분 (선택)"></label>
+        </div>
       </fieldset>
       <button class="button primary full">라운드 시작!</button>
     </form>
@@ -89,6 +113,12 @@
 
   <dialog id="settingsDialog" class="modal">
     <form id="settingsForm" method="dialog"><div class="modal-heading"><h2>방 설정</h2><button type="button" class="icon-button close-modal">×</button></div><label>방 제목<input name="title" maxlength="30"></label><div class="form-grid"><label>최대 인원<input name="maxPlayers" type="number" min="2" max="30"></label><label>제한 시간<select name="roundTime"><option>30</option><option>60</option><option>90</option><option>120</option></select></label><label>전체 라운드<input name="totalRounds" type="number" min="1" max="100"></label><label>공개 여부<select name="isPublic"><option value="true">공개방</option><option value="false">비공개방</option></select></label></div><div class="toggle-list"><label><input name="showWordLength" type="checkbox"><span>정답 글자 수 공개</span></label><label><input name="hintsEnabled" type="checkbox"><span>힌트 사용</span></label><label><input name="allowLateJoin" type="checkbox"><span>게임 중 입장 허용</span></label><label><input name="hostParticipates" type="checkbox"><span>방장도 게임 참여</span></label></div><button class="button primary full">설정 저장</button><button id="closeRoomButton" type="button" class="button danger-outline full">방 종료</button></form>
+  </dialog>
+
+  <dialog id="chooseWordDialog" class="modal choose-word-modal">
+    <div class="modal-heading"><div><p class="eyebrow">내 차례</p><h2>어떤 걸 그릴까요?</h2></div></div>
+    <p id="chooseWordTimer" class="participation-note"></p>
+    <div id="chooseWordButtons" class="choose-word-buttons"></div>
   </dialog>
 
   <dialog id="resultDialog" class="modal result-modal"><div id="resultContent"></div></dialog>

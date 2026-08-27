@@ -20,13 +20,19 @@ const elements = {
   chatMessages: $('#chatMessages'), chatForm: $('#chatForm'), chatInput: $('#chatInput'), chatSendButton: $('.send-button'), roundDialog: $('#roundDialog'),
   settingsDialog: $('#settingsDialog'), resultDialog: $('#resultDialog'), resultContent: $('#resultContent'), drawerSelect: $('#drawerSelect'),
   playerActionMenu: $('#playerActionMenu'), playerActionName: $('#playerActionName'), participationNote: $('#hostParticipationNote'),
-  customWordList: $('[name="customWordList"]'), customWordCount: $('#customWordCount')
+  customWordList: $('[name="customWordList"]'), customWordCount: $('#customWordCount'),
+  chooseWordDialog: $('#chooseWordDialog'), chooseWordButtons: $('#chooseWordButtons'), chooseWordTimer: $('#chooseWordTimer')
 };
 
+let chooseCountdownTimer = null;
+
+const DRAWING_ACTION_LIMIT = 2000;
 let room = null;
 let secretAnswer = '';
 let muted = localStorage.getItem('catchmind:muted') === 'true';
 let timerWarningPlayed = false;
+let lastCountdownSecond = null;
+let audioCtx = null;
 let knownChatIds = new Set();
 let drawingActions = [];
 let pendingRender = [];
@@ -222,6 +228,18 @@ function appendChat(message) {
 
 function renderChatHistory() { room.chat.forEach(appendChat); }
 
+// 서버 채팅 기록에는 없고 이 사람 화면에만 보이는 안내 한 줄 (예: "거의 맞았어요").
+function appendLocalNotice(message, type) {
+  const row = document.createElement('div');
+  row.className = `chat-row ${type}`;
+  const text = document.createElement('span');
+  text.textContent = message;
+  row.append(text);
+  elements.chatMessages.append(row);
+  while (elements.chatMessages.children.length > 100) elements.chatMessages.firstElementChild.remove();
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
 function updateChatAccess() {
   const self = me();
   const isBlocked = room.state === 'playing' && (isDrawer() || self?.hasGuessed);
@@ -237,11 +255,25 @@ function updateChatAccess() {
 
 function renderGameStatus() {
   const game = room.game;
-  elements.canvasOverlay.classList.toggle('hidden', room.state === 'playing');
+  const drawing = room.state === 'playing' && !game.choosing;
+  elements.canvasOverlay.classList.toggle('hidden', drawing);
+  const overlayTitle = elements.canvasOverlay.querySelector('h2');
+  const overlayText = elements.canvasOverlay.querySelector('p');
+  if (room.state === 'playing' && game.choosing) {
+    if (overlayTitle) overlayTitle.textContent = '출제자가 단어를 고르는 중…';
+    if (overlayText) overlayText.textContent = '잠시만 기다려 주세요.';
+  } else if (overlayTitle) {
+    overlayTitle.textContent = '아직 게임이 시작되지 않았어요';
+    if (overlayText) overlayText.textContent = '방장이 라운드를 설정하면 이곳에 그림이 나타납니다.';
+  }
   if (room.state === 'waiting') {
     elements.statusLabel.textContent = '친구들을 기다리는 중';
     elements.hintLabel.textContent = '모두 모이면 방장이 시작해요!';
     elements.timerLabel.textContent = '--';
+  } else if (room.state === 'playing' && game.choosing) {
+    elements.statusLabel.textContent = isDrawer() ? '고를 단어를 확인하세요!' : '출제자가 단어를 고르는 중';
+    elements.hintLabel.textContent = '곧 그림이 시작돼요.';
+    elements.timerLabel.textContent = '준비 중';
   } else if (room.state === 'playing') {
     const drawer = room.players.find((player) => player.userId === game.drawerId);
     elements.statusLabel.textContent = isDrawer() ? '내가 그릴 차례!' : `${drawer?.nickname || '출제자'}님이 그리는 중`;
@@ -254,11 +286,11 @@ function renderGameStatus() {
 }
 
 function updateCanvasAccess() {
-  const drawer = isDrawer();
+  const drawer = isDrawer() && !room?.game.choosing;
   elements.canvas.style.touchAction = drawer ? 'none' : 'auto';
   elements.canvas.classList.toggle('drawable', drawer);
   elements.drawerTools.classList.toggle('drawer-active', drawer);
-  elements.spectatorNotice.classList.toggle('hidden', drawer || room?.state !== 'playing');
+  elements.spectatorNotice.classList.toggle('hidden', drawer || room?.state !== 'playing' || room?.game.choosing);
   if (drawer) requestAnimationFrame(updatePaletteArrows);
 }
 
@@ -274,11 +306,38 @@ function updateRoundForm() {
   const participatingHost = isHost() && room.settings.hostParticipates;
   const roundForm = $('#roundForm');
   const randomWordMode = roundForm.querySelector('[name="wordMode"][value="random"]');
+  // 방장이 게임에도 참여하면 정답을 미리 알 수 있는 방식은 못 쓴다.
   roundForm.querySelectorAll('[name="wordMode"][value="selected"], [name="wordMode"][value="custom"]').forEach((field) => { field.disabled = participatingHost; });
   ['preparedWord', 'customWord', 'acceptedAnswers'].forEach((name) => { roundForm.elements[name].disabled = participatingHost; });
   const selectedWordMode = roundForm.querySelector('[name="wordMode"]:checked');
   if (participatingHost && ['selected', 'custom'].includes(selectedWordMode?.value)) randomWordMode.checked = true;
+  // '출제자가 고르기'는 후보를 무작위로 뽑을 때만 참여 방장이 쓸 수 있다.
+  const customSource = roundForm.querySelector('[name="chooseSource"][value="custom"]');
+  if (customSource) customSource.disabled = participatingHost;
+  if (participatingHost && customSource?.checked) {
+    roundForm.querySelector('[name="chooseSource"][value="random"]').checked = true;
+  }
+  const chooseWordsField = roundForm.elements.chooseWords;
+  if (chooseWordsField) chooseWordsField.disabled = participatingHost;
   elements.participationNote.classList.toggle('hidden', !participatingHost);
+  updateWordModePanels();
+}
+
+// 고른 제시어 방식에 해당하는 입력칸만 보여준다.
+function updateWordModePanels() {
+  const roundForm = $('#roundForm');
+  if (!roundForm) return;
+  const mode = roundForm.querySelector('[name="wordMode"]:checked')?.value || 'random';
+  const chooseSource = roundForm.querySelector('[name="chooseSource"]:checked')?.value || 'random';
+  roundForm.querySelectorAll('.word-mode-panel').forEach((panel) => {
+    let show = panel.dataset.modes.split(' ').includes(mode);
+    // 난이도 칸은 '출제자가 고르기 + 직접 입력'일 때는 필요 없다.
+    if (show && panel.dataset.modes === 'random choose' && mode === 'choose' && chooseSource === 'custom') show = false;
+    panel.hidden = !show;
+  });
+  roundForm.querySelectorAll('[data-choose-source]').forEach((node) => {
+    node.hidden = mode !== 'choose' || node.dataset.chooseSource !== chooseSource;
+  });
 }
 
 function customWordsFromInput() {
@@ -301,14 +360,16 @@ function openSettings() {
     if (field.type === 'checkbox') field.checked = value;
     else field.value = String(value);
   });
-  elements.settingsDialog.showModal();
+  openDialog(elements.settingsDialog);
 }
 
 function showResult(data) {
+  if (elements.resultDialog.open) elements.resultDialog.close();
   const topThree = data.ranking.slice(0, 3);
   elements.resultContent.replaceChildren();
   const eyebrow = document.createElement('p'); eyebrow.className = 'eyebrow'; eyebrow.textContent = data.finished ? '최종 결과' : '라운드 결과';
-  const heading = document.createElement('h2'); heading.textContent = data.finished ? '🏆 게임 종료!' : `정답은 “${data.answer}”`;
+  const heading = document.createElement('h2');
+  heading.textContent = data.finished ? '🏆 게임 종료!' : data.answer ? `정답은 “${data.answer}”` : '이번 라운드는 건너뛰었어요';
   const podium = document.createElement('div'); podium.className = 'podium';
   topThree.forEach((entry, index) => {
     const card = document.createElement('div'); card.className = `podium-card place-${index + 1}`;
@@ -358,16 +419,27 @@ function showResult(data) {
   playSound(data.finished ? 'finish' : 'round');
 }
 
-function playSound(type) {
+function playSound(type, freqOverride) {
   if (muted) return;
   try {
-    const audio = new (window.AudioContext || window.webkitAudioContext)();
-    const frequencies = { join: 520, start: 660, correct: 880, wrong: 180, warning: 440, round: 330, finish: 740 };
-    const oscillator = audio.createOscillator(); const gain = audio.createGain();
-    oscillator.frequency.value = frequencies[type] || 440; oscillator.type = type === 'wrong' ? 'sawtooth' : 'sine';
-    gain.gain.setValueAtTime(0.08, audio.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.18);
-    oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + 0.18);
+    // 오디오 엔진(AudioContext)은 하나만 만들어 계속 재사용한다. 매번 새로 만들면
+    // 브라우저 한도(약 6개)에 걸려 몇 번 뒤부터 소리가 안 난다.
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const frequencies = { join: 520, start: 660, correct: 880, wrong: 180, warning: 440, round: 330, finish: 740, tick: 700 };
+    const duration = type === 'tick' ? 0.09 : 0.18;
+    const oscillator = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+    oscillator.frequency.value = freqOverride || frequencies[type] || 440;
+    oscillator.type = type === 'wrong' ? 'sawtooth' : 'sine';
+    gain.gain.setValueAtTime(type === 'tick' ? 0.06 : 0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    oscillator.connect(gain).connect(audioCtx.destination); oscillator.start(); oscillator.stop(audioCtx.currentTime + duration);
   } catch { /* 오디오를 지원하지 않는 브라우저에서는 조용히 무시 */ }
+}
+
+function openDialog(dialog) {
+  if (dialog.open) dialog.close();
+  dialog.showModal();
 }
 
 function drawSegment(segment) {
@@ -451,29 +523,53 @@ socket.on('connect', () => {
   });
 });
 socket.on('disconnect', () => { elements.socketStatus.textContent = '○ 재연결 중'; elements.socketStatus.classList.remove('connected'); showToast('서버 연결이 끊겼습니다. 자동으로 재연결합니다.'); });
-socket.on('room:state', (nextRoom) => { room = nextRoom; renderRoom(); });
+socket.on('room:state', (nextRoom) => {
+  room = nextRoom;
+  if (!room.game.choosing) closeChooseWord();
+  renderRoom();
+});
 socket.on('game:secret', ({ answer }) => { secretAnswer = answer; renderGameStatus(); });
 socket.on('game:hint', ({ hint }) => { if (room) room.game.hint = hint; renderGameStatus(); });
 socket.on('chat:message', appendChat);
 socket.on('answer:correct', ({ userId: winnerId }) => playSound(winnerId === userId ? 'correct' : 'join'));
-socket.on('round:ended', (data) => { secretAnswer = ''; showResult(data); });
+socket.on('answer:close', ({ text }) => appendLocalNotice(`${text}은(는) 거의 맞았어요!`, 'close'));
+socket.on('game:choose-word', ({ candidates }) => showChooseWord(candidates));
+socket.on('round:ended', (data) => { secretAnswer = ''; closeChooseWord(); showResult(data); });
 socket.on('canvas:draw', ({ strokeId, segments }) => {
   let action = drawingActions.at(-1);
   if (action?.strokeId !== strokeId) { action = { type: 'stroke', strokeId, segments: [] }; drawingActions.push(action); }
-  action.segments.push(...segments); queueRender(segments);
+  action.segments.push(...segments);
+  if (drawingActions.length > DRAWING_ACTION_LIMIT) drawingActions.splice(0, drawingActions.length - DRAWING_ACTION_LIMIT);
+  queueRender(segments);
 });
-socket.on('canvas:sync', (actions) => { drawingActions = actions || []; redrawCanvas(); });
+socket.on('canvas:sync', (actions) => {
+  drawingActions = actions || [];
+  if (queueRender.frame) { cancelAnimationFrame(queueRender.frame); queueRender.frame = null; }
+  pendingRender = [];
+  redrawCanvas();
+});
 socket.on('room:kicked', () => returnHomeWithNotice('방장에 의해 강퇴되었습니다.'));
 socket.on('room:closed', () => { alert('방장이 방을 종료했습니다.'); sessionStorage.removeItem('catchmind:roomCode'); location.replace('/'); });
 socket.on('session:replaced', () => showToast('다른 탭에서 같은 사용자로 접속했습니다.'));
 
 setInterval(() => {
-  if (!room || room.state !== 'playing' || !room.game.endAt) return;
+  if (!room || room.state !== 'playing' || room.game.choosing || !room.game.endAt) {
+    elements.timerLabel.classList.remove('urgent', 'final');
+    lastCountdownSecond = null;
+    return;
+  }
   const left = Math.max(0, Math.ceil((room.game.endAt - Date.now()) / 1000));
   elements.timerLabel.textContent = left;
   elements.timerLabel.classList.toggle('urgent', left <= 5);
+  elements.timerLabel.classList.toggle('final', left <= 3 && left >= 1);
   if (left === 10 && !timerWarningPlayed) { timerWarningPlayed = true; playSound('warning'); }
   if (left > 10) timerWarningPlayed = false;
+  // 마지막 5초 카운트다운: 초가 바뀔 때마다 점점 높은 "삑" 소리.
+  if (left >= 1 && left <= 5 && left !== lastCountdownSecond) {
+    lastCountdownSecond = left;
+    playSound('tick', 500 + (6 - left) * 90);
+  }
+  if (left > 5 || left === 0) lastCountdownSecond = null;
 }, 200);
 
 elements.chatForm.addEventListener('submit', (event) => {
@@ -484,7 +580,7 @@ elements.chatForm.addEventListener('submit', (event) => {
   });
 });
 elements.readyButton.addEventListener('click', () => emitAck('room:ready'));
-function openRoundDialog() { setTabletLobby(false); elements.roundDialog.showModal(); }
+function openRoundDialog() { setTabletLobby(false); openDialog(elements.roundDialog); updateWordModePanels(); }
 elements.startButton.addEventListener('click', openRoundDialog);
 elements.tabletStartButton.addEventListener('click', openRoundDialog);
 elements.restartButton.addEventListener('click', () => emitAck('game:restart'));
@@ -499,13 +595,52 @@ elements.canvas.addEventListener('pointerup', endDrawing);
 elements.canvas.addEventListener('pointercancel', endDrawing);
 elements.customWordList.addEventListener('input', updateCustomWordCount);
 updateCustomWordCount();
+updateWordModePanels();
 
 $('#roundForm').addEventListener('submit', (event) => {
   event.preventDefault(); const data = new FormData(event.currentTarget);
-  const payload = { drawerMode: data.get('drawerMode'), drawerId: data.get('drawerId'), wordMode: data.get('wordMode'), customWord: data.get('customWord'), customWords: customWordsFromInput(), preparedWord: data.get('preparedWord'), difficulty: data.get('difficulty'), acceptedAnswers: String(data.get('acceptedAnswers') || '').split(',').map((value) => value.trim()).filter(Boolean) };
+  const payload = {
+    drawerMode: data.get('drawerMode'), drawerId: data.get('drawerId'), wordMode: data.get('wordMode'),
+    customWord: data.get('customWord'), customWords: customWordsFromInput(), preparedWord: data.get('preparedWord'),
+    difficulty: data.get('difficulty'),
+    chooseCount: Number(data.get('chooseCount')) || 3,
+    chooseSource: data.get('chooseSource') || 'random',
+    chooseWords: String(data.get('chooseWords') || '').split(/\r?\n/).map((word) => word.trim()).filter(Boolean),
+    acceptedAnswers: String(data.get('acceptedAnswers') || '').split(',').map((value) => value.trim()).filter(Boolean)
+  };
   secretAnswer = '';
   emitAck('game:start', payload, () => { elements.roundDialog.close(); playSound('start'); });
 });
+
+$('#roundForm').addEventListener('change', updateWordModePanels);
+
+// 출제자가 후보 중 하나를 고르는 창.
+function showChooseWord(candidates) {
+  if (!Array.isArray(candidates) || !candidates.length) return;
+  elements.chooseWordButtons.replaceChildren(...candidates.map((word) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'button primary full choose-word-option';
+    button.textContent = word;
+    button.addEventListener('click', () => {
+      emitAck('game:pick-word', { word }, () => closeChooseWord());
+    });
+    return button;
+  }));
+  openDialog(elements.chooseWordDialog);
+  clearInterval(chooseCountdownTimer);
+  const tick = () => {
+    const left = room?.game.chooseDeadline ? Math.max(0, Math.ceil((room.game.chooseDeadline - Date.now()) / 1000)) : 0;
+    elements.chooseWordTimer.textContent = `${left}초 안에 고르지 않으면 무작위로 정해져요.`;
+    if (left <= 0) clearInterval(chooseCountdownTimer);
+  };
+  tick();
+  chooseCountdownTimer = setInterval(tick, 250);
+}
+
+function closeChooseWord() {
+  clearInterval(chooseCountdownTimer);
+  if (elements.chooseWordDialog?.open) elements.chooseWordDialog.close();
+}
 
 $('#settingsForm').addEventListener('submit', (event) => {
   event.preventDefault(); const data = new FormData(event.currentTarget);
