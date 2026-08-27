@@ -11,12 +11,17 @@ const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_CHAT_HISTORY = 100;
 const RECONNECT_GRACE_MS = 30_000;
+const DISCONNECT_ANNOUNCE_MS = 3_000;
 const ROOM_IDLE_MS = 6 * 60 * 60 * 1000;
 const DRAWING_ACTION_LIMIT = 2_000;
 const NICKNAME_MAX_LENGTH = 30;
 const MAX_ROUNDS = 100;
 const CUSTOM_WORD_LIST_MIN = 10;
 const CUSTOM_WORD_LIST_MAX = 100;
+const USED_WORD_MEMORY = 500;
+const WORD_CHOICE_MS = 15_000;
+const CHOOSE_WORD_MIN = 2;
+const CHOOSE_WORD_MAX = 5;
 
 const app = express();
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
@@ -120,7 +125,8 @@ function createPlayer({ userId, nickname, socket }) {
     joinedAt: Date.now(),
     correctCount: 0,
     drawCount: 0,
-    disconnectTimer: null
+    disconnectTimer: null,
+    announceTimer: null
   };
 }
 
@@ -154,7 +160,10 @@ function roomState(room) {
       drawerId: room.game.drawerId,
       endAt: room.game.endAt,
       hint: room.game.hint,
-      wordLength: room.settings.showWordLength ? room.game.answer.replace(/\s/g, '').length : null,
+      choosing: room.game.choosing,
+      chooseDeadline: room.game.choosing ? room.game.chooseDeadline : null,
+      wordLength: room.settings.showWordLength && !room.game.choosing && room.game.answer
+        ? room.game.answer.replace(/\s/g, '').length : null,
       correctOrder: room.game.correctOrder.map((item) => ({
         userId: item.userId,
         nickname: item.nickname,
@@ -242,6 +251,7 @@ function leaveImmediately(room, userId, reason = 'left') {
   const player = room.players.get(userId);
   if (!player) return;
   if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+  if (player.announceTimer) clearTimeout(player.announceTimer);
   room.players.delete(userId);
   addSystemChat(room, `${player.nickname}님이 방을 나갔습니다.`);
 
@@ -249,13 +259,31 @@ function leaveImmediately(room, userId, reason = 'left') {
     clearRoom(room.code);
     return;
   }
-  if (room.hostId === userId) room.hostId = [...room.players.keys()][0];
+  if (room.hostId === userId) {
+    const nextHost = [...room.players.values()].find((p) => p.connected) || [...room.players.values()][0];
+    room.hostId = nextHost.userId;
+    addSystemChat(room, `${nextHost.nickname}님이 새 방장이 되었습니다.`);
+  }
   if (room.game.drawerId === userId && room.state === 'playing') {
     endRound(room, 'drawer-left');
   } else {
+    sendSecret(room);
     emitRoomState(room);
   }
   if (reason === 'kicked') io.to(player.socketId).emit('room:kicked');
+}
+
+// 라운드/게임 진행 상태만 초기화한다(참가자 점수는 건드리지 않음).
+function resetGame(room) {
+  const timer = roomTimers.get(room.code);
+  if (timer) clearTimeout(timer);
+  roomTimers.delete(room.code);
+  Object.assign(room.game, {
+    round: 0, drawerId: null, previousDrawerId: null, answer: '', acceptedAnswers: [],
+    pendingAcceptedAnswers: [], guessedIds: new Set(), correctOrder: [], endAt: null,
+    hint: '', hintStage: 0, choosing: false, candidates: [], chooseDeadline: null,
+    usedWords: [], drawingActions: [], redoActions: []
+  });
 }
 
 function clearRoom(code) {
@@ -283,7 +311,25 @@ function chooseDrawer(room, payload) {
   return candidates[Math.floor(Math.random() * candidates.length)].userId;
 }
 
-function chooseWord(payload) {
+// 이번 게임에서 이미 나온 단어(usedWords, 정규화됨)를 빼고 무작위로 count개를 뽑는다.
+// 남은 후보가 모자라면 전체 목록에서 다시 뽑아 같은 단어가 또 나올 수 있게 한다.
+function pickFresh(list, usedWords = [], count = 1) {
+  const used = new Set(usedWords);
+  let pool = list.filter((word) => !used.has(normalizeAnswer(word, true)));
+  if (pool.length < count) pool = [...list];
+  const bag = [...pool];
+  const picks = [];
+  while (picks.length < count && bag.length) {
+    picks.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+  }
+  return picks;
+}
+
+function difficultyOf(payload) {
+  return ['easy', 'normal', 'hard'].includes(payload.difficulty) ? payload.difficulty : 'normal';
+}
+
+function chooseWord(payload, room) {
   if (payload.wordMode === 'custom') {
     const custom = cleanText(payload.customWord, 30);
     if (custom.length >= 1) return custom;
@@ -293,9 +339,47 @@ function chooseWord(payload) {
     const selected = cleanText(payload.preparedWord, 30);
     return Object.values(words).flat().includes(selected) ? selected : null;
   }
-  const difficulty = ['easy', 'normal', 'hard'].includes(payload.difficulty) ? payload.difficulty : 'normal';
-  const list = words[difficulty];
-  return list[Math.floor(Math.random() * list.length)];
+  return pickFresh(words[difficultyOf(payload)], room.game.usedWords, 1)[0] || null;
+}
+
+// 출제자가 고를 후보 단어 목록(2~5개)을 만든다. 출처는 무작위 또는 방장 직접 입력.
+function chooseCandidates(payload, room) {
+  if (payload.chooseSource === 'custom') {
+    const raw = Array.isArray(payload.chooseWords) ? payload.chooseWords : [];
+    const cleaned = [];
+    for (const value of raw) {
+      if (/\p{Cc}/u.test(String(value ?? ''))) return { error: '후보 단어에는 제어 문자를 사용할 수 없습니다.' };
+      const word = cleanText(value, 30);
+      if (word) cleaned.push(word);
+    }
+    const unique = [...new Map(cleaned.map((word) => [normalizeAnswer(word, true), word])).values()];
+    if (unique.length < CHOOSE_WORD_MIN) return { error: `후보 단어를 ${CHOOSE_WORD_MIN}개 이상 입력해 주세요.` };
+    return { candidates: unique.slice(0, CHOOSE_WORD_MAX) };
+  }
+  const count = Math.min(CHOOSE_WORD_MAX, Math.max(CHOOSE_WORD_MIN, Number(payload.chooseCount) || CHOOSE_WORD_MIN));
+  const picks = pickFresh(words[difficultyOf(payload)], room.game.usedWords, count);
+  if (picks.length < CHOOSE_WORD_MIN) return { error: '후보 단어를 만들 수 없습니다.' };
+  return { candidates: picks };
+}
+
+// 두 글자열이 딱 한 글자만 다른지 검사한다(교체·추가·삭제 1회). 같으면 false.
+function isOneEditApart(aText, bText) {
+  if (aText === bText) return false;
+  const a = [...aText];
+  const b = [...bText];
+  if (Math.abs(a.length - b.length) > 1) return false;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < shorter.length && j < longer.length) {
+    if (shorter[i] === longer[j]) { i += 1; j += 1; continue; }
+    edits += 1;
+    if (edits > 1) return false;
+    if (shorter.length === longer.length) { i += 1; j += 1; } else { j += 1; }
+  }
+  edits += longer.length - j;
+  return edits === 1;
 }
 
 function validateCustomWordList(input) {
@@ -340,41 +424,97 @@ function scheduleRound(room) {
   roomTimers.set(room.code, timer);
 }
 
-function startRound(room, payload) {
-  const randomWordModes = ['random', 'customList'];
-  if (room.settings.hostParticipates && !randomWordModes.includes(payload.wordMode)) {
-    return '게임에 참여하는 방장은 기본 무작위 또는 사용자 목록 무작위 제시어만 사용할 수 있습니다.';
-  }
-  const drawerId = chooseDrawer(room, payload);
-  const customList = payload.wordMode === 'customList' ? validateCustomWordList(payload.customWords) : null;
-  if (customList?.error) return customList.error;
-  const answer = customList
-    ? customList.words[Math.floor(Math.random() * customList.words.length)]
-    : chooseWord(payload);
-  if (!drawerId) return '그릴 사람을 선택해 주세요.';
-  if (!answer) return '올바른 제시어를 입력하거나 선택해 주세요.';
+// 출제자가 후보 중 하나를 고를 때까지 기다리다가, 시간이 지나면 무작위로 하나 골라 라운드를 시작한다.
+function scheduleWordChoice(room) {
+  const oldTimer = roomTimers.get(room.code);
+  if (oldTimer) clearTimeout(oldTimer);
+  const timer = setTimeout(() => {
+    if (room.state === 'playing' && room.game.choosing && room.game.candidates.length) {
+      beginDrawing(room, room.game.candidates[Math.floor(Math.random() * room.game.candidates.length)]);
+    }
+  }, WORD_CHOICE_MS);
+  roomTimers.set(room.code, timer);
+}
 
-  room.state = 'playing';
-  room.game.round += 1;
-  room.game.previousDrawerId = room.game.drawerId;
-  room.game.drawerId = drawerId;
-  room.game.answer = answer;
-  room.game.acceptedAnswers = [answer, ...(Array.isArray(payload.acceptedAnswers) ? payload.acceptedAnswers : [])]
-    .map((v) => cleanText(v, 30)).filter(Boolean).slice(0, 5);
+// 제시어가 확정되어 실제로 그림을 그리기 시작하는 단계. (choose 모드는 출제자가 고른 뒤, 나머지는 즉시)
+function beginDrawing(room, word) {
+  room.game.choosing = false;
+  room.game.candidates = [];
+  room.game.chooseDeadline = null;
+  room.game.answer = word;
+  room.game.acceptedAnswers = [word, ...(room.game.pendingAcceptedAnswers || [])]
+    .map((value) => cleanText(value, 30)).filter(Boolean).slice(0, 5);
+  room.game.pendingAcceptedAnswers = [];
   room.game.guessedIds = new Set();
   room.game.correctOrder = [];
   room.game.endAt = Date.now() + room.settings.roundTime * 1000;
-  room.game.hint = maskAnswer(answer, 0);
+  room.game.hint = maskAnswer(word, 0);
   room.game.hintStage = 0;
-  room.game.drawingActions = [];
-  room.game.redoActions = [];
-  const drawer = room.players.get(drawerId);
+  room.game.usedWords.push(normalizeAnswer(word, true));
+  if (room.game.usedWords.length > USED_WORD_MEMORY) {
+    room.game.usedWords.splice(0, room.game.usedWords.length - USED_WORD_MEMORY);
+  }
+  const drawer = room.players.get(room.game.drawerId);
   if (drawer) drawer.drawCount += 1;
   addSystemChat(room, `${room.game.round}라운드가 시작되었습니다!`);
   io.to(room.code).emit('canvas:sync', []);
   emitRoomState(room);
   sendSecret(room);
   scheduleRound(room);
+}
+
+function startRound(room, payload) {
+  const hiddenWordModes = ['random', 'customList'];
+  const choosesFromRandom = payload.wordMode === 'choose' && payload.chooseSource !== 'custom';
+  if (room.settings.hostParticipates && !hiddenWordModes.includes(payload.wordMode) && !choosesFromRandom) {
+    return '게임에 참여하는 방장은 무작위 제시어 방식만 사용할 수 있습니다.';
+  }
+  const drawerId = chooseDrawer(room, payload);
+  if (!drawerId) return '그릴 사람을 선택해 주세요.';
+
+  let word = null;
+  let candidates = null;
+  if (payload.wordMode === 'choose') {
+    const built = chooseCandidates(payload, room);
+    if (built.error) return built.error;
+    candidates = built.candidates;
+  } else if (payload.wordMode === 'customList') {
+    const customList = validateCustomWordList(payload.customWords);
+    if (customList.error) return customList.error;
+    word = pickFresh(customList.words, room.game.usedWords, 1)[0];
+  } else {
+    word = chooseWord(payload, room);
+  }
+  if (!candidates && !word) return '올바른 제시어를 입력하거나 선택해 주세요.';
+
+  room.state = 'playing';
+  room.game.round += 1;
+  room.game.previousDrawerId = room.game.drawerId;
+  room.game.drawerId = drawerId;
+  room.game.drawingActions = [];
+  room.game.redoActions = [];
+  room.game.guessedIds = new Set();
+  room.game.correctOrder = [];
+  room.game.pendingAcceptedAnswers = ['selected', 'custom'].includes(payload.wordMode) && Array.isArray(payload.acceptedAnswers)
+    ? payload.acceptedAnswers : [];
+
+  if (candidates) {
+    room.game.choosing = true;
+    room.game.candidates = candidates;
+    room.game.answer = '';
+    room.game.acceptedAnswers = [];
+    room.game.endAt = null;
+    room.game.hint = '';
+    room.game.hintStage = 0;
+    room.game.chooseDeadline = Date.now() + WORD_CHOICE_MS;
+    io.to(room.code).emit('canvas:sync', []);
+    emitRoomState(room);
+    const drawer = room.players.get(drawerId);
+    if (drawer?.connected) io.to(drawer.socketId).emit('game:choose-word', { candidates });
+    scheduleWordChoice(room);
+  } else {
+    beginDrawing(room, word);
+  }
   return null;
 }
 
@@ -391,13 +531,17 @@ function endRound(room, reason = 'time') {
   if (timer) clearTimeout(timer);
   roomTimers.delete(room.code);
   const answer = room.game.answer;
+  const aborted = room.game.choosing && !answer;
+  room.game.choosing = false;
+  room.game.candidates = [];
+  room.game.chooseDeadline = null;
   room.state = room.game.round >= room.settings.totalRounds ? 'finished' : 'roundResult';
   room.game.endAt = null;
   room.game.drawingActions = [];
   room.game.redoActions = [];
-  addSystemChat(room, `라운드 종료! 정답은 “${answer}”입니다.`);
+  addSystemChat(room, aborted ? '출제자가 나가 이번 라운드를 건너뜁니다.' : `라운드 종료! 정답은 “${answer}”입니다.`);
   io.to(room.code).emit('round:ended', {
-    answer,
+    answer: aborted ? '' : answer,
     reason,
     correctOrder: room.game.correctOrder,
     ranking: ranking(room),
@@ -457,8 +601,9 @@ io.on('connection', (socket) => {
       lastActive: Date.now(),
       game: {
         round: 0, drawerId: null, previousDrawerId: null, answer: '', acceptedAnswers: [],
-        guessedIds: new Set(), correctOrder: [], endAt: null, hint: '', hintStage: 0,
-        drawingActions: [], redoActions: []
+        pendingAcceptedAnswers: [], guessedIds: new Set(), correctOrder: [], endAt: null,
+        hint: '', hintStage: 0, choosing: false, candidates: [], chooseDeadline: null,
+        usedWords: [], drawingActions: [], redoActions: []
       }
     };
     rooms.set(code, room);
@@ -480,6 +625,7 @@ io.on('connection', (socket) => {
     const existing = room.players.get(userId);
     if (existing) {
       if (existing.disconnectTimer) clearTimeout(existing.disconnectTimer);
+      if (existing.announceTimer) { clearTimeout(existing.announceTimer); existing.announceTimer = null; }
       if (existing.socketId && existing.socketId !== socket.id) io.to(existing.socketId).emit('session:replaced');
       existing.socketId = socket.id;
       existing.connected = true;
@@ -490,6 +636,7 @@ io.on('connection', (socket) => {
       socket.emit('room:state', roomState(room));
       socket.emit('canvas:sync', visibleDrawing(room.game.drawingActions));
       if (canSeeSecret(room, userId) && room.game.answer) socket.emit('game:secret', { answer: room.game.answer });
+      if (room.game.choosing && room.game.drawerId === userId) socket.emit('game:choose-word', { candidates: room.game.candidates });
       emitRoomState(room);
       return;
     }
@@ -594,12 +741,17 @@ io.on('connection', (socket) => {
     }
     if (!rateLimit(player, 'chat', 5_000, 7)) return ack({ ok: false, error: '메시지를 너무 빠르게 보내고 있습니다.' });
 
-    if (room.state === 'playing') {
+    if (room.state === 'playing' && !room.game.choosing) {
       const guess = normalizeAnswer(text, room.settings.ignoreSpaces);
-      const correct = room.game.acceptedAnswers.some((answer) => normalizeAnswer(answer, room.settings.ignoreSpaces) === guess);
+      const accepted = room.game.acceptedAnswers.map((answer) => normalizeAnswer(answer, room.settings.ignoreSpaces));
+      const correct = accepted.includes(guess);
       // 정답을 아는 진행 전용 방장이 정답 문자열을 일반 채팅으로 새지 않게 막는다.
       if (correct && player.userId === room.hostId && !room.settings.hostParticipates) {
         return ack({ ok: false, error: '진행 전용 방장은 정답에 참여할 수 없습니다.' });
+      }
+      // 정답이 두 글자 이상인데 딱 한 글자 차이면 본인에게만 "거의 맞았어요" 안내 (오타 구제).
+      if (!correct && accepted.some((answer) => [...answer].length >= 2 && isOneEditApart(answer, guess))) {
+        socket.emit('answer:close', { text });
       }
       if (correct) {
         const order = room.game.correctOrder.length;
@@ -650,9 +802,8 @@ io.on('connection', (socket) => {
     for (const player of room.players.values()) {
       player.score = 0; player.correctCount = 0; player.drawCount = 0; player.ready = false;
     }
+    resetGame(room);
     room.state = 'waiting';
-    room.game.round = 0; room.game.drawerId = null; room.game.previousDrawerId = null;
-    room.game.guessedIds = new Set(); room.game.correctOrder = [];
     addSystemChat(room, '새 게임을 준비합니다.');
     emitRoomState(room);
     ack({ ok: true });
@@ -661,10 +812,28 @@ io.on('connection', (socket) => {
   socket.on('game:lobby', (_payload, ack = () => {}) => {
     const membership = requireHost(socket, ack);
     if (!membership) return;
-    membership.room.state = 'waiting';
-    membership.room.game.round = 0;
-    membership.room.game.drawerId = null;
-    emitRoomState(membership.room);
+    const { room } = membership;
+    if (room.state !== 'finished') return ack({ ok: false, error: '게임이 끝난 뒤에 대기실로 돌아갈 수 있습니다.' });
+    resetGame(room);
+    room.state = 'waiting';
+    addSystemChat(room, '대기실로 돌아왔습니다. 점수는 그대로 이어집니다.');
+    emitRoomState(room);
+    ack({ ok: true });
+  });
+
+  socket.on('game:pick-word', (payload = {}, ack = () => {}) => {
+    const membership = requireMember(socket, ack);
+    if (!membership) return;
+    const { room, player } = membership;
+    if (room.state !== 'playing' || !room.game.choosing || room.game.drawerId !== player.userId) {
+      return ack({ ok: false, error: '지금은 제시어를 고를 수 없습니다.' });
+    }
+    const word = cleanText(payload.word, 30);
+    if (!room.game.candidates.includes(word)) return ack({ ok: false, error: '제시된 후보 중에서 골라 주세요.' });
+    const timer = roomTimers.get(room.code);
+    if (timer) clearTimeout(timer);
+    roomTimers.delete(room.code);
+    beginDrawing(room, word);
     ack({ ok: true });
   });
 
@@ -672,7 +841,7 @@ io.on('connection', (socket) => {
     const membership = requireMember(socket, ack);
     if (!membership) return;
     const { room, player } = membership;
-    if (room.state !== 'playing' || room.game.drawerId !== player.userId) return ack({ ok: false, error: '현재 출제자만 그릴 수 있습니다.' });
+    if (room.state !== 'playing' || room.game.choosing || room.game.drawerId !== player.userId) return ack({ ok: false, error: '현재 출제자만 그릴 수 있습니다.' });
     if (!rateLimit(player, 'draw', 1_000, 70)) return;
     const segments = Array.isArray(payload.segments) ? payload.segments.slice(0, 30) : [];
     if (!segments.length || !segments.every(validSegment)) return ack({ ok: false, error: '잘못된 그림 데이터입니다.' });
@@ -691,7 +860,7 @@ io.on('connection', (socket) => {
     const membership = requireMember(socket, ack);
     if (!membership) return;
     const { room, player } = membership;
-    if (room.state !== 'playing' || room.game.drawerId !== player.userId) return ack({ ok: false, error: '현재 출제자만 캔버스를 바꿀 수 있습니다.' });
+    if (room.state !== 'playing' || room.game.choosing || room.game.drawerId !== player.userId) return ack({ ok: false, error: '현재 출제자만 캔버스를 바꿀 수 있습니다.' });
     if (payload.action === 'clear' || payload.action === 'reset') {
       room.game.drawingActions.push({ type: 'clear' });
       room.game.redoActions = [];
@@ -709,11 +878,18 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const { room, player } = findMembership(socket);
     if (!room || !player) return;
-    player.connected = false;
+    // 화면 이동·짧은 끊김에는 알림을 내지 않는다. 3초 뒤에도 안 돌아오면 그때 처리한다.
     player.socketId = null;
-    addSystemChat(room, `${player.nickname}님의 연결이 끊겼습니다. 30초 동안 기다립니다.`);
-    emitRoomState(room);
-    player.disconnectTimer = setTimeout(() => leaveImmediately(room, player.userId, 'timeout'), RECONNECT_GRACE_MS);
+    if (player.announceTimer) clearTimeout(player.announceTimer);
+    player.announceTimer = setTimeout(() => {
+      player.announceTimer = null;
+      if (player.socketId) return; // 이미 재접속함
+      player.connected = false;
+      addSystemChat(room, `${player.nickname}님의 연결이 끊겼습니다. 30초 동안 기다립니다.`);
+      emitRoomState(room);
+      if (room.game.drawerId === player.userId && room.state === 'playing') endRound(room, 'drawer-left');
+      player.disconnectTimer = setTimeout(() => leaveImmediately(room, player.userId, 'timeout'), RECONNECT_GRACE_MS);
+    }, DISCONNECT_ANNOUNCE_MS);
   });
 });
 
@@ -739,5 +915,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, musicGame
+  hintRevealCount, isOneEditApart, musicGame
 };
