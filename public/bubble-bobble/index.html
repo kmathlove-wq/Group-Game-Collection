@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>그룹 게임 컬렉션-버블보블</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="layout">
+<div id="stage">
+  <canvas id="game" width="512" height="384"></canvas>
+
+  <!-- 게임오버·엔딩 때 순위 등록 창 -->
+  <div id="bbRankOverlay" class="bb-overlay" data-ui hidden>
+    <div class="bb-overlay-card">
+      <h2 id="bbRankTitle">GAME OVER</h2>
+      <p class="bb-final">이번 점수 <strong id="bbFinalScore">0</strong></p>
+      <form id="bbRankForm">
+        <label class="bb-name-label" for="bbNameInput">순위에 표시할 이름</label>
+        <div class="bb-name-row">
+          <input id="bbNameInput" class="bb-name-input" type="text" maxlength="20" placeholder="이름을 입력하세요" autocomplete="off">
+          <button id="bbSubmitButton" class="bb-primary-btn" type="submit">순위 등록</button>
+        </div>
+      </form>
+      <p id="bbRankResult" class="bb-rank-result"></p>
+      <ol class="bb-rank-list bb-rank-list-mini"></ol>
+      <button id="bbCloseButton" class="bb-secondary-btn" type="button">처음 화면으로</button>
+    </div>
+  </div>
+</div>
+
+<!-- 전체 순위 (넓은 화면에서 게임 옆에 보임) -->
+<aside id="bbBoard" class="bb-board" data-ui aria-label="전체 순위">
+  <a class="bb-back" href="/">← 그룹 게임 컬렉션</a>
+  <div class="bb-board-head">
+    <h2>전체 순위</h2>
+    <button id="bbRefreshButton" class="bb-text-btn" type="button">새로고침</button>
+  </div>
+  <p class="bb-board-note">이 사이트에서 플레이한 모든 사람의 기록이에요.</p>
+  <ol class="bb-rank-list"><li class="bb-rank-empty">기록을 불러오는 중…</li></ol>
+  <p id="bbMyBest" class="bb-my-best"></p>
+</aside>
+</div>
+
+<!-- 모바일 조작 버튼 (터치 기기에서만 보임) -->
+<div id="touch" hidden>
+  <div class="tpad">
+    <button class="tbtn" data-act="left">◀</button>
+    <button class="tbtn" data-act="right">▶</button>
+  </div>
+  <div class="tpad">
+    <button class="tbtn" data-act="bubble">거품</button>
+    <button class="tbtn" data-act="jump">점프</button>
+  </div>
+</div>
+
+<!-- 로드 순서 중요: util → assets → input → sfx → level → levels → player → bubble → enemy → item → ranking → main -->
+<script src="js/util.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/input.js"></script>
+<script src="js/sfx.js"></script>
+<script src="js/level.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/player.js"></script>
+<script src="js/bubble.js"></script>
+<script src="js/enemy.js"></script>
+<script src="js/item.js"></script>
+<script src="js/ranking.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

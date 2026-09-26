@@ -57,7 +57,7 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
-  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz', '/geometry-dash']) {
+  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz', '/geometry-dash', '/bubble-bobble/']) {
     const response = await fetch(`${url}${route}`);
     assert.equal(response.status, 200, `${route} 진입 화면이 열려야 한다`);
   }
@@ -90,6 +90,16 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 200 })
   });
   assert.equal(rateLimited.status, 429);
+  const bubbleTooHigh = await fetch(`${url}/api/bubble-bobble/scores`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 10_000_000 })
+  });
+  assert.equal(bubbleTooHigh.status, 400, '버블보블 점수 상한을 넘으면 거부해야 한다');
+  const bubbleSubmitted = await fetch(`${url}/api/bubble-bobble/scores`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: uniqueName, score: 123456 })
+  });
+  assert.equal(bubbleSubmitted.status, 200, '버블보블 순위는 지오메트리 대쉬 쿨다운과 따로 계산해야 한다');
+  const bubbleBody = await bubbleSubmitted.json();
+  assert.ok(bubbleBody.rank >= 1 && bubbleBody.rank <= 50);
   const scoreList = await fetch(`${url}/api/geometry-dash/scores`);
   assert.equal(scoreList.status, 200);
   const scoreListBody = await scoreList.json();

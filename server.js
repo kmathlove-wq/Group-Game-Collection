@@ -8,6 +8,8 @@ const { MemoryRoomStore } = require('./lib/memory-room-store');
 const { setupMusicGame } = require('./src/music');
 const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
+const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
+
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_CHAT_HISTORY = 100;
 const RECONNECT_GRACE_MS = 30_000;
@@ -34,9 +36,7 @@ const io = new Server(server, {
 
 const rooms = new MemoryRoomStore();
 const roomTimers = new Map();
-const geometryDashScores = createGeometryDashScoreStore(path.join(__dirname, 'data', 'geometry-dash-scores.json'));
-const geometryDashSubmitAt = new Map();
-const GEOMETRY_DASH_SUBMIT_COOLDOWN_MS = 2_000;
+const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
 app.use(express.json({ limit: '2kb' }));
@@ -50,24 +50,32 @@ app.get('/music/lobby', (_req, res) => res.sendFile(path.join(__dirname, 'public
 app.get('/music/room', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-room.html')));
 app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/api/geometry-dash/scores', (_req, res) => {
-  res.json({ scores: geometryDashScores.getTop(10) });
-});
-app.post('/api/geometry-dash/scores', (req, res) => {
-  const score = Number(req.body?.score);
-  if (!Number.isInteger(score) || score < 0 || score > SCORE_MAX) {
-    return res.status(400).json({ error: '유효하지 않은 점수입니다.' });
-  }
-  const ip = req.ip || 'unknown';
-  const now = Date.now();
-  const lastSubmitAt = geometryDashSubmitAt.get(ip) || 0;
-  if (now - lastSubmitAt < GEOMETRY_DASH_SUBMIT_COOLDOWN_MS) {
-    return res.status(429).json({ error: '너무 빠르게 제출했습니다. 잠시 후 다시 시도하세요.' });
-  }
-  geometryDashSubmitAt.set(ip, now);
-  const { rank } = geometryDashScores.addScore(req.body?.name, score);
-  res.json({ scores: geometryDashScores.getTop(10), rank });
-});
+
+// 1인용 게임의 전체 순위 API(GET 조회, POST 제출)를 게임별 파일 저장소로 연결한다.
+function registerScoreboard(slug, scoreMax) {
+  const store = createGeometryDashScoreStore(path.join(__dirname, 'data', `${slug}-scores.json`));
+  const submitAt = new Map();
+  app.get(`/api/${slug}/scores`, (_req, res) => {
+    res.json({ scores: store.getTop(10) });
+  });
+  app.post(`/api/${slug}/scores`, (req, res) => {
+    const score = Number(req.body?.score);
+    if (!Number.isInteger(score) || score < 0 || score > scoreMax) {
+      return res.status(400).json({ error: '유효하지 않은 점수입니다.' });
+    }
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    const lastSubmitAt = submitAt.get(ip) || 0;
+    if (now - lastSubmitAt < SCORE_SUBMIT_COOLDOWN_MS) {
+      return res.status(429).json({ error: '너무 빠르게 제출했습니다. 잠시 후 다시 시도하세요.' });
+    }
+    submitAt.set(ip, now);
+    const { rank } = store.addScore(req.body?.name, score);
+    res.json({ scores: store.getTop(10), rank });
+  });
+}
+registerScoreboard('geometry-dash', SCORE_MAX);
+registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size }));
 

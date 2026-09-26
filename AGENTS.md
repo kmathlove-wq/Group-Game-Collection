@@ -1,7 +1,7 @@
 # 그룹 게임 컬렉션 — AGENTS.md
 
 ## 프로젝트 목적
-그룹 게임 컬렉션은 그림 퀴즈 `두들팡`, 음원 퀴즈 `송캐치`, 1인용 `절대 못 맞히는 퀴즈쇼`를 운영한다.
+그룹 게임 컬렉션은 그림 퀴즈 `두들팡`, 음원 퀴즈 `송캐치`, 1인용 `절대 못 맞히는 퀴즈쇼`·`지오메트리 대쉬`·`버블보블`을 운영한다.
 이 문서는 코드 에이전트가 기존 보안·게임 규칙을 훼손하지 않고 변경하도록 돕는 저장소 지침이다.
 
 ## 빠른 시작
@@ -28,6 +28,7 @@ public/style.css             공통·PC·모바일 전체 스타일
 public/assets/               두들팡 로고 이미지
 public/impossible-quiz.*     1인용 퀴즈쇼 화면·스타일·문제 데이터·진행
 public/assets/impossible-quiz/ 퀴즈쇼 15·17번 문제 이미지
+public/bubble-bobble/        버블보블 게임(그림·음악 포함), 설계 문서는 docs/bubble-bobble/
 src/music/                   송캐치 SQLite·관리자·게임 서버
 public/music*.html/js/css    송캐치 첫 화면·개인전·단체전 화면
 public/admin*.html/js        숨겨진 송캐치 관리자 화면
@@ -52,7 +53,7 @@ CLAUDE.md                    상세 프로젝트 지식
 - 기존 두들팡 이벤트 이름과 동작을 새 게임의 규칙에 억지로 재사용하지 않는다.
 - 아직 구현하지 않은 게임은 선택 화면에 작동하는 것처럼 노출하지 않는다.
 - `/impossible-quiz`는 서버 방 없이 브라우저 `localStorage`로 진행을 복구하는 고정 순서 20문제 1인용 게임이다.
-- `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은 쓰지 않는다. 배경·캐릭터·장애물은 `public/assets/geometry-dash/`의 그림을 `drawImage`로 그리고, 효과음·배경음악은 WebAudio로 합성한다. 순위는 개인 저장이 아니라 `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며, `GET/POST /api/geometry-dash/scores`로 조회·제출한다(`SCORE_MAX`, IP당 2초 쿨다운, 물리 재현 없음). 가시·블록·구덩이 외에 누르면 뜨고 떼면 떨어지는 비행 구간이 있다. 점프·비행 물리 상수를 바꾸면 통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다.
+- `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은 쓰지 않는다. 배경·캐릭터·장애물은 `public/assets/geometry-dash/`의 그림을 `drawImage`로 그리고, 효과음·배경음악은 WebAudio로 합성한다. 순위는 개인 저장이 아니라 `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며, `GET/POST /api/geometry-dash/scores`로 조회·제출한다(`SCORE_MAX`, IP당 2초 쿨다운, 물리 재현 없음). 가시·블록·구덩이 외에 누르면 뜨고 떼면 떨어지는 비행 구간이 있다. 점프·비행 물리 상수를 바꾸면 통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다. `/bubble-bobble/`은 원래 별도 프로젝트(P17)였던 순수 Canvas 1인용 게임으로 `public/bubble-bobble/`에 그림·음악과 함께 들어 있고 상대경로로 에셋을 읽으므로 끝 슬래시 주소를 쓴다(설계 문서는 `docs/bubble-bobble/`). 순위는 `server.js`의 `registerScoreboard(slug, scoreMax)`로 지오메트리 대쉬와 같은 저장소 구현을 쓰되 `data/bubble-bobble-scores.json`(Git 제외)·`/api/bubble-bobble/scores`·쿨다운을 따로 둔다(상한 9,999,999점). 게임오버·엔딩 때 HTML 순위 창(`js/ranking.js`)을 띄우고 닫혀야 타이틀로 가며, `data-ui` 요소 안의 키·마우스 입력은 `input.js`가 게임 조작으로 가로채지 않는다.
 - 퀴즈쇼 4·5번은 항상 오답이며 최고 가능 점수는 18점이다. 진행 중 실제 점수는 20번 판정 때문에 공개하지 않는다.
 - 퀴즈쇼 저장 점수는 신뢰하지 않고 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 앞선 답안을 즉시 재채점한다.
 - 퀴즈쇼 9번은 35개의 1을 불규칙 배치하며, Ctrl을 500ms 안에 두 번 누르고 비밀번호를 통과하면 문제·보기·정오답 MP3를 순서대로 재생한다. 여러 오답 파일은 `WRONG_AUDIO_VARIANTS`의 선택지별 번호를 따른다.
