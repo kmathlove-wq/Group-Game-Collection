@@ -1,0 +1,120 @@
+/* 삼각형 땅따먹기 전용 스타일. 공통 버튼·입력은 music.css, 입장 카드·모달은 music-lobby.css를 빌려 쓴다. */
+:root { --tri: #7c4dff; --tri2: #ff4d75; --music: #ff4d75; --music2: #7c4dff; }
+
+/* ── 입장 화면 ── */
+.triangle-lobby-page {
+  background: radial-gradient(circle at 15% 20%, #ffe3ec 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #e3dcff 0 22%, transparent 23%),
+    linear-gradient(135deg, #f6f3ff, #fff4f7);
+}
+.triangle-logo {
+  width: 92px; height: 92px; margin: 0 auto 10px; display: grid; place-items: center;
+  border-radius: 28px; background: linear-gradient(135deg, var(--tri2), var(--tri));
+  color: #fff; font-size: 48px; box-shadow: 0 14px 32px #7c4dff44;
+  animation: tri-bob 3s ease-in-out infinite;
+}
+@keyframes tri-bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
+
+/* ── 게임방 ── */
+.triangle-room-page { background: linear-gradient(135deg, #f6f3ff, #fff4f7); min-height: 100vh; }
+.tri-shell { width: min(1400px, 100%); margin: auto; padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+/* 긴 글자 때문에 칸이 늘어나 화면이 옆으로 넘치지 않게 한다 */
+.tri-shell > *, .tri-layout > *, .tri-status > * { min-width: 0; }
+.tri-status strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tri-header {
+  display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #fff;
+  border: 1px solid var(--line); border-radius: 18px;
+}
+.tri-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; white-space: nowrap; }
+.tri-brand span { color: var(--tri); font-size: 22px; }
+.tri-title { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 0; }
+.tri-title h1 { margin: 0; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#copyCode { border: 1px dashed #c9c2f5; background: #f5f2ff; border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+#copyCode small { color: var(--muted); font-weight: 800; }
+#copyCode strong { letter-spacing: .12em; color: var(--tri); }
+.tri-header .danger { padding: 9px 14px; }
+
+.tri-status {
+  display: grid; grid-template-columns: 120px 1fr 120px; align-items: center; text-align: center;
+  padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 18px;
+}
+.tri-status small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+.tri-status strong { font-size: 20px; }
+#timer.urgent { color: var(--bad); animation: tri-pulse .5s ease-in-out infinite alternate; }
+@keyframes tri-pulse { to { transform: scale(1.12); } }
+
+.tri-layout { display: grid; grid-template-columns: 250px 1fr 300px; gap: 12px; align-items: start; }
+.tri-players-panel, .tri-chat-panel { padding: 16px; }
+.tri-panel-heading { display: flex; justify-content: space-between; align-items: center; }
+.tri-panel-heading h2 { margin: 0; font-size: 17px; }
+.tri-panel-heading h2 span { color: var(--muted); font-size: 14px; }
+.tri-player-list { display: grid; gap: 8px; margin: 14px 0; }
+.tri-player {
+  display: grid; grid-template-columns: 14px 1fr; column-gap: 10px; align-items: center;
+  padding: 10px 12px; border-radius: 14px; background: #f6f6fa; border: 2px solid transparent;
+}
+.tri-player i { grid-row: span 2; width: 14px; height: 14px; border-radius: 50%; background: var(--player); }
+.tri-player b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tri-player small { color: var(--muted); font-weight: 700; }
+.tri-player.turn { border-color: var(--player); background: color-mix(in srgb, var(--player) 12%, #fff); }
+.tri-player.offline { opacity: .5; }
+.tri-actions { display: grid; gap: 8px; }
+
+.tri-board-panel { padding: 14px; }
+.tri-board-wrap {
+  position: relative; width: 100%; aspect-ratio: 1000 / 700; border-radius: 16px; overflow: hidden;
+  background-color: #fffdf8;
+  background-image: radial-gradient(#e9e4d6 1px, transparent 1px); background-size: 22px 22px;
+  border: 2px solid var(--line); transition: border-color .2s, box-shadow .2s;
+}
+.tri-board-wrap.my-turn { border-color: var(--tri); box-shadow: 0 0 0 4px #7c4dff22; }
+#board { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+.tri-board-overlay {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px;
+  text-align: center; padding: 20px; background: #ffffffcc;
+}
+.tri-board-overlay span { font-size: 56px; color: var(--tri); }
+.tri-board-overlay b { font-size: 20px; }
+.tri-board-overlay small { color: var(--muted); }
+.tri-board-help { margin: 10px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+
+.tri-chat-panel { display: grid; grid-template-rows: auto 1fr auto; height: min(640px, calc(100vh - 190px)); }
+.tri-chat-panel .chat { min-height: 0; }
+.tri-chat-panel .chat p.system { background: transparent; color: var(--muted); font-size: 13px; padding: 4px 6px; }
+.tri-chat-panel .chat p.land { background: color-mix(in srgb, var(--player) 16%, #fff); font-weight: 800; }
+.tri-chat-form { margin: 0; }
+.tri-chat-form input { flex: 1; }
+
+.tri-result-dialog { width: min(420px, calc(100% - 32px)); border: 0; border-radius: 26px; padding: 28px; text-align: center; box-shadow: 0 24px 60px #2023314d; }
+.tri-result-dialog::backdrop { background: #1f1b3480; }
+.tri-result-dialog h2 { margin: 4px 0 18px; }
+.tri-ranking { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 8px; }
+.tri-ranking li {
+  display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px; padding: 12px 14px;
+  border-radius: 14px; border-left: 6px solid var(--player); background: #f6f6fa; text-align: left;
+}
+.tri-ranking span { font-size: 22px; font-weight: 900; }
+.tri-result-actions { display: flex; gap: 10px; justify-content: center; }
+
+@media (max-width: 1100px) {
+  .tri-layout { grid-template-columns: 220px 1fr; }
+  .tri-chat-panel { grid-column: 1 / -1; height: 320px; }
+}
+@media (max-width: 760px) {
+  .tri-shell { padding: 8px; gap: 8px; }
+  .tri-header { gap: 8px; padding: 8px 10px; }
+  .tri-brand b { display: none; }
+  .tri-title { justify-content: flex-start; gap: 8px; }
+  .tri-title h1 { font-size: 15px; }
+  #copyCode { padding: 4px 8px; white-space: nowrap; }
+  #copyCode small { display: none; }
+  .tri-header .danger { padding: 8px 10px; }
+  .tri-status { grid-template-columns: 70px 1fr 70px; padding: 8px; }
+  .tri-status strong { font-size: 16px; }
+  .tri-layout { grid-template-columns: 1fr; }
+  .tri-board-panel { order: -1; padding: 8px; }
+  .tri-player-list { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .triangle-logo, #timer.urgent { animation: none; }
+}

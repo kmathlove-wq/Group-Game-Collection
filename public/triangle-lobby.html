@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#7c4dff">
+  <title>그룹 게임 컬렉션-삼각형 땅따먹기</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-lobby.css">
+  <link rel="stylesheet" href="/triangle.css">
+</head>
+<body class="songcatch-lobby-page triangle-lobby-page">
+  <header class="music-header songcatch-lobby-header"><a href="/" class="mini-brand">← 그룹 게임 컬렉션</a></header>
+
+  <main class="songcatch-lobby-shell">
+    <section class="songcatch-lobby-card">
+      <div class="triangle-logo" aria-hidden="true">▲</div>
+      <p class="eyebrow">그룹 게임 컬렉션</p>
+      <h1>삼각형 땅따먹기</h1>
+      <p class="songcatch-lobby-copy">2~4명이 돌아가며 점을 잇고, 삼각형을 완성해 땅을 차지해요.</p>
+
+      <label class="songcatch-nickname-label" for="nickname">게임에서 사용할 닉네임</label>
+      <div class="songcatch-nickname-row">
+        <input id="nickname" maxlength="30" autocomplete="nickname" placeholder="자유롭게 닉네임 입력">
+        <span id="nicknameCount">0/30</span>
+      </div>
+      <p class="songcatch-field-help">이모지와 특수문자도 자유롭게 사용할 수 있어요.</p>
+
+      <div class="songcatch-main-actions">
+        <button id="openCreate" class="primary">＋ 방 만들기</button>
+        <button id="openRooms" class="secondary">🔎 공개 방 찾기</button>
+      </div>
+      <button id="openCode" class="songcatch-code-button">⌨ 방 코드로 입장</button>
+      <p id="connectionStatus" class="songcatch-connection" role="status">● 서버에 연결하는 중…</p>
+    </section>
+
+    <aside class="songcatch-lobby-features" aria-label="게임 규칙">
+      <div><span>✏️</span><strong>한 번에 한 선</strong><small>차례마다 점 두 개를 이어요</small></div>
+      <div><span>🔺</span><strong>삼각형 = 땅</strong><small>마지막 선을 그은 사람이 차지</small></div>
+      <div><span>🚫</span><strong>엇갈림 금지</strong><small>다른 선을 가로지를 수 없어요</small></div>
+    </aside>
+  </main>
+
+  <dialog id="createDialog" class="music-lobby-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">새로운 게임</p><h2>방 만들기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="title">방 제목</label><input id="title" maxlength="30" value="삼각형 땅따먹기 한 판!"></div>
+    <div class="field-row">
+      <div class="field"><label for="maxPlayers">최대 인원</label>
+        <select id="maxPlayers"><option value="2">2명</option><option value="3">3명</option><option value="4" selected>4명</option></select></div>
+      <div class="field"><label for="turnTime">차례 시간</label>
+        <select id="turnTime"><option value="15">15초</option><option value="30" selected>30초</option><option value="60">60초</option><option value="0">제한 없음</option></select></div>
+    </div>
+    <div class="songcatch-toggle-list">
+      <label><input id="isPublic" type="checkbox" checked><span>공개 방</span></label>
+    </div>
+    <button id="create" class="primary wide">방 만들고 입장</button>
+  </dialog>
+
+  <dialog id="roomsDialog" class="music-lobby-modal music-rooms-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">함께할 방</p><h2>공개 방 찾기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="music-room-filters">
+      <input id="roomSearch" placeholder="방 제목 검색" aria-label="방 제목 검색">
+      <select id="roomSort" aria-label="방 정렬"><option value="new">최신순</option><option value="players">인원 많은 순</option></select>
+      <label class="music-check-inline"><input id="joinableOnly" type="checkbox"> 입장 가능한 방만</label>
+      <button id="refresh" class="secondary music-compact">↻ 새로고침</button>
+    </div>
+    <div id="rooms" class="music-public-rooms" aria-live="polite"></div>
+  </dialog>
+
+  <dialog id="codeDialog" class="music-lobby-modal music-code-modal">
+    <div class="music-modal-heading"><h2>방 코드로 입장</h2><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="code">6자리 방 코드</label><input id="code" maxlength="6" autocomplete="off" placeholder="A7K3P2"></div>
+    <button id="join" class="primary wide">입장하기</button>
+  </dialog>
+
+  <div id="notice" class="notice songcatch-lobby-notice hidden" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/triangle-lobby.js"></script>
+</body>
+</html>

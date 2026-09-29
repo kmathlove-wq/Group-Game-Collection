@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#7c4dff">
+  <title>그룹 게임 컬렉션-삼각형 땅따먹기</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/triangle.css">
+</head>
+<body class="triangle-room-page">
+  <main class="tri-shell">
+    <header class="tri-header">
+      <a class="tri-brand" href="/triangle" aria-label="삼각형 땅따먹기 첫 화면"><span aria-hidden="true">▲</span><b>삼각형 땅따먹기</b></a>
+      <div class="tri-title">
+        <h1 id="roomTitle">방에 입장하는 중…</h1>
+        <button id="copyCode" type="button" title="방 코드 복사" aria-label="방 코드 복사"><small>CODE</small> <strong id="roomCode">------</strong></button>
+      </div>
+      <button id="leave" class="danger">나가기</button>
+    </header>
+
+    <section class="tri-status" aria-label="게임 진행 상태">
+      <div><small>그은 선</small><strong id="moveCount">0</strong></div>
+      <div class="tri-status-center"><small id="statusLabel">대기실</small><strong id="statusMessage">모두 준비하면 방장이 시작해요!</strong></div>
+      <div><small>남은 시간</small><strong id="timer">--</strong></div>
+    </section>
+
+    <section class="tri-layout">
+      <aside class="panel tri-players-panel">
+        <div class="tri-panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2><span aria-hidden="true">🔺</span></div>
+        <div id="players" class="tri-player-list"></div>
+        <div class="tri-actions">
+          <button id="ready" class="secondary wide hidden">✓ 준비하기</button>
+          <button id="start" class="primary wide hidden">▶ 게임 시작</button>
+          <button id="closeRoom" class="danger wide hidden">방 종료</button>
+        </div>
+      </aside>
+
+      <section class="panel tri-board-panel">
+        <div id="boardWrap" class="tri-board-wrap">
+          <canvas id="board" aria-label="점을 이어 선을 긋는 게임판"></canvas>
+          <div id="boardOverlay" class="tri-board-overlay">
+            <span aria-hidden="true">▲</span>
+            <b id="overlayTitle">방장이 게임을 시작하면 점이 찍혀요</b>
+            <small>점 두 개를 차례로 누르면 선이 그어져요.</small>
+          </div>
+        </div>
+        <p id="boardHelp" class="tri-board-help">점을 하나 누르고, 이어 줄 다른 점을 누르세요.</p>
+        <div id="result" class="notice hidden" role="status"></div>
+      </section>
+
+      <aside class="panel tri-chat-panel">
+        <div class="tri-panel-heading"><h2>채팅</h2></div>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="answer-row tri-chat-form">
+          <input id="chatInput" maxlength="200" autocomplete="off" placeholder="메시지 입력…">
+          <button id="chatSend" class="secondary" aria-label="채팅 전송">➤</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="resultDialog" class="tri-result-dialog">
+    <p class="eyebrow">게임 끝!</p>
+    <h2 id="winnerTitle">🏆 우승</h2>
+    <ol id="ranking" class="tri-ranking"></ol>
+    <div class="tri-result-actions">
+      <button id="again" class="primary hidden">↻ 다시 하기</button>
+      <button id="closeResult" class="secondary">판 구경하기</button>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/triangle-geometry.js"></script>
+  <script src="/triangle-room.js"></script>
+</body>
+</html>

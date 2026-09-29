@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const words = require('./data/words.json');
 const { MemoryRoomStore } = require('./lib/memory-room-store');
 const { setupMusicGame } = require('./src/music');
+const { setupTriangleGame } = require('./src/triangle');
 const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -39,6 +40,7 @@ const roomTimers = new Map();
 const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
+const triangleGame = setupTriangleGame({ app, io, rootDir: __dirname });
 app.use(express.json({ limit: '2kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
 app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -77,7 +79,7 @@ function registerScoreboard(slug, scoreMax) {
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size }));
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size }));
 
 function cleanText(value, maxLength) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, maxLength);
@@ -923,5 +925,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame
+  hintRevealCount, isOneEditApart, musicGame, triangleGame
 };
