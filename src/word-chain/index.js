@@ -79,7 +79,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
   async function computerOpener(dict, used) {
     const syllables = [...COMPUTER_OPENERS].sort(() => Math.random() - 0.5).slice(0, OPENER_PARALLEL);
     const tryOne = async (syllable) => {
-      const pick = await dictionary.pickWord(dict, syllable, used, { dueum: false });
+      const pick = await dictionary.pickWord(dict, syllable, used, { dueum: false, extraPage: false });
       if (pick && await dictionary.hasContinuation(dict, lastSyllable(pick.word))) return pick;
       throw new Error('후보 없음');
     };
@@ -91,13 +91,33 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
     }
   }
 
+  // 컴퓨터의 첫 단어를 사전마다 하나씩 미리 골라 둔다. 쓰면 바로 다음 것을 뒤에서 다시 준비한다.
+  const openers = new Map(); // 사전 → Promise<단어|null>
+  const prepareOpener = (dict) => {
+    const promise = computerOpener(dict, new Set()).catch(() => null);
+    openers.set(dict, promise); return promise;
+  };
+  async function takeOpener(dict, used) {
+    const ready = openers.get(dict) || prepareOpener(dict);
+    openers.delete(dict);
+    const pick = await ready;
+    prepareOpener(dict);
+    return pick || computerOpener(dict, used); // 미리 고른 게 실패했으면 그 자리에서 다시
+  }
+  // 화면에서 '컴퓨터 먼저'를 고르면 부른다. 바로 대답하고 준비는 뒤에서 한다.
+  app.post('/api/word-chain/solo/warm', json, (req, res) => {
+    const dict = dictionaryCode(req.body?.dictionary);
+    if (dictionary.isConfigured(dict) && !openers.has(dict)) prepareOpener(dict);
+    res.status(204).end();
+  });
+
   app.post('/api/word-chain/solo', json, async (req, res) => {
     const dict = dictionaryCode(req.body?.dictionary);
     if (!dictionary.isConfigured(dict)) return res.status(503).json({ ok: false, message: `${DICTIONARIES[dict].name} API 키가 아직 설정되지 않았어요.` });
     const game = { dictionary: dict, used: new Set(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
     let computer = null;
     if (req.body?.first === 'computer') {
-      try { computer = await computerOpener(dict, game.used); }
+      try { computer = await takeOpener(dict, game.used); }
       catch (error) { return res.status(503).json({ ok: false, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' }); }
       if (!computer) return res.status(503).json({ ok: false, message: '컴퓨터가 첫 단어를 고르지 못했어요. 다시 시작해 주세요.' });
       game.used.add(computer.word); game.lastWord = computer.word;

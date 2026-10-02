@@ -25,7 +25,7 @@ function fakeDictionary(words = WORDS) {
       const starts = R.allowedStarts(syllable); const has = words.some((w) => starts.includes(w[0]));
       known.set(syllable, has); return has;
     },
-    async pickWord(_dict, syllable, used, { dueum = true } = {}) {
+    async pickWord(_dict, syllable, used, { dueum = true } = {}) { // extraPage는 가짜 사전에선 의미 없음
       const starts = dueum ? R.allowedStarts(syllable) : [syllable];
       const word = words.find((w) => starts.includes(w[0]) && !used.has(w));
       return word ? { word, definition: `${word}의 뜻` } : null;
@@ -248,12 +248,16 @@ test('끝말잇기: 여럿이 방 — 제한 없음·한방단어 즉시 탈락�
 test('끝말잇기: 컴퓨터 먼저 — 한방단어가 아닌 첫 단어로 시작한다', async (t) => {
   const openers = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
   const { url } = await startServer(t, {}, [...openers.map((o) => `${o}과`), '과자', '자두']);
+  const warm = await fetch(`${url}/api/word-chain/solo/warm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"dictionary":"stdict"}' });
+  assert.equal(warm.status, 204);
   const start = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer' });
   assert.equal(start.ok, true);
   assert.match(start.computer.word, /^.과$/); assert.deepEqual(start.nextStarts, ['과']);
   const reply = await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '과자' });
   assert.equal(reply.computer.word[0], '자');
   assert.match((await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '두부' })).message, new RegExp(`'${reply.computer.word.at(-1)}'`));
+  const second = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer' }); // 미리 준비된 다음 단어
+  assert.equal(second.ok, true); assert.match(second.computer.word, /^.과$/);
 });
 
 test('끝말잇기: 방장이 차례 순서를 바꾸고 섞을 수 있다', async (t) => {

@@ -136,15 +136,15 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   }
 
   // 컴퓨터 차례: 이어 갈 수 있는 낱말 중 아직 안 나온 것을 무작위로 고른다. 없으면 null(컴퓨터 패배).
-  // dueum=false면 그 글자 하나만 찾는다(컴퓨터의 첫 단어처럼 두음 짝까지 볼 필요가 없을 때 더 빠르다).
-  async function pickWord(dictionary, syllable, usedWords, { dueum = true } = {}) {
+  // dueum=false면 그 글자 하나만, extraPage=false면 첫 묶음만 본다(컴퓨터의 첫 단어처럼 빨리 골라야 할 때).
+  async function pickWord(dictionary, syllable, usedWords, { dueum = true, extraPage = true } = {}) {
     const candidates = new Map();
     for (const start of dueum ? allowedStarts(syllable) : [syllable]) {
       const first = await search(dictionary, start, 'start');
       const pages = [first];
       const pageCount = Math.min(RANDOM_PAGE_MAX, Math.ceil(first.total / PAGE_SIZE));
       // 늘 같은 단어만 나오지 않게, 결과가 많으면 다른 묶음 하나를 더 섞는다.
-      if (pageCount > 1) pages.push(await search(dictionary, start, 'start', 2 + Math.floor(random() * (pageCount - 1))).catch(() => ({ items: [] })));
+      if (extraPage && pageCount > 1) pages.push(await search(dictionary, start, 'start', 2 + Math.floor(random() * (pageCount - 1))).catch(() => ({ items: [] })));
       for (const page of pages) {
         for (const item of page.items) {
           if (item.word[0] === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));

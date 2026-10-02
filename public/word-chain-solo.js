@@ -125,6 +125,15 @@
     } catch { /* 확인을 못 해도 게임은 계속 */ }
   }
 
+  // '컴퓨터 먼저'를 고르면 서버가 첫 단어를 미리 준비해 두게 한다(시작 버튼을 누르면 바로 나오게).
+  function warmOpener() {
+    if (document.querySelector('input[name=first]:checked').value !== 'computer') return;
+    const dictionary = document.querySelector('input[name=dictionary]:checked').value;
+    fetch('/api/word-chain/solo/warm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dictionary }) }).catch(() => {});
+  }
+  for (const input of document.querySelectorAll('input[name=first], input[name=dictionary]')) input.addEventListener('change', warmOpener);
+  warmOpener();
+
   $('#start').onclick = start;
   $('#wordForm').addEventListener('submit', submit);
   $('#giveup').onclick = () => { if (confirm('정말 포기할까요?')) finish(false, '🏳 포기했어요'); };
