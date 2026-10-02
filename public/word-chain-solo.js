@@ -1,0 +1,109 @@
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const { wordItem, beep, startsText } = window.WordChainUI;
+  const STORE_KEY = 'wordchain:solo:settings';
+
+  let game = null;        // { id, turnTime }
+  let deadline = null;    // 내 차례가 끝나는 시각(사전 확인 중엔 null)
+  let pausedMs = null;    // 확인하는 동안 멈춰 둔 남은 시간
+  let busy = false;
+  let over = false;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    if (saved.dictionary) document.querySelector(`input[name=dictionary][value="${saved.dictionary === 'opendict' ? 'opendict' : 'stdict'}"]`).checked = true;
+    if (saved.turnTime) $('#turnTime').value = String(saved.turnTime);
+  } catch { /* 저장된 설정이 없어도 기본값으로 시작 */ }
+
+  function message(text, type = '') {
+    const el = $('#message'); el.textContent = text; el.className = `notice ${type}`; el.classList.toggle('hidden', !text);
+  }
+  async function post(url, body) {
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok && data.ok !== false) throw new Error('서버에 연결하지 못했어요.');
+    return data;
+  }
+
+  function setTurn(ms) { deadline = Date.now() + ms; pausedMs = null; }
+  function tick() {
+    if (!game || over) return;
+    const total = game.turnTime * 1000;
+    const left = deadline ? Math.max(0, deadline - Date.now()) : pausedMs ?? total;
+    $('#timer').textContent = `${Math.ceil(left / 1000)}초`;
+    $('#timer').classList.toggle('urgent', left <= 5000 && Boolean(deadline));
+    $('#timebar').style.width = `${(left / total) * 100}%`;
+    if (deadline && left <= 0) finish(false, '⏰ 시간 초과!');
+  }
+  setInterval(tick, 100);
+
+  function addWord(word, definition, mine) {
+    $('#chain').append(wordItem({ word, definition, who: mine ? '나' : '🤖 컴퓨터', side: mine ? 'mine' : 'other', color: mine ? '#3b82f6' : '#10b981' }));
+    $('#chain').scrollTop = $('#chain').scrollHeight;
+  }
+
+  async function finish(win, title) {
+    if (over) return; over = true; deadline = null;
+    $('#word').disabled = true; $('#send').disabled = true; $('#giveup').disabled = true;
+    let score = Number($('#score').textContent);
+    if (!win) { try { score = (await post(`/api/word-chain/solo/${game.id}/giveup`)).score ?? score; } catch { /* 결과 표시는 계속 */ } }
+    beep(win ? [523, 659, 784, 1046] : [392, 330, 262], 0.13);
+    $('#resultTitle').textContent = win ? '🏆 내가 이겼어요!' : title;
+    $('#resultText').textContent = win ? `컴퓨터가 이어 말할 단어를 못 찾았어요. 단어 ${score}개를 이었어요!` : `단어 ${score}개를 이었어요. 다시 도전해 볼까요?`;
+    $('#statusLabel').textContent = '게임 끝'; $('#prompt').textContent = win ? '승리!' : '패배';
+    $('#resultDialog').showModal();
+  }
+
+  async function start() {
+    const dictionary = document.querySelector('input[name=dictionary]:checked').value;
+    const turnTime = Number($('#turnTime').value);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime })); } catch { /* 저장 못 해도 진행 */ }
+    $('#start').disabled = true;
+    try {
+      const data = await post('/api/word-chain/solo', { dictionary });
+      if (!data.ok) throw new Error(data.message);
+      game = { id: data.id, turnTime }; over = false; busy = false;
+      $('#dictBadge').textContent = `📖 ${dictionary === 'opendict' ? '우리말샘' : '표준국어대사전'}`; $('#dictBadge').classList.remove('hidden');
+      $('#setup').classList.add('hidden'); $('#game').classList.remove('hidden');
+      $('#chain').replaceChildren(); $('#score').textContent = '0'; message('');
+      $('#statusLabel').textContent = '내 차례!'; $('#prompt').textContent = '아무 단어로 시작하세요 (한방단어 금지)';
+      for (const el of [$('#word'), $('#send'), $('#giveup')]) el.disabled = false;
+      setTurn(turnTime * 1000); $('#word').value = ''; $('#word').focus();
+    } catch (error) {
+      const el = $('#setupNotice'); el.textContent = error.message || '시작하지 못했어요.'; el.classList.remove('hidden');
+    } finally { $('#start').disabled = false; }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    const word = $('#word').value.replace(/\s/g, '');
+    if (!word || busy || over) return;
+    busy = true; pausedMs = Math.max(0, deadline - Date.now()); deadline = null; // 확인하는 동안 시계 멈춤
+    $('#send').disabled = true; message('📖 사전에서 확인하는 중…');
+    try {
+      const data = await post(`/api/word-chain/solo/${game.id}/word`, { word });
+      if (over) return;
+      if (!data.ok) {
+        message(data.message || '쓸 수 없는 단어예요.', 'error'); beep([180], 0.15);
+        setTurn(Math.max(pausedMs, 1500)); return;
+      }
+      addWord(data.player.word, data.player.definition, true);
+      $('#score').textContent = String(data.score); $('#word').value = '';
+      if (!data.computer) { message(''); finish(true); return; }
+      beep([660, 880], 0.08);
+      addWord(data.computer.word, data.computer.definition, false);
+      message(''); $('#prompt').textContent = `${startsText(data.nextStarts)}(으)로 시작하는 단어`;
+      setTurn(game.turnTime * 1000);
+    } catch (error) {
+      message(error.message || '서버에 연결하지 못했어요.', 'error'); setTurn(Math.max(pausedMs ?? 0, 1500));
+    } finally {
+      busy = false; if (!over) { $('#send').disabled = false; $('#word').focus(); }
+    }
+  }
+
+  $('#start').onclick = start;
+  $('#wordForm').addEventListener('submit', submit);
+  $('#giveup').onclick = () => { if (confirm('정말 포기할까요?')) finish(false, '🏳 포기했어요'); };
+  $('#again').onclick = () => { $('#resultDialog').close(); $('#game').classList.add('hidden'); $('#setup').classList.remove('hidden'); $('#dictBadge').classList.add('hidden'); game = null; };
+  $('#closeResult').onclick = () => $('#resultDialog').close();
+})();

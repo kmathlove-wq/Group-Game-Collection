@@ -1,7 +1,7 @@
 # 그룹 게임 컬렉션 — AGENTS.md
 
 ## 프로젝트 목적
-그룹 게임 컬렉션은 그림 퀴즈 `두들팡`, 음원 퀴즈 `송캐치`, 2~4인 `삼각형 땅따먹기`, 1인용 `절대 못 맞히는 퀴즈쇼`·`지오메트리 대쉬`·`버블보블`을 운영한다.
+그룹 게임 컬렉션은 그림 퀴즈 `두들팡`, 음원 퀴즈 `송캐치`, 2~4인 `삼각형 땅따먹기`, 여럿/컴퓨터 대결 `끝말잇기`, 1인용 `절대 못 맞히는 퀴즈쇼`·`지오메트리 대쉬`·`버블보블`을 운영한다.
 이 문서는 코드 에이전트가 기존 보안·게임 규칙을 훼손하지 않고 변경하도록 돕는 저장소 지침이다.
 
 ## 빠른 시작
@@ -28,9 +28,8 @@ public/assets/               두들팡 로고 이미지
 public/impossible-quiz.*     1인용 퀴즈쇼 화면·스타일·문제 데이터·진행
 public/assets/impossible-quiz/ 퀴즈쇼 15·17번 문제 이미지
 public/bubble-bobble/        버블보블 게임(그림·음악 포함), 설계 문서는 docs/bubble-bobble/
-src/music/ · src/triangle/   송캐치 SQLite·관리자·게임 서버 / 삼각형 땅따먹기 서버·판정
-public/music*.html/js/css    송캐치 첫 화면·개인전·단체전 화면
-public/admin*.html/js        숨겨진 송캐치 관리자 화면
+src/music/ · triangle/ · word-chain/  송캐치 / 삼각형 땅따먹기 / 끝말잇기(사전 API) 서버
+public/music*·admin*         송캐치 첫 화면·개인전·단체전 / 숨겨진 관리자 화면
 uploads/                     Git에 넣지 않는 관리자 음원·이미지
 test/server.test.js          실제 소켓을 여는 통합 테스트
 README.md                    사용자용 설치·배포 문서
@@ -52,6 +51,7 @@ CLAUDE.md                    상세 프로젝트 지식
 - 기존 두들팡 이벤트 이름과 동작을 새 게임의 규칙에 억지로 재사용하지 않는다.
 - 아직 구현하지 않은 게임은 선택 화면에 작동하는 것처럼 노출하지 않는다.
 - `/triangle`(입장)·`/triangle/room`은 2~4인 `삼각형 땅따먹기`다. `src/triangle/index.js`가 `tri:*` 이벤트·메모리 방·차례·점수를 소유하고, `src/triangle/geometry.js`는 서버와 브라우저(`/triangle-geometry.js`)가 함께 쓰는 판정 모듈이다(화면 `public/triangle-*`, 테스트 `test/triangle.test.js`, 사용자 키 `triangle:userId`). 점 수 `인원×7+4`, 선 교차·점 스침(`POINT_CLEARANCE`) 금지, 새 선으로 닫힌 "안에 점 없는" 삼각형만 그은 사람 땅(동시 2개 가능), 보너스 차례 없음, 차례 시간 15/30/60초/무제한(0, 방장 선택), 게임 중 입장 불가, 끊김 3초 유예 뒤 차례 건너뜀, 더 그을 선이 없으면 종료하고 동점은 같은 등수다. 점은 칸 나눔+흔들기로 배치하고 일직선 검사는 이웃 점끼리만 한다(판 전체 검사는 점 20개 이상에서 수학적으로 불가능). 그래서 테두리 근처 작은 틈은 땅이 안 될 수 있다.
+- `/word-chain`(모드 선택)·`/word-chain/solo`(컴퓨터 대결)·`/word-chain/lobby`·`/word-chain/room`(2~8인)은 `끝말잇기`다. `src/word-chain/index.js`가 `wc:*` 이벤트·메모리 방과 `/api/word-chain/solo*` 서버 세션(30분)·`/api/word-chain/status`를, `rules.js`가 두음법칙(P07 `app.py`와 같은 표, 원음+정방향+역방향 시작 허용)·사전 전 검사(한글 2~20자, 이어짐, 중복)를, `dictionary.js`가 국립국어원 공식 API(표준국어대사전 `STDICT_API_KEY`·우리말샘 `OPENDICT_API_KEY`, P07과 같은 키 이름·매개변수, `method=exact` 단어 확인·`method=start` 이어짐/컴퓨터 단어, 30분 캐시)를 소유한다. 사전은 방장이 방 만들 때(혼자는 시작 전) 하나 고르고, 명사만 허용하며, 끝말이 새로 시작될 때(첫 단어·탈락 직후)만 한방단어를 금지한다. 차례 시간 10/15/20/30초, 사전 확인 중 시계 정지, 틀리면 시간 안 재입력, 시간 초과는 탈락 후 다음 사람이 새 단어로 시작, 끊김은 3초 뒤 차례 건너뜀, 마지막 생존자 우승이다. 키는 서버에만 두고 응답에 넣지 않으며, 테스트(`test/word-chain.test.js`)는 가짜 사전과 `secondMs` 옵션으로 키 없이 돈다. 사용자 키 `wordchain:userId`.
 - `/impossible-quiz`는 서버 방 없이 브라우저 `localStorage`로 진행을 복구하는 고정 순서 20문제 1인용 게임이다.
 - `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은 쓰지 않는다. 배경·캐릭터·장애물은 `public/assets/geometry-dash/`의 그림을 `drawImage`로 그리고, 효과음·배경음악은 WebAudio로 합성한다. 순위는 개인 저장이 아니라 `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며, `GET/POST /api/geometry-dash/scores`로 조회·제출한다(`SCORE_MAX`, IP당 2초 쿨다운, 물리 재현 없음). 가시·블록·구덩이 외에 누르면 뜨고 떼면 떨어지는 비행 구간이 있다. 점프·비행 물리 상수를 바꾸면 통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다. `/bubble-bobble/`은 원래 별도 프로젝트(P17)였던 순수 Canvas 1인용 게임으로 `public/bubble-bobble/`에 그림·음악과 함께 들어 있고 상대경로로 에셋을 읽으므로 끝 슬래시 주소를 쓴다(설계 문서는 `docs/bubble-bobble/`). 순위는 `server.js`의 `registerScoreboard(slug, scoreMax)`로 지오메트리 대쉬와 같은 저장소 구현을 쓰되 `data/bubble-bobble-scores.json`(Git 제외)·`/api/bubble-bobble/scores`·쿨다운을 따로 둔다(상한 9,999,999점). 게임오버·엔딩 때 HTML 순위 창(`js/ranking.js`)을 띄우고 닫혀야 타이틀로 가며, `data-ui` 요소 안의 키·마우스 입력은 `input.js`가 게임 조작으로 가로채지 않는다.
 - 퀴즈쇼 4·5번은 항상 오답이며 최고 가능 점수는 18점이다. 진행 중 실제 점수는 20번 판정 때문에 공개하지 않는다.

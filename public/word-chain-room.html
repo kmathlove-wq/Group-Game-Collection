@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3b82f6">
+  <title>그룹 게임 컬렉션-끝말잇기</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/word-chain.css">
+</head>
+<body class="wc-play-page">
+  <main class="wc-room-shell">
+    <header class="wc-header">
+      <a class="wc-brand" href="/word-chain/lobby" aria-label="끝말잇기 첫 화면"><span aria-hidden="true">가</span><b>끝말잇기</b></a>
+      <div class="wc-title">
+        <h1 id="roomTitle">방에 입장하는 중…</h1>
+        <button id="copyCode" type="button" title="방 코드 복사" aria-label="방 코드 복사"><small>CODE</small> <strong id="roomCode">------</strong></button>
+      </div>
+      <span id="dictBadge" class="wc-dict-badge"></span>
+      <button id="leave" class="danger">나가기</button>
+    </header>
+
+    <section class="wc-status" aria-label="게임 진행 상태">
+      <div><small>이어진 단어</small><strong id="wordCount">0</strong></div>
+      <div class="wc-status-center"><small id="statusLabel">대기실</small><strong id="statusMessage">모두 준비하면 방장이 시작해요!</strong></div>
+      <div><small>남은 시간</small><strong id="timer">--</strong></div>
+    </section>
+
+    <section class="wc-layout">
+      <aside class="panel wc-side-panel">
+        <div class="wc-panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2></div>
+        <div id="players" class="wc-player-list"></div>
+        <div class="wc-actions">
+          <button id="ready" class="secondary wide hidden">✓ 준비하기</button>
+          <button id="start" class="primary wide hidden">▶ 게임 시작</button>
+          <button id="closeRoom" class="danger wide hidden">방 종료</button>
+        </div>
+      </aside>
+
+      <section class="panel wc-board">
+        <div class="wc-timebar"><i id="timebar"></i></div>
+        <div id="waiting" class="wc-waiting"><span aria-hidden="true">가</span><b>방장이 게임을 시작하면 끝말잇기가 시작돼요</b><small>차례가 오면 아래 칸에 단어를 쓰고 Enter!</small></div>
+        <ol id="chain" class="wc-chain" aria-live="polite"></ol>
+        <form id="wordForm" class="wc-word-form">
+          <input id="word" maxlength="20" autocomplete="off" placeholder="내 차례가 오면 입력할 수 있어요" aria-label="단어 입력" disabled>
+          <button class="primary" id="send" disabled>내기</button>
+        </form>
+        <div id="result" class="notice hidden" role="status"></div>
+      </section>
+
+      <aside class="panel wc-side-panel wc-chat-panel">
+        <div class="wc-panel-heading"><h2>채팅</h2></div>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="answer-row wc-chat-form">
+          <input id="chatInput" maxlength="200" autocomplete="off" placeholder="메시지 입력…">
+          <button id="chatSend" class="secondary" aria-label="채팅 전송">➤</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="resultDialog" class="wc-result-dialog">
+    <p class="eyebrow">게임 끝!</p>
+    <h2 id="winnerTitle">🏆 우승</h2>
+    <ol id="ranking" class="wc-ranking"></ol>
+    <div class="wc-result-actions">
+      <button id="again" class="primary hidden">↻ 다시 하기</button>
+      <button id="closeResult" class="secondary">단어 다시 보기</button>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/word-chain-common.js"></script>
+  <script src="/word-chain-room.js"></script>
+</body>
+</html>

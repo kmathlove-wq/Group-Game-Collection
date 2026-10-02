@@ -1,0 +1,169 @@
+/* 끝말잇기 전용 스타일. 공통 버튼·입력은 music.css, 입장 카드·모달은 music-lobby.css를 빌려 쓴다. */
+:root { --wc: #3b82f6; --wc2: #10b981; --music: #3b82f6; --music2: #10b981; }
+
+/* ── 입장 화면 ── */
+.wc-page {
+  background: radial-gradient(circle at 15% 20%, #dbeafe 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #d1fae5 0 22%, transparent 23%),
+    linear-gradient(135deg, #f0f7ff, #f0fdf7);
+}
+.wc-logo {
+  width: 92px; height: 92px; margin: 0 auto 10px; display: grid; place-items: center;
+  border-radius: 28px; background: linear-gradient(135deg, var(--wc), var(--wc2));
+  color: #fff; font-size: 48px; font-weight: 900; box-shadow: 0 14px 32px #3b82f644;
+  animation: wc-bob 3s ease-in-out infinite;
+}
+@keyframes wc-bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
+.wc-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
+.wc-mode-card {
+  display: grid; gap: 6px; justify-items: center; padding: 20px 14px; border-radius: 18px;
+  border: 2px solid var(--line); background: #fff; transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.wc-mode-card:hover, .wc-mode-card:focus-visible { transform: translateY(-3px); border-color: var(--wc); box-shadow: 0 12px 26px #3b82f622; }
+.wc-mode-card span { font-size: 38px; }
+.wc-mode-card b { font-size: 18px; }
+.wc-mode-card small { color: var(--muted); line-height: 1.4; }
+
+/* 사전 고르기 카드형 라디오 */
+.wc-field-label { font-weight: 750; }
+.wc-dict-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.wc-dict-choice label { cursor: pointer; }
+.wc-dict-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.wc-dict-choice span {
+  display: grid; gap: 4px; height: 100%; padding: 14px; border-radius: 14px; border: 2px solid var(--line);
+  background: #fff; text-align: left; transition: border-color .15s, background .15s;
+}
+.wc-dict-choice small { color: var(--muted); line-height: 1.4; }
+.wc-dict-choice input:checked + span { border-color: var(--wc); background: #eff6ff; }
+.wc-dict-choice input:focus-visible + span { outline: 3px solid #3b82f655; outline-offset: 2px; }
+
+/* ── 게임 화면 공통 ── */
+.wc-play-page { background: linear-gradient(135deg, #f0f7ff, #f0fdf7); min-height: 100vh; }
+.wc-solo-shell, .wc-room-shell { width: min(1400px, 100%); margin: auto; padding: 14px; display: grid; gap: 12px; }
+.wc-solo-shell { width: min(760px, 100%); }
+.wc-solo-shell > *, .wc-room-shell > *, .wc-layout > *, .wc-status > * { min-width: 0; }
+.wc-header {
+  display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #fff;
+  border: 1px solid var(--line); border-radius: 18px;
+}
+.wc-header h1 { flex: 1; margin: 0; font-size: 20px; text-align: center; }
+.wc-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; white-space: nowrap; }
+.wc-brand span {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px;
+  background: linear-gradient(135deg, var(--wc), var(--wc2)); color: #fff; font-size: 16px;
+}
+.wc-title { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 0; }
+.wc-title h1 { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#copyCode { border: 1px dashed #bcd3f7; background: #eff6ff; border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+#copyCode small { color: var(--muted); font-weight: 800; }
+#copyCode strong { letter-spacing: .12em; color: var(--wc); }
+.wc-dict-badge { padding: 6px 10px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.wc-header .danger { padding: 9px 14px; }
+
+.wc-status {
+  display: grid; grid-template-columns: 120px 1fr 120px; align-items: center; text-align: center;
+  padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 18px;
+}
+.wc-game .wc-status { padding: 0 0 10px; border: 0; }
+.wc-status small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+.wc-status strong { display: block; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#timer.urgent { color: var(--bad); animation: wc-pulse .5s ease-in-out infinite alternate; }
+@keyframes wc-pulse { to { transform: scale(1.12); } }
+.wc-timebar { height: 8px; border-radius: 99px; background: #eef1f7; overflow: hidden; }
+.wc-timebar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--wc2), var(--wc)); transition: width .1s linear; }
+
+/* 단어 말풍선 목록 */
+.wc-chain { list-style: none; margin: 12px 0; padding: 4px; display: grid; gap: 10px; align-content: start; overflow-y: auto; min-height: 260px; max-height: 52vh; }
+.wc-word {
+  max-width: min(78%, 460px); padding: 10px 14px; border-radius: 16px 16px 16px 4px;
+  background: color-mix(in srgb, var(--player, #10b981) 12%, #fff); border: 2px solid color-mix(in srgb, var(--player, #10b981) 40%, #fff);
+  animation: wc-pop .25s ease-out;
+}
+.wc-word.mine { justify-self: end; border-radius: 16px 16px 4px 16px; }
+.wc-word small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+.wc-word b { font-size: 24px; letter-spacing: .02em; word-break: keep-all; }
+.wc-word em { font-style: normal; color: var(--player, var(--wc)); text-decoration: underline 3px; text-underline-offset: 4px; }
+.wc-word p { margin: 4px 0 0; color: #555b70; font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wc-word p:empty { display: none; }
+@keyframes wc-pop { from { transform: scale(.9); opacity: 0; } }
+
+.wc-word-form { display: flex; gap: 10px; padding: 8px; border-radius: 16px; border: 2px solid var(--line); background: #fff; transition: border-color .2s, box-shadow .2s; }
+.wc-word-form.my-turn, .wc-game .wc-word-form { border-color: var(--wc); box-shadow: 0 0 0 4px #3b82f622; }
+.wc-word-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 0; font-size: 20px; font-weight: 800; outline: none; background: transparent; }
+.wc-word-form input:disabled { color: var(--muted); }
+.wc-word-form button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── 컴퓨터랑 대결 ── */
+.wc-setup, .wc-game { padding: 22px; }
+.wc-setup h2 { margin-top: 0; }
+.wc-giveup { display: block; margin: 10px auto 0; }
+
+/* ── 여럿이 방 ── */
+.wc-layout { display: grid; grid-template-columns: 250px 1fr 300px; gap: 12px; align-items: start; }
+.wc-side-panel { padding: 16px; }
+.wc-panel-heading h2 { margin: 0; font-size: 17px; }
+.wc-panel-heading h2 span { color: var(--muted); font-size: 14px; }
+.wc-player-list { display: grid; gap: 8px; margin: 14px 0; }
+.wc-player {
+  display: grid; grid-template-columns: 14px 1fr; column-gap: 10px; align-items: center;
+  padding: 10px 12px; border-radius: 14px; background: #f6f6fa; border: 2px solid transparent;
+}
+.wc-player i { grid-row: span 2; width: 14px; height: 14px; border-radius: 50%; background: var(--player); }
+.wc-player b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-player small { color: var(--muted); font-weight: 700; }
+.wc-player.turn { border-color: var(--player); background: color-mix(in srgb, var(--player) 12%, #fff); }
+.wc-player.offline { opacity: .5; }
+.wc-player.out b { text-decoration: line-through; color: var(--muted); }
+.wc-actions { display: grid; gap: 8px; }
+.wc-board { padding: 14px; }
+.wc-waiting { display: grid; justify-items: center; gap: 8px; padding: 50px 20px; text-align: center; }
+.wc-waiting span { font-size: 56px; font-weight: 900; color: var(--wc); }
+.wc-waiting b { font-size: 20px; }
+.wc-waiting small { color: var(--muted); }
+.wc-chat-panel { display: grid; grid-template-rows: auto 1fr auto; height: min(640px, calc(100vh - 190px)); }
+.wc-chat-panel .chat { min-height: 0; }
+.wc-chat-panel .chat p.system { background: transparent; color: var(--muted); font-size: 13px; padding: 4px 6px; }
+.wc-chat-panel .chat p.reject { background: #fff4f4; color: #9b3434; font-size: 13px; }
+.wc-chat-panel .chat p.out { background: color-mix(in srgb, var(--player) 14%, #fff); font-weight: 800; }
+.wc-chat-form { margin: 0; }
+.wc-chat-form input { flex: 1; }
+
+/* 결과 창 */
+.wc-result-dialog { width: min(420px, calc(100% - 32px)); border: 0; border-radius: 26px; padding: 28px; text-align: center; box-shadow: 0 24px 60px #2023314d; }
+.wc-result-dialog::backdrop { background: #1f1b3480; }
+.wc-result-dialog h2 { margin: 4px 0 14px; }
+.wc-result-dialog > p:not(.eyebrow) { color: var(--muted); margin: 0 0 20px; }
+.wc-ranking { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 8px; }
+.wc-ranking li {
+  display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px; padding: 12px 14px;
+  border-radius: 14px; border-left: 6px solid var(--player); background: #f6f6fa; text-align: left;
+}
+.wc-ranking span { font-size: 22px; font-weight: 900; }
+.wc-result-actions { display: flex; gap: 10px; justify-content: center; }
+
+@media (max-width: 1100px) {
+  .wc-layout { grid-template-columns: 220px 1fr; }
+  .wc-chat-panel { grid-column: 1 / -1; height: 320px; }
+}
+@media (max-width: 760px) {
+  .wc-solo-shell, .wc-room-shell { padding: 8px; gap: 8px; }
+  .wc-header { gap: 8px; padding: 8px 10px; }
+  .wc-header h1 { font-size: 15px; }
+  .wc-brand b, .wc-dict-badge { display: none; }
+  .wc-title { justify-content: flex-start; gap: 8px; }
+  #copyCode { padding: 4px 8px; white-space: nowrap; }
+  #copyCode small { display: none; }
+  .wc-header .danger { padding: 8px 10px; }
+  .wc-status { grid-template-columns: 70px 1fr 70px; padding: 8px; }
+  .wc-status strong { font-size: 15px; white-space: normal; }
+  .wc-layout { grid-template-columns: 1fr; }
+  .wc-board { order: -1; padding: 8px; }
+  .wc-player-list { grid-template-columns: repeat(2, 1fr); }
+  .wc-chain { min-height: 200px; max-height: 45vh; }
+  .wc-word { max-width: 88%; }
+  .wc-mode-grid, .wc-dict-choice { grid-template-columns: 1fr; }
+  .wc-setup, .wc-game { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc-logo, #timer.urgent, .wc-word { animation: none; }
+}

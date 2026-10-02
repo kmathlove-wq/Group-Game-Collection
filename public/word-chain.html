@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3b82f6">
+  <title>그룹 게임 컬렉션-끝말잇기</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-lobby.css">
+  <link rel="stylesheet" href="/word-chain.css">
+</head>
+<body class="songcatch-lobby-page wc-page">
+  <header class="music-header songcatch-lobby-header"><a href="/" class="mini-brand">← 그룹 게임 컬렉션</a></header>
+
+  <main class="songcatch-lobby-shell">
+    <section class="songcatch-lobby-card">
+      <div class="wc-logo" aria-hidden="true">가</div>
+      <p class="eyebrow">그룹 게임 컬렉션</p>
+      <h1>끝말잇기</h1>
+      <p class="songcatch-lobby-copy">국립국어원 사전(표준국어대사전·우리말샘)에 있는 단어로만 끝말을 이어 가요.</p>
+      <div class="wc-mode-grid">
+        <a class="wc-mode-card" href="/word-chain/lobby"><span>👥</span><b>여럿이 방에서</b><small>2~8명이 차례대로 · 마지막까지 살아남기</small></a>
+        <a class="wc-mode-card" href="/word-chain/solo"><span>🤖</span><b>컴퓨터랑 대결</b><small>혼자서 컴퓨터와 번갈아 말하기</small></a>
+      </div>
+      <p id="dictStatus" class="notice hidden" role="status"></p>
+    </section>
+
+    <aside class="songcatch-lobby-features" aria-label="게임 규칙">
+      <div><span>📖</span><strong>사전에 있는 명사</strong><small>두 글자 이상, 이번 판에 처음 나온 단어</small></div>
+      <div><span>🔁</span><strong>두음법칙 OK</strong><small>'력' 다음엔 '역'으로 시작해도 돼요</small></div>
+      <div><span>💥</span><strong>첫 단어 한방 금지</strong><small>이어 말할 수 없는 단어는 첫 단어로 못 써요</small></div>
+    </aside>
+  </main>
+
+  <script>
+    // 사전 키가 아직 설정되지 않았으면 미리 알려 준다.
+    fetch('/api/word-chain/status').then((r) => r.json()).then(({ dictionaries }) => {
+      const missing = dictionaries.filter((d) => !d.ready).map((d) => d.name);
+      if (!missing.length) return;
+      const el = document.querySelector('#dictStatus');
+      el.textContent = `⚠️ ${missing.join(', ')} API 키가 아직 설정되지 않아 그 사전으로는 게임할 수 없어요.`;
+      el.classList.add('error'); el.classList.remove('hidden');
+    }).catch(() => {});
+  </script>
+</body>
+</html>

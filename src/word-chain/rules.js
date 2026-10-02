@@ -1,0 +1,70 @@
+// 끝말잇기 글자 규칙. 두음법칙 표는 P07(끝말잇기 한방단어 검색기) app.py와 같은 규칙을 옮겨 왔다.
+const HANGUL_BASE = 0xac00;
+const HANGUL_END = 0xd7a3;
+const INITIALS = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const VOWELS = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
+const L_TO_IEUNG = new Set(['ㅑ', 'ㅕ', 'ㅖ', 'ㅛ', 'ㅠ', 'ㅣ']);
+const L_TO_NIEUN = new Set(['ㅏ', 'ㅐ', 'ㅓ', 'ㅔ', 'ㅗ', 'ㅚ', 'ㅜ', 'ㅡ']);
+const N_TO_IEUNG = new Set(['ㅑ', 'ㅕ', 'ㅖ', 'ㅛ', 'ㅠ', 'ㅣ']);
+const WORD_MIN = 2;
+const WORD_MAX = 20;
+
+function split(syllable) {
+  const code = syllable?.length === 1 ? syllable.charCodeAt(0) : 0;
+  if (code < HANGUL_BASE || code > HANGUL_END) return null;
+  const offset = code - HANGUL_BASE;
+  return { initial: INITIALS[Math.floor(offset / 588)], vowelIndex: Math.floor((offset % 588) / 28), finalIndex: offset % 28 };
+}
+function compose(initial, vowelIndex, finalIndex) {
+  return String.fromCharCode(HANGUL_BASE + INITIALS.indexOf(initial) * 588 + vowelIndex * 28 + finalIndex);
+}
+
+// 정방향: 력→역, 라→나, 녀→여
+function dueumVariant(syllable) {
+  const s = split(syllable); if (!s) return syllable;
+  const vowel = VOWELS[s.vowelIndex];
+  if (s.initial === 'ㄹ' && L_TO_IEUNG.has(vowel)) return compose('ㅇ', s.vowelIndex, s.finalIndex);
+  if (s.initial === 'ㄹ' && L_TO_NIEUN.has(vowel)) return compose('ㄴ', s.vowelIndex, s.finalIndex);
+  if (s.initial === 'ㄴ' && N_TO_IEUNG.has(vowel)) return compose('ㅇ', s.vowelIndex, s.finalIndex);
+  return syllable;
+}
+
+// 역방향(원래 소리): 여→려·녀, 나→라. 한방 판정과 시작 글자 허용을 같은 기준으로 맞추려고 함께 쓴다.
+function dueumReverseVariants(syllable) {
+  const s = split(syllable); if (!s) return [];
+  const vowel = VOWELS[s.vowelIndex]; const out = [];
+  if (s.initial === 'ㅇ' && L_TO_IEUNG.has(vowel)) out.push(compose('ㄹ', s.vowelIndex, s.finalIndex), compose('ㄴ', s.vowelIndex, s.finalIndex));
+  if (s.initial === 'ㄴ' && L_TO_NIEUN.has(vowel)) out.push(compose('ㄹ', s.vowelIndex, s.finalIndex));
+  return [...new Set(out)];
+}
+
+// 앞 단어 끝 글자 다음에 올 수 있는 시작 글자들(원음 + 두음 변환음).
+function allowedStarts(lastSyllable) {
+  return [...new Set([lastSyllable, dueumVariant(lastSyllable), ...dueumReverseVariants(lastSyllable)])];
+}
+
+function lastSyllable(word) {
+  const matches = String(word || '').match(/[가-힣]/g);
+  return matches ? matches.at(-1) : '';
+}
+
+// 사전 표제어의 띄어쓰기 기호(^)·붙임표(-)·공백을 지운다.
+function cleanWord(word) {
+  return String(word || '').replace(/[\s^\-]/g, '');
+}
+
+// 사전에 묻기 전에 먼저 검사할 수 있는 규칙. 통과하면 null, 아니면 이유 문장을 돌려준다.
+function precheck(word, previousWord, usedWords) {
+  if (!word) return '단어를 입력해 주세요.';
+  if (!/^[가-힣]+$/.test(word)) return '완성된 한글 글자만 입력할 수 있어요.';
+  if (word.length < WORD_MIN) return '두 글자 이상 단어만 쓸 수 있어요.';
+  if (word.length > WORD_MAX) return `${WORD_MAX}글자 이하로 입력해 주세요.`;
+  if (previousWord) {
+    const starts = allowedStarts(lastSyllable(previousWord));
+    if (!starts.includes(word[0])) return `'${starts.join("' 또는 '")}'(으)로 시작해야 해요.`;
+  }
+  if (usedWords.has(word)) return '이번 판에 이미 나온 단어예요.';
+  return null;
+}
+
+module.exports = { dueumVariant, dueumReverseVariants, allowedStarts, lastSyllable, cleanWord, precheck, WORD_MIN, WORD_MAX };
