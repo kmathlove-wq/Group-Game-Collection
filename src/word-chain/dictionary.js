@@ -1,6 +1,7 @@
 // 국립국어원 공식 Open API(표준국어대사전·우리말샘) 조회기. 키는 서버 환경 변수에서만 읽고 응답에 넣지 않는다.
 // 요청 매개변수와 응답 해석은 P07(끝말잇기 한방단어 검색기) app.py의 fetch_dictionary()/normalize_item()과 같다.
 const { allowedStarts, cleanWord, WORD_MIN, WORD_MAX } = require('./rules');
+const { createOneShotStore } = require('./one-shot-store');
 
 const DICTIONARIES = {
   stdict: { name: '표준국어대사전', endpoint: 'https://stdict.korean.go.kr/api/search.do', keyEnv: 'STDICT_API_KEY' },
@@ -44,8 +45,10 @@ function playable(item) {
 }
 const definitionOf = (item) => item.senses.find(isNounSense)?.definition || '';
 
-function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, random = Math.random } = {}) {
+// store: 끝 글자별 한방 여부 단어장(없으면 메모리에만 기억).
+function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, random = Math.random, store = createOneShotStore(null) } = {}) {
   const cache = new Map();
+  const checking = new Map(); // 같은 글자를 동시에 두 번 묻지 않게 진행 중인 확인을 공유한다
 
   function remember(key, make) {
     const hit = cache.get(key);
@@ -104,8 +107,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return { found: false, reason: same.length ? '명사가 아니라서 쓸 수 없어요.' : `${configOf(dictionary).name}에 없는 단어예요.` };
   }
 
-  // 시작 글자(두음 변형 포함)로 시작하는 쓸 수 있는 낱말이 하나라도 있는지(= 한방단어가 아닌지).
-  async function hasContinuation(dictionary, syllable) {
+  async function askContinuation(dictionary, syllable) {
     for (const start of allowedStarts(syllable)) {
       const first = await search(dictionary, start, 'start');
       if (first.items.some(playable)) return true;
@@ -113,6 +115,24 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
       if (first.total > PAGE_SIZE && (await search(dictionary, start, 'start', 2)).items.some(playable)) return true;
     }
     return false;
+  }
+
+  // 단어장에 이미 있으면 바로 답한다(true/false). 모르면 undefined — 사전에 묻지 않는다.
+  const knownContinuation = (dictionary, syllable) => store.get(dictionary, syllable);
+
+  // 시작 글자(두음 변형 포함)로 시작하는 쓸 수 있는 낱말이 하나라도 있는지(= 한방단어가 아닌지).
+  // 확인한 답은 단어장에 남긴다(파일 쓰기는 나중에 모아서 하므로 기다리지 않는다).
+  function hasContinuation(dictionary, syllable) {
+    const known = store.get(dictionary, syllable);
+    if (known !== undefined) return Promise.resolve(known);
+    const key = `${dictionary}|${syllable}`;
+    if (!checking.has(key)) {
+      const promise = askContinuation(dictionary, syllable)
+        .then((has) => { store.set(dictionary, syllable, has); return has; })
+        .finally(() => checking.delete(key));
+      checking.set(key, promise);
+    }
+    return checking.get(key);
   }
 
   // 컴퓨터 차례: 이어 갈 수 있는 낱말 중 아직 안 나온 것을 무작위로 고른다. 없으면 null(컴퓨터 패배).
@@ -136,7 +156,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return { word, definition: candidates.get(word) };
   }
 
-  return { isConfigured, lookup, hasContinuation, pickWord };
+  return { isConfigured, lookup, hasContinuation, knownContinuation, pickWord };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };

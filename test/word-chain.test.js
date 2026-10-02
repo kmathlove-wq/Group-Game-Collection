@@ -7,14 +7,24 @@ const { io: createClient } = require('socket.io-client');
 const R = require('../src/word-chain/rules');
 const { createDictionary, DictionaryError } = require('../src/word-chain/dictionary');
 const { setupWordChainGame, rankPlayers } = require('../src/word-chain');
+const { createOneShotStore } = require('../src/word-chain/one-shot-store');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // ── 가짜 사전: 실제 API 대신 정해진 낱말만 아는 사전(키 없이도 게임 흐름을 검사) ──
-const WORDS = ['사과', '과자', '자두', '두부', '부엉이', '이빨', '빨대', '알루미늄', '경력', '역사'];
+const WORDS = ['사과', '과자', '자두', '두부', '부엉이', '이빨', '빨대', '알루미늄', '경력', '역사', '공알'];
 function fakeDictionary(words = WORDS) {
+  const known = new Map(); // 진짜와 같이 한 번 확인한 끝 글자는 기억한다
   return {
+    known,
     isConfigured: () => true,
+    knownContinuation: (_dict, syllable) => known.get(syllable),
     async lookup(_dict, word) { return words.includes(word) ? { found: true, word, definition: `${word}의 뜻` } : { found: false, reason: '사전에 없는 단어예요.' }; },
-    async hasContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.some((w) => starts.includes(w[0])); },
+    async hasContinuation(_dict, syllable) {
+      const starts = R.allowedStarts(syllable); const has = words.some((w) => starts.includes(w[0]));
+      known.set(syllable, has); return has;
+    },
     async pickWord(_dict, syllable, used) {
       const starts = R.allowedStarts(syllable);
       const word = words.find((w) => starts.includes(w[0]) && !used.has(w));
@@ -23,13 +33,14 @@ function fakeDictionary(words = WORDS) {
   };
 }
 
-async function startServer(t, options = {}) {
+async function startServer(t, options = {}, words = WORDS) {
   const app = express(); const server = http.createServer(app); const io = new Server(server);
-  const game = setupWordChainGame({ app, io, rootDir: `${__dirname}/..`, dictionary: fakeDictionary(), ...options });
+  const dictionary = fakeDictionary(words);
+  const game = setupWordChainGame({ app, io, rootDir: `${__dirname}/..`, dictionary, ...options });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { game.close(); await new Promise((resolve) => io.close(resolve)); });
-  return { url, game };
+  return { url, game, dictionary };
 }
 const post = async (url, body) => (await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })).json();
 function connect(url) {
@@ -160,4 +171,113 @@ test('끝말잇기: 여럿이 방 — 차례·틀린 단어·시간 초과 탈�
   assert.equal((await emitAck(guest, 'wc:room:close')).ok, false);
   assert.equal((await emitAck(host, 'wc:room:close')).ok, true);
   await closed;
+});
+
+test('끝말잇기: 한방 단어장은 기억한 답을 파일에 저장하고 다시 읽는다', async () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-store-')), 'one-shot.json');
+  const store = createOneShotStore(file);
+  assert.equal(store.get('stdict', '늄'), undefined);
+  store.set('stdict', '늄', false); store.set('stdict', '과', true);
+  assert.equal(store.get('stdict', '늄'), false);
+  assert.equal(store.get('opendict', '늄'), undefined); // 사전마다 따로
+  assert.deepEqual(store.deadEnds('stdict'), ['늄']);
+  await store.flush();
+  const again = createOneShotStore(file);
+  assert.equal(again.get('stdict', '늄'), false); assert.equal(again.get('stdict', '과'), true); assert.equal(again.size, 2);
+
+  // 사전 조회기는 한 번 확인한 끝 글자를 단어장에서 바로 답하고 다시 묻지 않는다.
+  let calls = 0;
+  const fetchImpl = async () => { calls += 1; return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: 0, item: [] } }) }; };
+  const memory = createOneShotStore(null);
+  const dict = createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl, store: memory });
+  assert.equal(dict.knownContinuation('stdict', '슘'), undefined);
+  const [a, b] = await Promise.all([dict.hasContinuation('stdict', '슘'), dict.hasContinuation('stdict', '슘')]);
+  assert.equal(a, false); assert.equal(b, false);
+  assert.equal(memory.get('stdict', '슘'), false);
+  const before = calls;
+  assert.equal(await createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl, store: memory }).hasContinuation('stdict', '슘'), false);
+  assert.equal(calls, before, '새 조회기라도 단어장에 있으면 묻지 않는다');
+});
+
+test('끝말잇기: 컴퓨터의 한방단어 — 처음엔 뒤에서 확인, 두 번째부터는 바로 끝난다', async (t) => {
+  const { url, dictionary } = await startServer(t);
+  let { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
+  let reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
+  assert.equal(reply.computer.word, '알루미늄');
+  assert.equal(reply.finished, false); assert.equal(reply.checkOneShot, true); // 응답은 기다리지 않고 먼저 온다
+  const check = await (await fetch(`${url}/api/word-chain/solo/${id}/one-shot`)).json();
+  assert.equal(check.oneShot, true); assert.equal(check.result, 'lose');
+  assert.equal(dictionary.known.get('늄'), false); // 단어장에 남았다
+
+  ({ id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' }));
+  reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
+  assert.equal(reply.finished, true); assert.equal(reply.oneShot, true); assert.equal(reply.result, 'lose');
+});
+
+test('끝말잇기: 여럿이 방 — 제한 없음·한방단어 즉시 탈락·포기', async (t) => {
+  const { url } = await startServer(t);
+  const a = await connect(url); const b = await connect(url); const c = await connect(url);
+  t.after(() => { a.close(); b.close(); c.close(); });
+  const { code } = await emitAck(a, 'wc:room:create', { userId: 'p-a', nickname: '가', turnTime: 0 });
+  for (const [socket, userId, nickname] of [[b, 'p-b', '나'], [c, 'p-c', '다']]) {
+    assert.equal((await emitAck(socket, 'wc:room:join', { userId, nickname, code })).ok, true);
+    assert.equal((await emitAck(socket, 'wc:room:ready', true)).ok, true);
+  }
+  const playing = new Promise((resolve) => a.on('wc:room:state', (room) => { if (room.state === 'playing') resolve(room); }));
+  assert.equal((await emitAck(a, 'wc:game:start')).ok, true);
+  const room = await playing; a.removeAllListeners('wc:room:state');
+  assert.equal(room.turnTime, 0); assert.equal(room.game.turnMsLeft, null); // 시계 없음
+
+  assert.equal((await emitAck(a, 'wc:word', { word: '공알' })).ok, true);
+  const boom = new Promise((resolve) => a.once('wc:one-shot', resolve));
+  const afterBoom = new Promise((resolve) => a.on('wc:room:state', (r) => { if (r.players.find((p) => p.userId === 'p-c')?.alive === false) resolve(r); }));
+  assert.equal((await emitAck(b, 'wc:word', { word: '알루미늄' })).ok, true);
+  assert.deepEqual(await boom, { word: '알루미늄', userId: 'p-b', victimId: 'p-c' });
+  const state = await afterBoom; a.removeAllListeners('wc:room:state');
+  assert.equal(state.game.turnUserId, 'p-a');   // 탈락한 다음 사람 건너 새 끝말
+  assert.equal(state.game.lastWord, null);
+  assert.equal(state.game.words.at(-1).oneShot, true);
+
+  assert.match((await emitAck(b, 'wc:giveup')).message, /내 차례/);
+  const finished = new Promise((resolve) => b.once('wc:game:finished', resolve));
+  assert.equal((await emitAck(a, 'wc:giveup')).ok, true);
+  const { ranking } = await finished;
+  assert.deepEqual(ranking.map((r) => [r.userId, r.rank]), [['p-b', 1], ['p-a', 2], ['p-c', 3]]);
+});
+
+test('끝말잇기: 컴퓨터 먼저 — 한방단어가 아닌 첫 단어로 시작한다', async (t) => {
+  const openers = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
+  const { url } = await startServer(t, {}, [...openers.map((o) => `${o}과`), '과자', '자두']);
+  const start = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer' });
+  assert.equal(start.ok, true);
+  assert.match(start.computer.word, /^.과$/); assert.deepEqual(start.nextStarts, ['과']);
+  const reply = await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '과자' });
+  assert.equal(reply.computer.word[0], '자');
+  assert.match((await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '두부' })).message, new RegExp(`'${reply.computer.word.at(-1)}'`));
+});
+
+test('끝말잇기: 방장이 차례 순서를 바꾸고 섞을 수 있다', async (t) => {
+  const { url } = await startServer(t);
+  const a = await connect(url); const b = await connect(url); const c = await connect(url);
+  t.after(() => { a.close(); b.close(); c.close(); });
+  const { code } = await emitAck(a, 'wc:room:create', { userId: 'o-a', nickname: '가', turnTime: 0 });
+  for (const [socket, userId, nickname] of [[b, 'o-b', '나'], [c, 'o-c', '다']]) {
+    await emitAck(socket, 'wc:room:join', { userId, nickname, code }); await emitAck(socket, 'wc:room:ready', true);
+  }
+  const nextState = () => new Promise((resolve) => a.once('wc:room:state', resolve));
+  assert.match((await emitAck(b, 'wc:room:order', { userId: 'o-c', dir: -1 })).message, /방장/);
+  assert.match((await emitAck(a, 'wc:room:order', { userId: 'o-a', dir: -1 })).message, /옮길 수 없/);
+  let state = nextState();
+  assert.equal((await emitAck(a, 'wc:room:order', { userId: 'o-c', dir: -1 })).ok, true);
+  assert.deepEqual((await state).players.map((p) => p.userId), ['o-a', 'o-c', 'o-b']);
+  state = nextState();
+  assert.equal((await emitAck(a, 'wc:room:order', { shuffle: true })).ok, true);
+  const shuffled = (await state).players.map((p) => p.userId);
+  assert.deepEqual([...shuffled].sort(), ['o-a', 'o-b', 'o-c']);
+  // 게임은 정한 순서의 첫 사람부터 시작한다.
+  const playing = new Promise((resolve) => a.on('wc:room:state', (room) => { if (room.state === 'playing') resolve(room); }));
+  await emitAck(a, 'wc:game:start');
+  assert.equal((await playing).game.turnUserId, shuffled[0]);
+  a.removeAllListeners('wc:room:state');
+  assert.match((await emitAck(a, 'wc:room:order', { shuffle: true })).message, /게임 중/);
 });

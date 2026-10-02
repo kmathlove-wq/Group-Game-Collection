@@ -5,7 +5,7 @@ const { precheck, lastSyllable, allowedStarts } = require('./rules');
 const { DictionaryError, DICTIONARIES } = require('./dictionary');
 
 const MAX_PLAYERS = 8;
-const TURN_TIMES = [10, 15, 20, 30];
+const TURN_TIMES = [0, 10, 15, 20, 30]; // 0 = 제한 없음
 const COLORS = ['#ff4d75', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 const DISCONNECT_GRACE_MS = 3_000;
 const RECONNECT_MS = 30_000;
@@ -14,6 +14,10 @@ const PUBLIC_WORD_LIMIT = 60;
 const MIN_RESUME_MS = 1_500;   // 틀린 단어를 낸 뒤 다시 입력할 최소 시간
 const SOLO_TTL_MS = 30 * 60 * 1000;
 const SOLO_MAX = 1_000;
+const ONE_SHOT_WAIT_MS = 25_000;
+// 컴퓨터가 먼저 할 때 첫 단어를 고를 시작 글자 후보(흔하게 쓰이는 글자)
+const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
+const OPENER_TRIES = 5; // 컴퓨터 대결 화면이 뒤에서 한방 확인 결과를 기다리는 최대 시간
 
 function text(value, maxLength) {
   return [...String(value ?? '').replace(/[<>\p{Cc}]/gu, '').trim()].slice(0, maxLength).join('');
@@ -55,6 +59,8 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
   app.get('/word-chain/lobby', page('word-chain-lobby.html'));
   app.get('/word-chain/room', page('word-chain-room.html'));
   const json = express.json({ limit: '2kb' });
+  // 응답과 상관없이 뒤에서 끝 글자의 한방 여부를 확인해 단어장에 남긴다.
+  const learn = (dict, syllable) => { if (dictionary.knownContinuation(dict, syllable) === undefined) dictionary.hasContinuation(dict, syllable).catch(() => {}); };
 
   app.get('/api/word-chain/status', (_req, res) => {
     res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code) })) });
@@ -68,13 +74,31 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
   }, 60_000);
   soloCleanup.unref();
 
-  app.post('/api/word-chain/solo', json, (req, res) => {
+  // 컴퓨터가 먼저 할 때: 흔한 글자로 시작하는, 한방단어가 아닌 첫 단어를 고른다.
+  async function computerOpener(dict, used) {
+    for (let tries = 0; tries < OPENER_TRIES; tries += 1) {
+      const syllable = COMPUTER_OPENERS[crypto.randomInt(COMPUTER_OPENERS.length)];
+      const pick = await dictionary.pickWord(dict, syllable, used);
+      if (pick && await dictionary.hasContinuation(dict, lastSyllable(pick.word))) return pick;
+    }
+    return null;
+  }
+
+  app.post('/api/word-chain/solo', json, async (req, res) => {
     const dict = dictionaryCode(req.body?.dictionary);
     if (!dictionary.isConfigured(dict)) return res.status(503).json({ ok: false, message: `${DICTIONARIES[dict].name} API 키가 아직 설정되지 않았어요.` });
+    const game = { dictionary: dict, used: new Set(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
+    let computer = null;
+    if (req.body?.first === 'computer') {
+      try { computer = await computerOpener(dict, game.used); }
+      catch (error) { return res.status(503).json({ ok: false, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' }); }
+      if (!computer) return res.status(503).json({ ok: false, message: '컴퓨터가 첫 단어를 고르지 못했어요. 다시 시작해 주세요.' });
+      game.used.add(computer.word); game.lastWord = computer.word;
+    }
     if (soloGames.size >= SOLO_MAX) soloGames.delete(soloGames.keys().next().value);
     const id = crypto.randomUUID();
-    soloGames.set(id, { dictionary: dict, used: new Set(), lastWord: null, score: 0, busy: false, finished: false, lastActive: Date.now() });
-    res.json({ ok: true, id, dictionary: dict });
+    soloGames.set(id, game);
+    res.json({ ok: true, id, dictionary: dict, computer, nextStarts: computer ? allowedStarts(lastSyllable(computer.word)) : null });
   });
 
   app.post('/api/word-chain/solo/:id/word', json, async (req, res) => {
@@ -87,8 +111,11 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
       const result = await checkWord(dictionary, game.dictionary, req.body?.word, game.lastWord, game.used);
       if (!result.ok) return res.json(result);
       game.used.add(result.word);
-      let computer;
-      try { computer = await dictionary.pickWord(game.dictionary, lastSyllable(result.word), game.used); }
+      const playerSyllable = lastSyllable(result.word);
+      // 내 단어가 이미 단어장에 한방으로 있으면 컴퓨터에게 물어볼 것도 없이 바로 승리.
+      const playerOneShot = dictionary.knownContinuation(game.dictionary, playerSyllable) === false;
+      let computer = null;
+      try { if (!playerOneShot) computer = await dictionary.pickWord(game.dictionary, playerSyllable, game.used); }
       catch (error) {
         game.used.delete(result.word); // 컴퓨터가 대답을 못 한 건 사전 연결 문제이니 내 단어를 없던 일로 한다
         return res.json({ ok: false, dictionaryError: true, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' });
@@ -97,11 +124,34 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
       const player = { word: result.word, definition: result.definition };
       if (!computer) {
         game.finished = true; game.lastWord = result.word;
-        return res.json({ ok: true, player, computer: null, finished: true, result: 'win', score: game.score });
+        res.json({ ok: true, player, computer: null, finished: true, result: 'win', oneShot: playerOneShot, score: game.score });
+        if (!playerOneShot) learn(game.dictionary, playerSyllable); // 응답을 보낸 뒤 뒤에서 단어장에 남긴다
+        return;
       }
       game.used.add(computer.word); game.lastWord = computer.word;
-      res.json({ ok: true, player, computer, nextStarts: allowedStarts(lastSyllable(computer.word)), finished: false, score: game.score });
+      const computerSyllable = lastSyllable(computer.word);
+      const known = dictionary.knownContinuation(game.dictionary, computerSyllable);
+      if (known === false) { // 컴퓨터가 한방단어를 썼다는 걸 이미 알면 바로 끝낸다
+        game.finished = true;
+        return res.json({ ok: true, player, computer, finished: true, result: 'lose', oneShot: true, score: game.score });
+      }
+      // 모르면 게임은 그대로 진행하고, 뒤에서 확인해 단어장에 남긴다(화면은 /one-shot으로 결과를 따로 받는다).
+      game.pending = known === undefined
+        ? { word: computer.word, promise: dictionary.hasContinuation(game.dictionary, computerSyllable).catch(() => true) }
+        : null;
+      res.json({ ok: true, player, computer, nextStarts: allowedStarts(computerSyllable), finished: false, checkOneShot: Boolean(game.pending), score: game.score });
     } finally { game.busy = false; }
+  });
+
+  // 컴퓨터 단어가 한방단어인지 뒤에서 확인한 결과. 그동안 사람은 계속 단어를 생각하고 입력할 수 있다.
+  app.get('/api/word-chain/solo/:id/one-shot', async (req, res) => {
+    const game = soloGames.get(req.params.id);
+    const pending = game?.pending;
+    if (!pending) return res.json({ ok: true, oneShot: false });
+    const has = await Promise.race([pending.promise, new Promise((resolve) => setTimeout(resolve, ONE_SHOT_WAIT_MS, true))]);
+    if (has || game.finished || game.lastWord !== pending.word) return res.json({ ok: true, oneShot: false });
+    game.finished = true; game.pending = null;
+    res.json({ ok: true, oneShot: true, word: pending.word, result: 'lose', score: game.score });
   });
 
   app.post('/api/word-chain/solo/:id/giveup', (req, res) => {
@@ -200,7 +250,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
       if (p?.alive && p.connected) { next = p.userId; break; }
     }
     game.turnUserId = next;
-    if (next) startTimer(room, room.turnTime * secondMs); else game.turnEndsAt = null;
+    if (next && room.turnTime) startTimer(room, room.turnTime * secondMs); else game.turnEndsAt = null;
   }
 
   // 탈락하면 끝말이 끊기고, 다음 사람은 아무 단어로 새로 시작한다(한방단어 금지는 다시 적용).
@@ -216,6 +266,26 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
     }
     addChat(room, { type: 'system', text: '끝말이 끊겼어요. 다음 사람은 아무 단어로 새로 시작해요.' });
     nextTurn(room); emitState(room);
+  }
+
+  // 방금 나온 단어가 한방단어인지 본다. 단어장에 있으면 바로, 없으면 뒤에서 사전에 물어 확인·저장한다.
+  // 한방이면 다음 사람은 이어 갈 수 없으니 기다리지 않고 바로 탈락시킨다.
+  function watchOneShot(room, game, entry) {
+    const syllable = lastSyllable(entry.word);
+    const known = dictionary.knownContinuation(room.dictionary, syllable);
+    if (known === true) return;
+    if (known === false) { oneShotHit(room, game, entry); return; }
+    dictionary.hasContinuation(room.dictionary, syllable).then((has) => { if (!has) oneShotHit(room, game, entry); }).catch(() => {});
+  }
+  function oneShotHit(room, game, entry) {
+    // 그사이 게임이 끝났거나 끝말이 이미 바뀌었으면 아무것도 하지 않는다.
+    if (rooms.get(room.code) !== room || room.game !== game || room.state !== 'playing' || game.lastWord !== entry.word) return;
+    const victim = room.players.get(game.turnUserId);
+    if (!victim) return;
+    entry.oneShot = true;
+    if (game.checking) { game.checking = false; game.checkToken = null; } // 확인 중이던 단어는 어차피 이어질 수 없다
+    io.to(channel(room)).emit('wc:one-shot', { word: entry.word, userId: entry.userId, victimId: victim.userId });
+    eliminate(room, victim, `💥 한방단어 '${entry.word}'! ${victim.nickname}님은 이어 갈 단어가 없어 탈락했어요.`);
   }
 
   function startGame(room) {
@@ -316,6 +386,26 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
       player.ready = Boolean(ready); emitState(room); ack({ ok: true });
     });
 
+    // 대기실에서 방장이 차례 순서를 바꾼다: { userId, dir: -1(위로)|1(아래로) } 또는 { shuffle: true }
+    socket.on('wc:room:order', (raw, ack = () => {}) => {
+      if (typeof ack !== 'function') return;
+      const { room, player } = membership(socket);
+      if (!room || room.hostId !== player.userId) return ack({ ok: false, message: '방장만 순서를 바꿀 수 있어요.' });
+      if (room.state === 'playing') return ack({ ok: false, message: '게임 중에는 순서를 바꿀 수 없어요.' });
+      const order = [...room.players.keys()];
+      if (raw?.shuffle) {
+        for (let i = order.length - 1; i > 0; i -= 1) { const j = crypto.randomInt(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+      } else {
+        const from = order.indexOf(text(raw?.userId, 80)); const to = from + (Number(raw?.dir) < 0 ? -1 : 1);
+        if (from < 0 || to < 0 || to >= order.length) return ack({ ok: false, message: '더 옮길 수 없어요.' });
+        [order[from], order[to]] = [order[to], order[from]];
+      }
+      // Map은 넣은 순서를 기억하므로, 새 순서로 다시 만들면 목록·게임 차례가 모두 그 순서를 따른다.
+      room.players = new Map(order.map((id) => [id, room.players.get(id)]));
+      if (raw?.shuffle) addChat(room, { type: 'system', text: `🔀 차례 순서를 섞었어요: ${order.map((id) => room.players.get(id).nickname).join(' → ')}` });
+      emitState(room); ack({ ok: true });
+    });
+
     socket.on('wc:game:start', (_raw, ack = () => {}) => {
       if (typeof ack !== 'function') return;
       const { room, player } = membership(socket);
@@ -346,14 +436,28 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
       if (!result.ok) {
         const tried = String(raw?.word ?? '').replace(/\s/g, '').slice(0, 20);
         if (tried) addChat(room, { type: 'reject', userId: player.userId, color: player.color, text: `${player.nickname}: ${tried} ✗ ${result.message}` });
-        startTimer(room, Math.max(game.pausedMs, Math.min(MIN_RESUME_MS, room.turnTime * secondMs))); game.pausedMs = null;
+        if (room.turnTime) startTimer(room, Math.max(game.pausedMs, Math.min(MIN_RESUME_MS, room.turnTime * secondMs)));
+        game.pausedMs = null;
         emitState(room); return ack(result);
       }
-      game.words.push({ word: result.word, definition: result.definition, userId: player.userId, nickname: player.nickname, color: player.color });
+      const entry = { word: result.word, definition: result.definition, userId: player.userId, nickname: player.nickname, color: player.color };
+      game.words.push(entry);
       game.used.add(result.word); game.lastWord = result.word; player.score += 1;
       io.to(channel(room)).emit('wc:word:accepted', { word: result.word, userId: player.userId });
       ack({ ok: true, word: result.word });
       nextTurn(room); emitState(room);
+      watchOneShot(room, game, entry); // 다음 차례는 이미 시작됐고, 한방 확인은 뒤에서 한다
+    });
+
+    // 시간 제한이 없을 때 막히면 스스로 탈락할 수 있다(내 차례에만).
+    socket.on('wc:giveup', (_raw, ack = () => {}) => {
+      if (typeof ack !== 'function') return;
+      const { room, player } = membership(socket);
+      if (!room || room.state !== 'playing') return ack({ ok: false, message: '게임 중이 아닙니다.' });
+      if (room.game.turnUserId !== player.userId) return ack({ ok: false, message: '내 차례에만 포기할 수 있어요.' });
+      if (room.game.checking) return ack({ ok: false, message: '사전에서 확인하는 중이에요.' });
+      ack({ ok: true });
+      eliminate(room, player, `🏳 ${player.nickname}님이 포기했어요.`);
     });
 
     socket.on('wc:chat:send', (raw, ack = () => {}) => {

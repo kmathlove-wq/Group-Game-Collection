@@ -12,7 +12,8 @@
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
     if (saved.dictionary) document.querySelector(`input[name=dictionary][value="${saved.dictionary === 'opendict' ? 'opendict' : 'stdict'}"]`).checked = true;
-    if (saved.turnTime) $('#turnTime').value = String(saved.turnTime);
+    if (saved.first === 'computer') document.querySelector('input[name=first][value="computer"]').checked = true;
+    if (saved.turnTime !== undefined) $('#turnTime').value = String(saved.turnTime);
   } catch { /* 저장된 설정이 없어도 기본값으로 시작 */ }
 
   function message(text, type = '') {
@@ -25,9 +26,10 @@
     return data;
   }
 
-  function setTurn(ms) { deadline = Date.now() + ms; pausedMs = null; }
+  function setTurn(ms) { pausedMs = null; deadline = game.turnTime ? Date.now() + ms : null; } // 제한 없음이면 시계 없음
   function tick() {
     if (!game || over) return;
+    if (!game.turnTime) { $('#timer').textContent = '∞'; $('#timebar').style.width = '100%'; return; }
     const total = game.turnTime * 1000;
     const left = deadline ? Math.max(0, deadline - Date.now()) : pausedMs ?? total;
     $('#timer').textContent = `${Math.ceil(left / 1000)}초`;
@@ -42,14 +44,14 @@
     $('#chain').scrollTop = $('#chain').scrollHeight;
   }
 
-  async function finish(win, title) {
+  async function finish(win, title, detail = '') {
     if (over) return; over = true; deadline = null;
     $('#word').disabled = true; $('#send').disabled = true; $('#giveup').disabled = true;
     let score = Number($('#score').textContent);
-    if (!win) { try { score = (await post(`/api/word-chain/solo/${game.id}/giveup`)).score ?? score; } catch { /* 결과 표시는 계속 */ } }
+    if (!win && !detail) { try { score = (await post(`/api/word-chain/solo/${game.id}/giveup`)).score ?? score; } catch { /* 결과 표시는 계속 */ } }
     beep(win ? [523, 659, 784, 1046] : [392, 330, 262], 0.13);
     $('#resultTitle').textContent = win ? '🏆 내가 이겼어요!' : title;
-    $('#resultText').textContent = win ? `컴퓨터가 이어 말할 단어를 못 찾았어요. 단어 ${score}개를 이었어요!` : `단어 ${score}개를 이었어요. 다시 도전해 볼까요?`;
+    $('#resultText').textContent = detail || (win ? `컴퓨터가 이어 말할 단어를 못 찾았어요. 단어 ${score}개를 이었어요!` : `단어 ${score}개를 이었어요. 다시 도전해 볼까요?`);
     $('#statusLabel').textContent = '게임 끝'; $('#prompt').textContent = win ? '승리!' : '패배';
     $('#resultDialog').showModal();
   }
@@ -57,28 +59,32 @@
   async function start() {
     const dictionary = document.querySelector('input[name=dictionary]:checked').value;
     const turnTime = Number($('#turnTime').value);
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime })); } catch { /* 저장 못 해도 진행 */ }
+    const first = document.querySelector('input[name=first]:checked').value;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime, first })); } catch { /* 저장 못 해도 진행 */ }
     $('#start').disabled = true;
+    $('#setupNotice').classList.add('hidden');
+    if (first === 'computer') $('#start').textContent = '🤖 컴퓨터가 첫 단어를 고르는 중…';
     try {
-      const data = await post('/api/word-chain/solo', { dictionary });
+      const data = await post('/api/word-chain/solo', { dictionary, first });
       if (!data.ok) throw new Error(data.message);
       game = { id: data.id, turnTime }; over = false; busy = false;
       $('#dictBadge').textContent = `📖 ${dictionary === 'opendict' ? '우리말샘' : '표준국어대사전'}`; $('#dictBadge').classList.remove('hidden');
       $('#setup').classList.add('hidden'); $('#game').classList.remove('hidden');
       $('#chain').replaceChildren(); $('#score').textContent = '0'; message('');
       $('#statusLabel').textContent = '내 차례!'; $('#prompt').textContent = '아무 단어로 시작하세요 (한방단어 금지)';
+      if (data.computer) { addWord(data.computer.word, data.computer.definition, false); $('#prompt').textContent = `${startsText(data.nextStarts)}(으)로 시작하는 단어`; }
       for (const el of [$('#word'), $('#send'), $('#giveup')]) el.disabled = false;
       setTurn(turnTime * 1000); $('#word').value = ''; $('#word').focus();
     } catch (error) {
       const el = $('#setupNotice'); el.textContent = error.message || '시작하지 못했어요.'; el.classList.remove('hidden');
-    } finally { $('#start').disabled = false; }
+    } finally { $('#start').disabled = false; $('#start').textContent = '▶ 시작하기'; }
   }
 
   async function submit(event) {
     event.preventDefault();
     const word = $('#word').value.replace(/\s/g, '');
     if (!word || busy || over) return;
-    busy = true; pausedMs = Math.max(0, deadline - Date.now()); deadline = null; // 확인하는 동안 시계 멈춤
+    busy = true; pausedMs = deadline ? Math.max(0, deadline - Date.now()) : null; deadline = null; // 확인하는 동안 시계 멈춤
     $('#send').disabled = true; message('📖 사전에서 확인하는 중…');
     try {
       const data = await post(`/api/word-chain/solo/${game.id}/word`, { word });
@@ -89,9 +95,15 @@
       }
       addWord(data.player.word, data.player.definition, true);
       $('#score').textContent = String(data.score); $('#word').value = '';
-      if (!data.computer) { message(''); finish(true); return; }
+      if (!data.computer) {
+        message('');
+        finish(true, '', data.oneShot ? `💥 한방단어! 컴퓨터가 이어 말할 단어가 없어요. 단어 ${data.score}개를 이었어요!` : '');
+        return;
+      }
       beep([660, 880], 0.08);
       addWord(data.computer.word, data.computer.definition, false);
+      if (data.finished) { oneShotLose(data.computer.word, data.score); return; }
+      if (data.checkOneShot) watchOneShot(game.id, data.computer.word);
       message(''); $('#prompt').textContent = `${startsText(data.nextStarts)}(으)로 시작하는 단어`;
       setTurn(game.turnTime * 1000);
     } catch (error) {
@@ -99,6 +111,18 @@
     } finally {
       busy = false; if (!over) { $('#send').disabled = false; $('#word').focus(); }
     }
+  }
+
+  function oneShotLose(word, score) {
+    $('#chain').lastElementChild?.classList.add('one-shot');
+    finish(false, '💥 컴퓨터의 한방단어!', `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.`);
+  }
+  // 컴퓨터 단어가 한방단어인지 서버가 뒤에서 확인하는 동안 나는 계속 입력할 수 있다. 결과가 오면 그때 반응한다.
+  async function watchOneShot(id, word) {
+    try {
+      const data = await (await fetch(`/api/word-chain/solo/${id}/one-shot`)).json();
+      if (data.oneShot && !over && game?.id === id) oneShotLose(word, data.score);
+    } catch { /* 확인을 못 해도 게임은 계속 */ }
   }
 
   $('#start').onclick = start;

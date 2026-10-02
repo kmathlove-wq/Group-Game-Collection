@@ -25,24 +25,38 @@
 
   function renderPlayers(room) {
     const root = $('#players'); root.replaceChildren();
-    for (const p of room.players) {
+    const canOrder = room.hostId === me.userId && room.state !== 'playing';
+    room.players.forEach((p, index) => {
       const row = document.createElement('div');
       row.className = `wc-player${room.game?.turnUserId === p.userId ? ' turn' : ''}${p.connected ? '' : ' offline'}${room.state !== 'waiting' && !p.alive ? ' out' : ''}`;
       row.style.setProperty('--player', p.color);
-      const dot = document.createElement('i');
+      const dot = document.createElement('i'); dot.textContent = String(index + 1); // 차례 순서 번호
       const name = document.createElement('b'); name.textContent = `${p.isHost ? '👑 ' : ''}${p.nickname}${p.userId === me.userId ? ' (나)' : ''}`;
       const info = document.createElement('small');
       if (room.state === 'waiting') info.textContent = p.isHost ? '방장' : p.ready ? '준비 완료 ✓' : '준비 중…';
       else info.textContent = `${p.alive ? '🔤' : '💀 탈락'} · 단어 ${p.score}개${p.connected ? '' : ' · 연결 끊김'}`;
-      row.append(dot, name, info); root.append(row);
-    }
+      row.append(dot, name, info);
+      if (canOrder && room.players.length > 1) {
+        const moves = document.createElement('span'); moves.className = 'wc-order-buttons';
+        for (const [dir, label] of [[-1, '▲'], [1, '▼']]) {
+          const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+          button.setAttribute('aria-label', `${p.nickname} ${dir < 0 ? '앞으로' : '뒤로'}`);
+          button.disabled = dir < 0 ? index === 0 : index === room.players.length - 1;
+          button.onclick = () => emit('wc:room:order', { userId: p.userId, dir }).catch((e) => notice(e.message, 'error'));
+          moves.append(button);
+        }
+        row.append(moves);
+      }
+      root.append(row);
+    });
   }
 
   function renderChain(game) {
     const words = game?.words || [];
-    if (game?.wordCount === shownWordCount) return;
-    shownWordCount = game?.wordCount ?? 0;
-    $('#chain').replaceChildren(...words.map((w) => wordItem({ word: w.word, definition: w.definition, who: w.nickname, color: w.color, side: w.userId === me.userId ? 'mine' : 'other' })));
+    const key = `${game?.wordCount ?? 0}|${words.filter((w) => w.oneShot).length}`; // 한방 표시가 붙어도 다시 그린다
+    if (key === shownWordCount) return;
+    shownWordCount = key;
+    $('#chain').replaceChildren(...words.map((w) => wordItem({ word: w.word, definition: w.definition, who: w.nickname, color: w.color, oneShot: w.oneShot, side: w.userId === me.userId ? 'mine' : 'other' })));
     $('#chain').scrollTop = $('#chain').scrollHeight;
   }
 
@@ -57,6 +71,7 @@
     $('#start').classList.toggle('hidden', !host || room.state === 'playing');
     $('#start').textContent = room.state === 'finished' ? '↻ 새 게임 시작' : '▶ 게임 시작';
     $('#closeRoom').classList.toggle('hidden', !host || room.state === 'playing');
+    $('#shuffle').classList.toggle('hidden', !host || room.state === 'playing' || room.players.length < 2);
     $('#ready').classList.toggle('hidden', host || room.state === 'playing');
     $('#ready').textContent = mine?.ready ? '준비 취소' : '✓ 준비하기';
     $('#again').classList.toggle('hidden', !host);
@@ -83,6 +98,8 @@
       label.textContent = '게임 끝'; message.textContent = '최종 순위를 확인해 보세요!';
     }
     const canType = myTurn() && !game.checking && !sending;
+    $('#giveup').classList.toggle('hidden', !myTurn());
+    $('#giveup').disabled = !canType;
     $('#word').disabled = !canType; $('#send').disabled = !canType;
     $('#word').placeholder = myTurn() ? '단어 입력 후 Enter' : '내 차례가 오면 입력할 수 있어요';
     $('#wordForm').classList.toggle('my-turn', myTurn());
@@ -92,6 +109,7 @@
   function tickTimer() {
     const timer = $('#timer'); const bar = $('#timebar');
     if (state?.state !== 'playing') { timer.textContent = '--'; bar.style.width = '0%'; timer.classList.remove('urgent'); return; }
+    if (!state.turnTime) { timer.textContent = '∞'; timer.classList.remove('urgent'); bar.style.width = '100%'; return; }
     const total = state.turnTime * 1000;
     const left = state.game.checking ? state.game.turnMsLeft ?? 0 : turnEndsAt ? Math.max(0, turnEndsAt - Date.now()) : 0;
     timer.textContent = `${Math.ceil(left / 1000)}초`;
@@ -139,9 +157,18 @@
   socket.on('wc:chat:history', (messages) => { $('#chat').replaceChildren(); messages.forEach(addChat); });
   socket.on('wc:word:accepted', (data) => beep(data.userId === me.userId ? [523, 784] : [440, 523], 0.08));
   socket.on('wc:player:out', (data) => { beep([330, 220], 0.15); if (data.userId === me.userId) notice('💀 탈락했어요. 끝까지 구경해 보세요!', 'error'); });
+  socket.on('wc:one-shot', (data) => {
+    beep([880, 660, 440, 220], 0.12);
+    const banner = $('#oneShotBanner');
+    banner.textContent = `💥 한방단어 '${data.word}'!`;
+    banner.classList.remove('hidden'); banner.classList.remove('show'); void banner.offsetWidth; banner.classList.add('show');
+    clearTimeout(banner.timer); banner.timer = setTimeout(() => banner.classList.add('hidden'), 2200);
+  });
   socket.on('wc:game:finished', (data) => { beep([523, 659, 784, 1046], 0.13); showResult(data.ranking); });
   socket.on('wc:room:closed', (data) => { sessionStorage.setItem('wordchain:exitNotice', data?.message || '방장이 방을 종료했습니다.'); location.replace('/word-chain/lobby'); });
 
+  $('#shuffle').onclick = () => emit('wc:room:order', { shuffle: true }).catch((e) => notice(e.message, 'error'));
+  $('#giveup').onclick = () => { if (confirm('정말 포기할까요? 바로 탈락해요.')) emit('wc:giveup', {}).catch((e) => notice(e.message, 'error')); };
   $('#ready').onclick = () => emit('wc:room:ready', !playerById(me.userId)?.ready).catch((e) => notice(e.message, 'error'));
   const start = () => emit('wc:game:start', {}).then(() => { shownWordCount = -1; if ($('#resultDialog').open) $('#resultDialog').close(); }).catch((e) => notice(e.message, 'error'));
   $('#start').onclick = start; $('#again').onclick = start;

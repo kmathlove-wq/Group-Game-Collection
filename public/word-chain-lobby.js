@@ -57,7 +57,7 @@
       status.textContent = room.state === 'playing' ? '게임 중' : '대기 중';
       const title = document.createElement('h3'); title.textContent = room.title;
       const meta = document.createElement('p'); const host = document.createElement('b'); host.textContent = room.hostNickname || '알 수 없음';
-      meta.append('방장 ', host, ` · ${room.dictionaryName} · 차례 ${room.turnTime}초`); main.append(status, title, meta);
+      meta.append('방장 ', host, ` · ${room.dictionaryName} · 차례 ${room.turnTime ? `${room.turnTime}초` : '제한 없음'}`); main.append(status, title, meta);
       const side = document.createElement('div'); side.className = 'music-room-card-side';
       const count = document.createElement('strong'); count.textContent = `👥 ${room.playerCount}/${room.maxPlayers}`;
       const button = document.createElement('button'); button.className = `music-compact ${room.canJoin ? 'primary' : 'secondary'}`;

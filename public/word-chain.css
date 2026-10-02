@@ -167,3 +167,28 @@
 @media (prefers-reduced-motion: reduce) {
   .wc-logo, #timer.urgent, .wc-word { animation: none; }
 }
+
+/* 한방단어 표시 */
+.wc-word.one-shot { border-color: #f43f5e; box-shadow: 0 0 0 3px #f43f5e33; }
+.wc-word.one-shot small::after { content: ' · 💥 한방단어'; color: #e11d48; }
+.wc-board { position: relative; }
+.wc-one-shot-banner {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 5; pointer-events: none;
+  padding: 18px 28px; border-radius: 22px; background: linear-gradient(135deg, #f43f5e, #f97316); color: #fff;
+  font-size: clamp(22px, 4vw, 34px); font-weight: 900; white-space: nowrap; box-shadow: 0 18px 40px #f43f5e55;
+}
+.wc-one-shot-banner.show { animation: wc-boom .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes wc-boom { from { transform: translate(-50%, -50%) scale(.3) rotate(-8deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wc-one-shot-banner.show { animation: none; } }
+
+/* 차례 순서 번호와 방장용 ▲▼ */
+.wc-player { grid-template-columns: 22px 1fr auto; }
+.wc-player i { width: 22px; height: 22px; display: grid; place-items: center; color: #fff; font: 800 12px/1 inherit; font-style: normal; }
+.wc-player b, .wc-player small { grid-column: 2; }
+.wc-order-buttons { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 2px; }
+.wc-order-buttons button {
+  width: 28px; height: 20px; border: 0; border-radius: 6px; background: #e6ebf5; color: #45415e;
+  font-size: 10px; cursor: pointer;
+}
+.wc-order-buttons button:hover:not(:disabled) { background: var(--wc); color: #fff; }
+.wc-order-buttons button:disabled { opacity: .3; cursor: default; }

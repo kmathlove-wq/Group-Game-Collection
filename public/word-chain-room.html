@@ -33,6 +33,7 @@
         <div id="players" class="wc-player-list"></div>
         <div class="wc-actions">
           <button id="ready" class="secondary wide hidden">✓ 준비하기</button>
+          <button id="shuffle" class="secondary wide hidden">🔀 순서 섞기</button>
           <button id="start" class="primary wide hidden">▶ 게임 시작</button>
           <button id="closeRoom" class="danger wide hidden">방 종료</button>
         </div>
@@ -46,7 +47,9 @@
           <input id="word" maxlength="20" autocomplete="off" placeholder="내 차례가 오면 입력할 수 있어요" aria-label="단어 입력" disabled>
           <button class="primary" id="send" disabled>내기</button>
         </form>
+        <button id="giveup" class="secondary wc-giveup hidden">🏳 포기하기</button>
         <div id="result" class="notice hidden" role="status"></div>
+        <div id="oneShotBanner" class="wc-one-shot-banner hidden" aria-live="assertive"></div>
       </section>
 
       <aside class="panel wc-side-panel wc-chat-panel">

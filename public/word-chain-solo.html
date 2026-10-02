@@ -23,8 +23,14 @@
         <label><input type="radio" name="dictionary" value="stdict" checked><span><b>표준국어대사전</b><small>꼭 필요한 표준어 위주 · 깔끔해요</small></span></label>
         <label><input type="radio" name="dictionary" value="opendict"><span><b>우리말샘</b><small>신조어·방언·전문어까지 · 단어가 아주 많아요</small></span></label>
       </div>
+      <div class="field"><span class="wc-field-label">누가 먼저 할까요?</span>
+        <div class="wc-dict-choice wc-first-choice" role="radiogroup" aria-label="먼저 할 사람">
+          <label><input type="radio" name="first" value="me" checked><span><b>🙋 내가 먼저</b><small>아무 단어로 시작해요</small></span></label>
+          <label><input type="radio" name="first" value="computer"><span><b>🤖 컴퓨터 먼저</b><small>컴퓨터의 첫 단어에 이어 말해요</small></span></label>
+        </div>
+      </div>
       <div class="field"><label for="turnTime">차례 시간</label>
-        <select id="turnTime"><option value="10">10초</option><option value="15">15초</option><option value="20" selected>20초</option><option value="30">30초</option></select></div>
+        <select id="turnTime"><option value="10">10초</option><option value="15">15초</option><option value="20" selected>20초</option><option value="30">30초</option><option value="0">제한 없음</option></select></div>
       <button id="start" class="primary wide">▶ 시작하기</button>
       <div id="setupNotice" class="notice error hidden" role="alert"></div>
     </section>
