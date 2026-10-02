@@ -17,7 +17,7 @@ const SOLO_MAX = 1_000;
 const ONE_SHOT_WAIT_MS = 25_000;
 // 컴퓨터가 먼저 할 때 첫 단어를 고를 시작 글자 후보(흔하게 쓰이는 글자)
 const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
-const OPENER_TRIES = 5; // 컴퓨터 대결 화면이 뒤에서 한방 확인 결과를 기다리는 최대 시간
+const OPENER_PARALLEL = 3; // 첫 단어 후보 글자를 동시에 몇 개 알아볼지 // 컴퓨터 대결 화면이 뒤에서 한방 확인 결과를 기다리는 최대 시간
 
 function text(value, maxLength) {
   return [...String(value ?? '').replace(/[<>\p{Cc}]/gu, '').trim()].slice(0, maxLength).join('');
@@ -75,13 +75,20 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000 }) {
   soloCleanup.unref();
 
   // 컴퓨터가 먼저 할 때: 흔한 글자로 시작하는, 한방단어가 아닌 첫 단어를 고른다.
+  // 서로 다른 글자 몇 개를 동시에 알아보고 가장 먼저 통과한 단어를 쓴다(하나씩 차례로 하면 느리다).
   async function computerOpener(dict, used) {
-    for (let tries = 0; tries < OPENER_TRIES; tries += 1) {
-      const syllable = COMPUTER_OPENERS[crypto.randomInt(COMPUTER_OPENERS.length)];
-      const pick = await dictionary.pickWord(dict, syllable, used);
+    const syllables = [...COMPUTER_OPENERS].sort(() => Math.random() - 0.5).slice(0, OPENER_PARALLEL);
+    const tryOne = async (syllable) => {
+      const pick = await dictionary.pickWord(dict, syllable, used, { dueum: false });
       if (pick && await dictionary.hasContinuation(dict, lastSyllable(pick.word))) return pick;
+      throw new Error('후보 없음');
+    };
+    try { return await Promise.any(syllables.map(tryOne)); }
+    catch (error) {
+      const dictionaryError = error.errors?.find((e) => e instanceof DictionaryError);
+      if (dictionaryError) throw dictionaryError;
+      return null;
     }
-    return null;
   }
 
   app.post('/api/word-chain/solo', json, async (req, res) => {

@@ -136,9 +136,10 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   }
 
   // 컴퓨터 차례: 이어 갈 수 있는 낱말 중 아직 안 나온 것을 무작위로 고른다. 없으면 null(컴퓨터 패배).
-  async function pickWord(dictionary, syllable, usedWords) {
+  // dueum=false면 그 글자 하나만 찾는다(컴퓨터의 첫 단어처럼 두음 짝까지 볼 필요가 없을 때 더 빠르다).
+  async function pickWord(dictionary, syllable, usedWords, { dueum = true } = {}) {
     const candidates = new Map();
-    for (const start of allowedStarts(syllable)) {
+    for (const start of dueum ? allowedStarts(syllable) : [syllable]) {
       const first = await search(dictionary, start, 'start');
       const pages = [first];
       const pageCount = Math.min(RANDOM_PAGE_MAX, Math.ceil(first.total / PAGE_SIZE));

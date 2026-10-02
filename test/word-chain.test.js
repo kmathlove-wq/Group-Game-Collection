@@ -25,8 +25,8 @@ function fakeDictionary(words = WORDS) {
       const starts = R.allowedStarts(syllable); const has = words.some((w) => starts.includes(w[0]));
       known.set(syllable, has); return has;
     },
-    async pickWord(_dict, syllable, used) {
-      const starts = R.allowedStarts(syllable);
+    async pickWord(_dict, syllable, used, { dueum = true } = {}) {
+      const starts = dueum ? R.allowedStarts(syllable) : [syllable];
       const word = words.find((w) => starts.includes(w[0]) && !used.has(w));
       return word ? { word, definition: `${word}의 뜻` } : null;
     }
