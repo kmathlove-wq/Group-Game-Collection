@@ -148,9 +148,9 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 쓸 수 있는 🪤 함정을 찾는다. 이미 아는 바로 이어 갈 단어가 3개보다 많아진 함정은(예전에 조건 없이 적혔거나
   // 사전에 단어가 늘어남) 쓰지 않고 노트에서 지운다. 모르면 배울 때 확인했으니 믿고 쓴다.
-  function findTrap(dict, starts, used) {
+  function findTrap(dict, starts, used, isSafe) {
     for (;;) {
-      const trap = brain.find(dict, starts, used, random, 'trap');
+      const trap = brain.find(dict, starts, used, random, 'trap', isSafe);
       if (!trap) return null;
       const syllable = lastSyllable(trap.word);
       const known = dictionary.knownContinuation(dict, syllable);
@@ -161,28 +161,44 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 성장 모드 컴퓨터의 차례(위에서부터 되는 것을 쓴다):
   //   ① 📒 한방 노트로 바로 끝내기 → ② 🪤 함정 단어로 2단 공격 준비 → ③ 한방 글자로 끝나는 사전 단어로 공격
-  //   → ④ 🧩 어려운 노트(조심 단어·글자는 빼고) → ⑤ 🔭 한 수 내다보기: 🚫 조심 단어와 조심 단어의 끝 글자로 끝나는 단어는 빼고,
+  //   → ④ 🧩 어려운 노트 → ⑤ 🔭 한 수 내다보기. 🪤·🧩·🔭 모두 위험한 단어(safeFor)는 빼고,
   //     상대가 이어 갈 단어가 가장 적게 남는 단어를 고른다.
+  // 성장 컴퓨터가 "내면 위험한 단어"를 거르는 검사기를 만든다. 위험한 단어:
+  //   - 🚫 조심 단어, 조심 단어의 끝 글자로 끝나는 단어
+  //   - 끝 글자(두음 포함) 뒤에 상대가 쓸 수 있는 📒 한방단어가 있는 단어(가돌리늄을 알면 '…가'로 끝나는 단어는 위험)
+  // 고를 단어가 다 위험하면(어쩔 수 없을 때)는 부르는 쪽이 전체에서 고른다.
+  function safeFor(dict, used) {
+    const riskyWords = new Set(brain.words(dict, 'risky'));
+    const riskyEnds = new Set([...riskyWords].map(lastSyllable));
+    const killers = new Map(); // 시작 글자 → 상대가 쓸 수 있는 📒 한방단어들
+    for (const word of brain.words(dict, 'shot')) {
+      if (used.has(word)) continue;
+      if (!killers.has(word[0])) killers.set(word[0], []);
+      killers.get(word[0]).push(word);
+    }
+    return (word) => {
+      if (riskyWords.has(word) || riskyEnds.has(lastSyllable(word))) return false;
+      return !allowedStarts(lastSyllable(word)).some((start) => (killers.get(start) || []).some((killer) => killer !== word));
+    };
+  }
   async function growthPick(dict, syllable, used) {
     const power = strength(brain.count(dict));
     const starts = allowedStarts(syllable);
     const pickFrom = (list) => list[Math.floor(random() * list.length)];
     const remembers = random() < power.memoryChance;
+    const isSafe = remembers ? safeFor(dict, used) : () => true;
     if (remembers) {
       const shot = brain.find(dict, starts, used, random, 'shot');
       if (shot) return { ...shot, how: 'memory' };
-      const trap = findTrap(dict, starts, used);
+      const trap = findTrap(dict, starts, used, isSafe);
       if (trap) return { ...trap, how: 'trap' };
     }
     const all = await dictionary.candidates(dict, syllable, used);
     if (!all.length) return null;
     const deadEnds = all.filter((c) => dictionary.knownContinuation(dict, lastSyllable(c.word), usedWith(used, c.word)) === false);
     if (deadEnds.length && random() < power.attackChance) return { ...pickFrom(deadEnds), how: 'attack' };
-    const riskyWords = new Set(remembers ? brain.words(dict, 'risky') : []);
-    const riskyEnds = new Set([...riskyWords].map(lastSyllable));
-    const isSafe = (word) => !riskyWords.has(word) && !riskyEnds.has(lastSyllable(word));
     if (remembers) {
-      const hard = brain.find(dict, starts, used, random, 'hard', isSafe); // 🧩 어려운 단어도 🚫 조심 단어·글자는 피한다
+      const hard = brain.find(dict, starts, used, random, 'hard', isSafe); // 🧩 어려운 단어도 위험한 단어는 피한다
       if (hard) return { ...hard, how: 'hard' };
     }
     const safe = all.filter((c) => isSafe(c.word));
@@ -222,6 +238,21 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     }
   }
 
+  // 성장 컴퓨터의 첫 단어: 흔한 시작 글자들의 후보 중 위험하지 않고 한방도 아닌 단어(시작 글자 3개씩 한꺼번에 알아본다).
+  async function growthOpener(dict, used) {
+    const isSafe = safeFor(dict, used);
+    const syllables = [...COMPUTER_OPENERS].sort(() => random() - 0.5);
+    for (let i = 0; i < syllables.length; i += OPENER_PARALLEL) {
+      const lists = await Promise.all(syllables.slice(i, i + OPENER_PARALLEL)
+        .map((start) => dictionary.candidates(dict, start, used, { dueum: false, extraPage: false }).catch(() => [])));
+      const pool = lists.flat().filter((c) => isSafe(c.word)).sort(() => random() - 0.5);
+      for (const pick of pool.slice(0, 3)) {
+        if (await dictionary.hasContinuation(dict, lastSyllable(pick.word), usedWith(used, pick.word)).catch(() => false)) return pick;
+      }
+    }
+    return null;
+  }
+
   // 컴퓨터의 첫 단어를 사전마다 하나씩 미리 골라 둔다. 쓰면 바로 다음 것을 뒤에서 다시 준비한다.
   const openers = new Map(); // 사전 → Promise<단어|null>
   const prepareOpener = (dict) => {
@@ -250,7 +281,11 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const game = { mode, dictionary: dict, used: new Set(), defs: new Map(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
     let computer = null;
     if (req.body?.first === 'computer') {
-      try { computer = await takeOpener(dict, game.used); }
+      try {
+        computer = await takeOpener(dict, game.used);
+        // 성장 컴퓨터는 첫 단어도 위험한 단어(예: 가돌리늄을 알면 '…가'로 끝나는 단어)는 피한다. 안전한 걸 못 찾으면 그대로 쓴다.
+        if (mode === 'growth' && computer && !safeFor(dict, game.used)(computer.word)) computer = (await growthOpener(dict, game.used)) || computer;
+      }
       catch (error) { return res.status(503).json({ ok: false, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' }); }
       if (!computer) return res.status(503).json({ ok: false, message: '컴퓨터가 첫 단어를 고르지 못했어요. 다시 시작해 주세요.' });
       game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game, computer);

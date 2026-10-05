@@ -644,3 +644,25 @@ test('끝말잇기 성장 모드: 나온 단어 중 이어 갈 단어가 1~10개
   // 과자('자' 뒤 11개)는 너무 많아서, 자가('가' 뒤 0개)는 한방이라서 🧩가 아니다
   assert.deepEqual(brain.words('stdict', 'shot'), ['자가']);
 });
+
+test('끝말잇기 성장 모드: 📒 한방단어(가돌리늄)를 알면 그 글자로 끝나는 단어(…가)는 내지 않는다 — 중간에도, 첫 단어로도', async (t) => {
+  const knowsGadolinium = () => { const brain = createBrain(null); brain.remember('stdict', '가돌리늄', '', 'shot'); return brain; }; // 시험마다 새 노트
+  const brain = knowsGadolinium();
+  // 중간: '과가'(가 뒤 1개)가 '과자'(자 뒤 2개)보다 내다보기로는 좋아 보여도, 가돌리늄에 당하니 과자를 낸다.
+  const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 200 }, ['사과', '과가', '과자', '자두', '자라', '가돌리늄']);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' });
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사과' })).computer.word, '과자');
+
+  // 낼 수 있는 게 위험한 단어뿐이면 어쩔 수 없이 낸다.
+  const only = await startServer(t, { brain: knowsGadolinium(), random: () => 0, lookaheadMs: 200 }, ['사과', '과가', '가돌리늄']);
+  const game = await post(`${only.url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' });
+  assert.equal((await post(`${only.url}/api/word-chain/solo/${game.id}/word`, { word: '사과' })).computer.word, '과가');
+
+  // 첫 단어: 흔한 시작 글자 20개마다 '…가'(위험) 단어가 있고 안전한 건 '다자'뿐이면 성장 컴퓨터는 매번 다자로 시작한다.
+  const openers = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
+  const first = await startServer(t, { brain: knowsGadolinium(), lookaheadMs: 200 }, [...openers.map((o) => `${o}가`), '다자', '자두', '가돌리늄']);
+  for (let i = 0; i < 4; i += 1) {
+    const start = await post(`${first.url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer', mode: 'growth' });
+    assert.equal(start.computer.word, '다자');
+  }
+});
