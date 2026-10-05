@@ -7,6 +7,7 @@ const path = require('path');
 const TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const WRITE_DELAY_MS = 2_000;
 const REMOTE_NAME = 'word-chain-one-shot.json';
+const VERSION = 2; // 2: 이어 갈 단어가 적으면 목록(words)도 함께 적는다
 
 function createOneShotStore(filePath, { remote = null } = {}) {
   const entries = new Map(); // "사전|글자" → { has, at, words? } — words: 이어 갈 단어가 5개 이하로 적을 때 그 목록(늡 → [늡늡])
@@ -14,9 +15,13 @@ function createOneShotStore(filePath, { remote = null } = {}) {
   let writing = Promise.resolve();
 
   // 저장된 내용을 읽어 들인다. 이미 아는 글자는 그대로 두고 모르는 것만 더한다(불러오는 사이에 배운 것을 지키려고).
+  // 버전 1(2026-10 이전)은 "있음"만 적고 적은 단어 목록이 없어서 늡늡 같은 단어를 판단할 수 없다.
+  // 그래서 버전 1의 "있음" 기록은 버리고 다시 묻는다("없음" = 한방 글자 기록은 그대로 믿는다).
   function absorb(saved) {
+    const legacy = (Number(saved?.version) || 1) < VERSION;
     for (const [key, value] of Object.entries(saved?.entries || {})) {
       if (typeof value?.has !== 'boolean' || !(Date.now() - value.at < TTL_MS) || entries.has(key)) continue;
+      if (legacy && value.has) continue;
       const words = Array.isArray(value.words) && value.words.every((w) => typeof w === 'string') ? value.words : undefined;
       entries.set(key, words ? { has: value.has, at: value.at, words } : { has: value.has, at: value.at });
     }
@@ -25,7 +30,7 @@ function createOneShotStore(filePath, { remote = null } = {}) {
     try { absorb(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } catch { /* 파일이 없거나 깨졌으면 빈 단어장으로 시작 */ }
   }
   // 저장할 때 6개월이 지난 글자는 빼서, 파일·Gist에 오래된 답이 쌓이지 않게 한다.
-  const snapshot = () => JSON.stringify({ version: 1, entries: Object.fromEntries([...entries].filter(([, v]) => Date.now() - v.at < TTL_MS)) });
+  const snapshot = () => JSON.stringify({ version: VERSION, entries: Object.fromEntries([...entries].filter(([, v]) => Date.now() - v.at < TTL_MS)) });
   const ready = remote ? remote.attach(REMOTE_NAME, { absorb, snapshot }) : Promise.resolve();
 
   function flush() {

@@ -567,3 +567,12 @@ test('끝말잇기 성장 모드: 📚 미리 공부하기는 이어 갈 단어�
   for (let i = 0; i < 5 && !brain.has('stdict', '늡늡', 'shot'); i += 1) await study.step();
   assert.deepEqual(brain.words('stdict', 'shot'), ['늡늡']);
 });
+
+test('끝말잇기: 예전(버전 1) 한방 단어장의 "있음" 기록은 단어 목록이 없어 버리고 다시 묻는다', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-store-v1-')), 'one-shot.json');
+  const now = Date.now();
+  fs.writeFileSync(file, JSON.stringify({ version: 1, entries: { 'stdict|늡': { has: true, at: now }, 'stdict|늄': { has: false, at: now } } }));
+  const store = createOneShotStore(file);
+  assert.equal(store.get('stdict', '늡'), undefined); // 다시 물어서 목록까지 받는다
+  assert.equal(store.get('stdict', '늄'), false);     // 한방 글자 기록은 그대로
+});
