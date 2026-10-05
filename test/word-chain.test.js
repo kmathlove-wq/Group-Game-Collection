@@ -576,3 +576,26 @@ test('끝말잇기: 예전(버전 1) 한방 단어장의 "있음" 기록은 단�
   assert.equal(store.get('stdict', '늡'), undefined); // 다시 물어서 목록까지 받는다
   assert.equal(store.get('stdict', '늄'), false);     // 한방 글자 기록은 그대로
 });
+
+test('끝말잇기 성장 모드: 컴퓨터가 한방단어로 이긴 판도 배운다(컴퓨터 A → 나 B → 컴퓨터 C💥: C 한방, B 조심, A 함정)', async (t) => {
+  const words = ['가자', '자공', '공알', '알루미늄'];
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 200 }, words);
+  const wait = async (check) => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise((resolve) => setTimeout(resolve, 5)); };
+
+  // 기본 모드에서 져도 배우지 않는다.
+  let { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
+  await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
+  await (await fetch(`${url}/api/word-chain/solo/${id}/one-shot`)).json();
+  assert.equal(brain.count('stdict'), 0);
+
+  // 성장 모드: 나 '가자' → 컴퓨터 '자공' → 나 '공알' → 컴퓨터 '알루미늄' 💥 ('늄'은 이미 한방 글자로 알고 있음)
+  ({ id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' }));
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '가자' })).computer.word, '자공');
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
+  assert.equal(reply.computer.word, '알루미늄'); assert.equal(reply.result, 'lose');
+  await wait(() => brain.count('stdict') >= 3);
+  assert.deepEqual(brain.words('stdict', 'shot'), ['알루미늄']);
+  assert.deepEqual(brain.words('stdict', 'risky'), ['공알']); // 내가 말한 단어 = 컴퓨터가 조심할 단어
+  assert.deepEqual(brain.words('stdict', 'trap'), ['자공']);
+});

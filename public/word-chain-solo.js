@@ -138,7 +138,8 @@
   function oneShotLose(word, score, how) {
     $('#chain').lastElementChild?.classList.add('one-shot');
     const title = how === 'memory' ? '😎 지난번에 배운 단어야!' : how === 'attack' ? '🌱 컴퓨터의 공격 성공!' : '💥 컴퓨터의 한방단어!';
-    finish(false, title, `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.`);
+    const remember = game?.mode === 'growth' ? ' 🧠 컴퓨터가 이번 판도 기억해 둘 거예요.' : '';
+    finish(false, title, `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.${remember}`);
   }
   // 컴퓨터 단어가 한방단어인지 서버가 뒤에서 확인하는 동안 나는 계속 입력할 수 있다. 결과가 오면 그때 반응한다.
   async function watchOneShot(id, word) {

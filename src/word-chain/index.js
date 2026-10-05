@@ -103,8 +103,10 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
 
   // ── 성장 모드: 진 판의 마지막 세 단어를 기억 노트(brain.js)에 적고, 다음 판에 꺼내 쓴다. 기본 모드는 아래 함수들을 쓰지 않는다 ──
   const brainInfo = (dict) => { const learned = brain.count(dict); return { learned, level: strength(learned).level, ...brain.counts(dict), study: study?.info(dict) ?? null }; };
-  // 사람이 이긴 단어(C)의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾은 경우는 빼려고).
-  // 이 판의 단어 순서가 사람 A → 컴퓨터 B → 사람 C였다면 A는 🪤 함정, B는 🚫 조심 단어로도 적는다.
+  // 한방단어로 끝난 판의 마지막 세 단어 A → B → C를 배운다. 누가 이겼든 모양이 같다:
+  //   사람이 이김: 사람 A → 컴퓨터 B → 사람 C💥 / 컴퓨터가 이김: 컴퓨터 A → 사람 B → 컴퓨터 C💥
+  //   C는 📒 한방, B는 🚫 조심(컴퓨터가 B를 말하면 상대가 C로 끝낼 수 있다), A는 🪤 함정.
+  // C의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾았거나 이번 판에서만 막힌 경우는 빼려고).
   function learnWin(game, known) {
     const chain = [...game.used]; // Set은 넣은 순서를 지키므로 곧 단어가 나온 순서다
     const [a, b, c] = [chain.at(-3), chain.at(-2), chain.at(-1)]; // 짧은 판이면 a·b가 없을 수 있다
@@ -262,6 +264,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       const known = dictionary.knownContinuation(game.dictionary, computerSyllable, game.used);
       if (known === false) { // 컴퓨터가 한방단어를 썼다는 걸 이미 알면 바로 끝낸다
         game.finished = true;
+        if (game.mode === 'growth') learnWin(game, known); // 컴퓨터가 이긴 판도 기억한다
         return res.json({ ok: true, player, computer, finished: true, result: 'lose', oneShot: true, score: game.score });
       }
       // 모르면 게임은 그대로 진행하고, 뒤에서 확인해 단어장에 남긴다(화면은 /one-shot으로 결과를 따로 받는다).
@@ -283,6 +286,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const has = await Promise.race([pending.promise, new Promise((resolve) => setTimeout(resolve, ONE_SHOT_WAIT_MS, true))]);
     if (has || game.finished || game.lastWord !== pending.word) return res.json({ ok: true, oneShot: false });
     game.finished = true; game.pending = null;
+    if (game.mode === 'growth') learnWin(game, false); // 컴퓨터가 이긴 판도 기억한다
     res.json({ ok: true, oneShot: true, word: pending.word, result: 'lose', score: game.score });
   });
 
