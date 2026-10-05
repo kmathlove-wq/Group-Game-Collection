@@ -20,6 +20,7 @@ const ONE_SHOT_TRIES = 3;         // 한방 확인이 사전 문제로 실패하
 const ONE_SHOT_RETRY_MS = 3_000;  // 다시 묻기 전 기다리는 시간
 // 컴퓨터가 먼저 할 때 첫 단어를 고를 시작 글자 후보(흔하게 쓰이는 글자)
 const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
+const TRAP_LIMIT = 3;  // 🪤 함정은 그 단어 뒤에 이어 갈 단어가 이 수 이하일 때만(많으면 상대가 다른 단어로 빠져나간다)
 const HARD_LIMIT = 10; // 기억한 한방단어가 한방이 아니게 됐을 때, 이어 갈 단어가 이 수 이하면 🧩 어려운 단어로 남긴다
 const LOOKAHEAD_SIZE = 6;     // 🔭 한 번에 비교해 볼 후보 수
 const LOOKAHEAD_LIMIT = 30;   // 상대가 이어 갈 단어는 이만큼까지만 센다(그 이상은 "많음")
@@ -113,7 +114,12 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const note = () => {
       brain.remember(game.dictionary, c, game.defs.get(c), 'shot');
       if (b) brain.remember(game.dictionary, b, game.defs.get(b), 'risky');
-      if (a) brain.remember(game.dictionary, a, game.defs.get(a), 'trap');
+      // 🪤 A 뒤에 이어 갈 단어가 3개 이하일 때만 함정이다(요요 → '요'로 시작하는 단어는 많아서 함정이 못 된다).
+      if (a) {
+        dictionary.countContinuation(game.dictionary, lastSyllable(a), TRAP_LIMIT)
+          .then((count) => { if (count <= TRAP_LIMIT) brain.remember(game.dictionary, a, game.defs.get(a), 'trap'); })
+          .catch(() => {});
+      }
     };
     if (known === false && dictionary.knownContinuation(game.dictionary, lastSyllable(c), usedWith(new Set(), c)) === false) { note(); return; }
     // 이번 판에서만 막힌 경우(이어 갈 단어가 앞에서 이미 다 나옴)는 다음 판엔 한방이 아니므로, C 자신만 뺀 채로 다시 판단한다.
@@ -129,6 +135,19 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (count <= HARD_LIMIT) brain.remember(dict, word, definition, 'hard');
     }).catch(() => {}); // 사전에 못 물어보면 다음에 다시 쓸 때 또 확인한다
   }
+  // 쓸 수 있는 🪤 함정을 찾는다. 이미 아는 바로 이어 갈 단어가 3개보다 많아진 함정은(예전에 조건 없이 적혔거나
+  // 사전에 단어가 늘어남) 쓰지 않고 노트에서 지운다. 모르면 배울 때 확인했으니 믿고 쓴다.
+  function findTrap(dict, starts, used) {
+    for (;;) {
+      const trap = brain.find(dict, starts, used, random, 'trap');
+      if (!trap) return null;
+      const syllable = lastSyllable(trap.word);
+      const known = dictionary.knownContinuation(dict, syllable);
+      const few = dictionary.fewContinuations(dict, syllable);
+      if (known !== true || (few && few.length <= TRAP_LIMIT)) return trap;
+      brain.forget(dict, trap.word, 'trap');
+    }
+  }
   // 성장 모드 컴퓨터의 차례(위에서부터 되는 것을 쓴다):
   //   ① 📒 한방 노트로 바로 끝내기 → ② 🪤 함정 단어로 2단 공격 준비 → ③ 한방 글자로 끝나는 사전 단어로 공격
   //   → ④ 🧩 어려운 노트 → ⑤ 🔭 한 수 내다보기: 🚫 조심 단어와 조심 단어의 끝 글자로 끝나는 단어는 빼고,
@@ -141,7 +160,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     if (remembers) {
       const shot = brain.find(dict, starts, used, random, 'shot');
       if (shot) return { ...shot, how: 'memory' };
-      const trap = brain.find(dict, starts, used, random, 'trap');
+      const trap = findTrap(dict, starts, used);
       if (trap) return { ...trap, how: 'trap' };
     }
     const all = await dictionary.candidates(dict, syllable, used);

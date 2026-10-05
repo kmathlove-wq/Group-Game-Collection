@@ -599,3 +599,25 @@ test('끝말잇기 성장 모드: 컴퓨터가 한방단어로 이긴 판도 배
   assert.deepEqual(brain.words('stdict', 'risky'), ['공알']); // 내가 말한 단어 = 컴퓨터가 조심할 단어
   assert.deepEqual(brain.words('stdict', 'trap'), ['자공']);
 });
+
+test('끝말잇기 성장 모드: 🪤 함정은 이어 갈 단어가 3개 이하일 때만 — 요요(→요리·요가·요금·요새)는 함정이 아니다', async (t) => {
+  const words = ['요요', '요리', '리튬', '요가', '요금', '요새', '가방', '가지', '금붕어', '금요일', '새우', '새벽', '공요'];
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 200 }, words);
+  const wait = async (check) => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise((resolve) => setTimeout(resolve, 5)); };
+
+  // 나 '요요' → 컴퓨터 '요리' → 나 '리튬' 💥 : 리튬은 한방, 요리는 조심. 요요 뒤에는 이어 갈 단어가 5개라 함정 아님.
+  let { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' });
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '요요' })).computer.word, '요리');
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '리튬' })).result, 'win');
+  await wait(() => brain.count('stdict') >= 2);
+  await new Promise((resolve) => setTimeout(resolve, 20)); // 함정 확인(뒤에서)이 끝날 시간
+  assert.deepEqual(brain.counts('stdict'), { shot: 1, trap: 0, risky: 1, hard: 0 });
+
+  // 예전에 조건 없이 적힌 함정(요요)은 쓰려고 할 때 확인해서 지운다.
+  brain.remember('stdict', '요요', '', 'trap');
+  ({ id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' }));
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공요' });
+  assert.notEqual(reply.computer.how, 'trap');
+  assert.equal(brain.has('stdict', '요요', 'trap'), false);
+});
