@@ -17,14 +17,18 @@ const path = require('path');
 const WORDS = ['사과', '과자', '자두', '두부', '부엉이', '이빨', '빨대', '알루미늄', '경력', '역사', '공알'];
 function fakeDictionary(words = WORDS) {
   const known = new Map(); // 진짜와 같이 한 번 확인한 끝 글자는 기억한다
+  const continuations = (syllable) => { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])); };
+  const left = (syllable, used) => !used || continuations(syllable).some((w) => !used.has(w));
   return {
     known,
     isConfigured: () => true,
-    knownContinuation: (_dict, syllable) => known.get(syllable),
+    // used(이번 판에 나온 단어)를 주면 그 단어들은 빼고 이어 갈 단어가 남는지 본다(늡 → 늡늡처럼 자기 자신뿐인 경우).
+    knownContinuation: (_dict, syllable, used) => (known.get(syllable) === undefined ? undefined : known.get(syllable) && left(syllable, used)),
+    fewContinuations: (_dict, syllable) => { const next = continuations(syllable); return next.length && next.length <= 5 ? next : undefined; },
     async lookup(_dict, word) { return words.includes(word) ? { found: true, word, definition: `${word}의 뜻` } : { found: false, reason: '사전에 없는 단어예요.' }; },
-    async hasContinuation(_dict, syllable) {
-      const starts = R.allowedStarts(syllable); const has = words.some((w) => starts.includes(w[0]));
-      known.set(syllable, has); return has;
+    async hasContinuation(_dict, syllable, used) {
+      const has = continuations(syllable).length > 0;
+      known.set(syllable, has); return has && left(syllable, used);
     },
     async countContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])).length; },
     requests: 0,
@@ -257,7 +261,7 @@ test('끝말잇기: 여럿이 방 — 제한 없음·한방단어 즉시 탈락�
 
 test('끝말잇기: 컴퓨터 먼저 — 한방단어가 아닌 첫 단어로 시작한다', async (t) => {
   const openers = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
-  const { url } = await startServer(t, {}, [...openers.map((o) => `${o}과`), '과자', '자두']);
+  const { url } = await startServer(t, {}, [...openers.map((o) => `${o}과`), '과자', '과일', '자두']); // '과일'이 없으면 과자를 쓴 뒤 '과'가 한방이 된다
   const warm = await fetch(`${url}/api/word-chain/solo/warm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"dictionary":"stdict"}' });
   assert.equal(warm.status, 204);
   const start = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer' });
@@ -406,9 +410,9 @@ test('끝말잇기 성장 모드: 기억한 한방단어가 한방이 아니게 
 test('끝말잇기: 여럿이 방 — 한방 확인이 사전 문제로 실패해도 다시 물어서 상대를 탈락시킨다', async (t) => {
   const { url, dictionary } = await startServer(t, { oneShotRetryMs: 10 });
   let calls = 0; const original = dictionary.hasContinuation;
-  dictionary.hasContinuation = async (dict, syllable) => { // '늄' 확인은 처음 두 번 실패(사전 서버가 불안정한 날)
+  dictionary.hasContinuation = async (dict, syllable, ...rest) => { // '늄' 확인은 처음 두 번 실패(사전 서버가 불안정한 날)
     if (syllable === '늄' && (calls += 1) <= 2) throw new DictionaryError('표준국어대사전 응답이 늦어요.');
-    return original(dict, syllable);
+    return original(dict, syllable, ...rest);
   };
   const a = await connect(url); const b = await connect(url);
   t.after(() => { a.close(); b.close(); });
@@ -478,7 +482,8 @@ test('끝말잇기 성장 모드: 📚 미리 공부하기 — 한방 글자를 
       if (failing) throw new DictionaryError('사전 응답이 늦어요.');
       known.set(s, s !== '각'); return s !== '각'; // '각'만 한방 글자
     },
-    async wordsEndingWith(_d, s) { requests += 1; return s === '각' ? [{ word: '시각', definition: '뜻' }, { word: '감각', definition: '뜻' }] : []; }
+    async wordsEndingWith(_d, s) { requests += 1; return s === '각' ? [{ word: '시각', definition: '뜻' }, { word: '감각', definition: '뜻' }] : []; },
+    fewContinuations: () => undefined
   };
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-study-')), 'study.json');
   const brain = createBrain(null);
@@ -508,4 +513,57 @@ test('끝말잇기 성장 모드: 📚 미리 공부하기 — 한방 글자를 
     assert.equal(again.info('stdict').studied, 6); // 서버가 다시 켜져도 이어서
   } finally { console.error = original; }
   assert.ok(errors.some((e) => e.includes('잠시 쉼')));
+});
+
+test('끝말잇기: 이어 갈 단어가 자기 자신뿐인 단어(늡늡)는 이미 나온 단어를 빼고 판단해 한방으로 본다', async () => {
+  const fetchImpl = async (url) => {
+    const q = new URL(url).searchParams.get('q');
+    const item = q === '늡' ? [{ word: '늡늡', sense: { pos: '', definition: '늡늡한 모양.' } }, { word: '늡늡하다', sense: { pos: '형용사', definition: '너그럽다.' } }] : [];
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length, item } }) };
+  };
+  const dict = createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl });
+  assert.equal(await dict.hasContinuation('stdict', '늡'), true); // 사전에는 '늡늡'이 있다
+  assert.deepEqual(dict.fewContinuations('stdict', '늡'), ['늡늡']); // 늡늡하다는 명사가 아니라 빠진다
+  assert.equal(await dict.hasContinuation('stdict', '늡', new Set(['늡늡'])), false); // 늡늡을 이미 썼으면 한방
+  assert.equal(dict.knownContinuation('stdict', '늡', new Set(['늡늡'])), false);
+  assert.equal(dict.knownContinuation('stdict', '늡', new Set(['사과'])), true);
+});
+
+test('끝말잇기: 늡늡 — 혼자 모드는 컴퓨터가 쓰면 바로 지고, 여럿이 방은 첫 단어로 못 쓰고 쓰면 다음 사람이 탈락한다', async (t) => {
+  const { url } = await startServer(t, {}, ['사늡', '늡늡', '공사']);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사늡' });
+  assert.equal(reply.computer.word, '늡늡');
+  assert.equal(reply.finished, true); assert.equal(reply.result, 'lose'); assert.equal(reply.oneShot, true);
+
+  const a = await connect(url); const b = await connect(url);
+  t.after(() => { a.close(); b.close(); });
+  const { code } = await emitAck(a, 'wc:room:create', { userId: 'n-a', nickname: '가', turnTime: 0 });
+  assert.equal((await emitAck(b, 'wc:room:join', { userId: 'n-b', nickname: '나', code })).ok, true);
+  assert.equal((await emitAck(b, 'wc:room:ready', true)).ok, true);
+  const playing = new Promise((resolve) => a.on('wc:room:state', (room) => { if (room.state === 'playing') resolve(room); }));
+  assert.equal((await emitAck(a, 'wc:game:start')).ok, true);
+  await playing; a.removeAllListeners('wc:room:state');
+  assert.match((await emitAck(a, 'wc:word', { word: '늡늡' })).message, /한방단어/); // 첫 단어로는 못 쓴다
+  assert.equal((await emitAck(a, 'wc:word', { word: '공사' })).ok, true);
+  assert.equal((await emitAck(b, 'wc:word', { word: '사늡' })).ok, true);
+  const boom = new Promise((resolve) => b.once('wc:one-shot', resolve));
+  assert.equal((await emitAck(a, 'wc:word', { word: '늡늡' })).ok, true);
+  assert.deepEqual(await boom, { word: '늡늡', userId: 'n-a', victimId: 'n-b' });
+});
+
+test('끝말잇기 성장 모드: 📚 미리 공부하기는 이어 갈 단어가 자기 자신뿐인 글자를 찾으면 그 단어를 한방으로 외운다', async () => {
+  const { createStudy, SYLLABLES } = require('../src/word-chain/study');
+  const known = new Map(SYLLABLES.slice(0, SYLLABLES.indexOf('늡')).map((s) => [s, true])); // '늡' 앞 글자는 이미 안다
+  const dictionary = {
+    isConfigured: () => true, requests: 0,
+    knownContinuation: (_d, s) => known.get(s),
+    async hasContinuation(_d, s) { known.set(s, true); return true; },
+    fewContinuations: (_d, s) => (s === '늡' ? ['늡늡'] : undefined),
+    async wordsEndingWith() { return []; }
+  };
+  const brain = createBrain(null);
+  const study = createStudy({ dictionary, brain, dictionaries: ['stdict'], idleMs: 0 });
+  for (let i = 0; i < 5 && !brain.has('stdict', '늡늡', 'shot'); i += 1) await study.step();
+  assert.deepEqual(brain.words('stdict', 'shot'), ['늡늡']);
 });

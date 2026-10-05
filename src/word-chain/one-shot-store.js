@@ -9,14 +9,16 @@ const WRITE_DELAY_MS = 2_000;
 const REMOTE_NAME = 'word-chain-one-shot.json';
 
 function createOneShotStore(filePath, { remote = null } = {}) {
-  const entries = new Map(); // "사전|글자" → { has, at }
+  const entries = new Map(); // "사전|글자" → { has, at, words? } — words: 이어 갈 단어가 5개 이하로 적을 때 그 목록(늡 → [늡늡])
   let timer = null;
   let writing = Promise.resolve();
 
   // 저장된 내용을 읽어 들인다. 이미 아는 글자는 그대로 두고 모르는 것만 더한다(불러오는 사이에 배운 것을 지키려고).
   function absorb(saved) {
     for (const [key, value] of Object.entries(saved?.entries || {})) {
-      if (typeof value?.has === 'boolean' && Date.now() - value.at < TTL_MS && !entries.has(key)) entries.set(key, value);
+      if (typeof value?.has !== 'boolean' || !(Date.now() - value.at < TTL_MS) || entries.has(key)) continue;
+      const words = Array.isArray(value.words) && value.words.every((w) => typeof w === 'string') ? value.words : undefined;
+      entries.set(key, words ? { has: value.has, at: value.at, words } : { has: value.has, at: value.at });
     }
   }
   if (filePath) {
@@ -39,17 +41,21 @@ function createOneShotStore(filePath, { remote = null } = {}) {
     return writing;
   }
 
+  // { has, words? } 또는 undefined(모름). words가 있으면 이어 갈 수 있는 단어가 그것뿐이다.
+  function entry(dictionary, syllable) {
+    const hit = entries.get(`${dictionary}|${syllable}`);
+    if (!hit) return undefined;
+    if (Date.now() - hit.at >= TTL_MS) { entries.delete(`${dictionary}|${syllable}`); return undefined; }
+    return hit;
+  }
+
   return {
     ready,
     // true = 이어 갈 단어 있음, false = 한방(막다른) 글자, undefined = 아직 모름
-    get(dictionary, syllable) {
-      const hit = entries.get(`${dictionary}|${syllable}`);
-      if (!hit) return undefined;
-      if (Date.now() - hit.at >= TTL_MS) { entries.delete(`${dictionary}|${syllable}`); return undefined; }
-      return hit.has;
-    },
-    set(dictionary, syllable, has) {
-      entries.set(`${dictionary}|${syllable}`, { has: Boolean(has), at: Date.now() });
+    get: (dictionary, syllable) => entry(dictionary, syllable)?.has,
+    entry,
+    set(dictionary, syllable, has, words = null) {
+      entries.set(`${dictionary}|${syllable}`, has && words ? { has: true, at: Date.now(), words: [...words] } : { has: Boolean(has), at: Date.now() });
       if (filePath && !timer) { timer = setTimeout(flush, WRITE_DELAY_MS); timer.unref?.(); }
       remote?.save(REMOTE_NAME);
     },

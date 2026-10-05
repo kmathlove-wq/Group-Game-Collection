@@ -12,6 +12,7 @@ const CACHE_MAX = 5_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const PAGE_SIZE = 100;
 const RANDOM_PAGE_MAX = 10;
+const FEW_WORDS = 5; // 이어 갈 단어가 이만큼 이하면 목록을 기억해 "이미 나온 단어"를 빼고 한방 여부를 판단한다
 
 class DictionaryError extends Error {}
 
@@ -109,40 +110,63 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return { found: false, reason: same.length ? '명사가 아니라서 쓸 수 없어요.' : `${configOf(dictionary).name}에 없는 단어예요.` };
   }
 
-  // 시작 글자(두음 변형 포함)들을 한꺼번에 묻고, 하나라도 "있다"가 오면 나머지를 기다리지 않고 바로 답한다.
-  // 하나라도 묻지 못했는데 나머지가 다 "없다"면 한방이라고 단정할 수 없으므로 실패로 돌려준다.
+  // 시작 글자(두음 변형 포함)들을 한꺼번에 묻고 { has, words }로 답한다.
+  //   words: 이어 갈 단어가 FEW_WORDS(5)개 이하로 적을 때 그 목록. 많으면 null.
+  //   한 글자라도 "많다"가 오면 나머지를 기다리지 않고 바로 답한다.
+  //   하나라도 묻지 못했는데 나머지에서 단어를 못 찾았다면 한방이라고 단정할 수 없으므로 실패로 돌려준다.
   function askContinuation(dictionary, syllable) {
     const askOne = async (start) => {
       const first = await search(dictionary, start, 'start');
-      if (first.items.some(playable)) return true;
+      const wordsIn = (page) => page.items.filter((item) => item.word[0] === start && playable(item)).map((item) => item.word);
+      let words = wordsIn(first);
       // 첫 묶음이 전부 한 글자 단어 등으로 걸러져도 뒤에 더 있으면 한 묶음만 더 본다(P07과 같은 기준).
-      return first.total > PAGE_SIZE && (await search(dictionary, start, 'start', 2)).items.some(playable);
+      if (!words.length && first.total > PAGE_SIZE) words = wordsIn(await search(dictionary, start, 'start', 2));
+      return { words: [...new Set(words)], many: first.total > PAGE_SIZE && words.length > 0 };
     };
     const starts = allowedStarts(syllable);
     return new Promise((resolve, reject) => {
-      let left = starts.length; let failure = null;
-      const settle = () => { if (--left === 0) (failure ? reject(failure) : resolve(false)); };
-      for (const start of starts) askOne(start).then((has) => (has ? resolve(true) : settle()), (error) => { failure = error; settle(); });
+      let left = starts.length; let failure = null; const found = new Set();
+      const settle = () => {
+        if (--left > 0) return;
+        if (failure && found.size) resolve({ has: true, words: null }); // 일부를 못 물어 목록이 완전하지 않으니 "적다"고 하지 않는다
+        else if (failure) reject(failure);
+        else resolve({ has: found.size > 0, words: found.size && found.size <= FEW_WORDS ? [...found] : null });
+      };
+      for (const start of starts) {
+        askOne(start).then(({ words, many }) => {
+          for (const word of words) found.add(word);
+          if (many || found.size > FEW_WORDS) resolve({ has: true, words: null });
+          settle();
+        }, (error) => { failure = error; settle(); });
+      }
     });
   }
-
+  // 단어장의 답을 이번 판 상황에 맞춘다. 이어 갈 단어가 몇 개뿐이고 그게 다 이미 나왔다면(늡 → 늡늡) 한방이다.
+  const judge = (entry, used) => {
+    if (!entry) return undefined;
+    if (!entry.has) return false;
+    return entry.words && used ? entry.words.some((word) => !used.has(word)) : true;
+  };
   // 단어장에 이미 있으면 바로 답한다(true/false). 모르면 undefined — 사전에 묻지 않는다.
-  const knownContinuation = (dictionary, syllable) => store.get(dictionary, syllable);
+  // used(이번 판에 나온 단어들)를 주면 그 단어들은 다시 못 쓰는 것으로 계산한다.
+  const knownContinuation = (dictionary, syllable, used = null) => judge(store.entry(dictionary, syllable), used);
 
-  // 시작 글자(두음 변형 포함)로 시작하는 쓸 수 있는 낱말이 하나라도 있는지(= 한방단어가 아닌지).
+  // 시작 글자(두음 변형 포함)로 시작하는 쓸 수 있는 낱말이 남아 있는지(= 한방단어가 아닌지).
   // 확인한 답은 단어장에 남긴다(파일 쓰기는 나중에 모아서 하므로 기다리지 않는다).
-  function hasContinuation(dictionary, syllable) {
-    const known = store.get(dictionary, syllable);
-    if (known !== undefined) return Promise.resolve(known);
+  function hasContinuation(dictionary, syllable, used = null) {
+    const known = store.entry(dictionary, syllable);
+    if (known) return Promise.resolve(judge(known, used));
     const key = `${dictionary}|${syllable}`;
     if (!checking.has(key)) {
       const promise = askContinuation(dictionary, syllable)
-        .then((has) => { store.set(dictionary, syllable, has); return has; })
+        .then((answer) => { store.set(dictionary, syllable, answer.has, answer.words); return answer; })
         .finally(() => checking.delete(key));
       checking.set(key, promise);
     }
-    return checking.get(key);
+    return checking.get(key).then((answer) => judge(answer, used));
   }
+  // 이어 갈 수 있는 단어가 몇 개뿐일 때 그 목록(모르거나 많으면 undefined). 미리 공부하기가 늡늡 같은 단어를 찾는 데 쓴다.
+  const fewContinuations = (dictionary, syllable) => store.entry(dictionary, syllable)?.words;
 
   // 이 글자 뒤에 이어 갈 수 있는 낱말이 몇 개인지 센다. limit을 넘으면 거기서 멈춘다(정확한 수보다 "많다"만 알면 됨).
   async function countContinuation(dictionary, syllable, limit) {
@@ -201,7 +225,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return [...candidates].map(([word, definition]) => ({ word, definition }));
   }
 
-  return { isConfigured, lookup, hasContinuation, knownContinuation, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
+  return { isConfigured, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };

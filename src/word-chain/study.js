@@ -77,6 +77,10 @@ function createStudy({ dictionary, brain, dictionaries, filePath = null, remote 
         for (const { word, definition } of await dictionary.wordsEndingWith(dict, syllable, END_PAGES)) {
           if (lastSyllable(word) === syllable) brain.remember(dict, word, definition, 'shot');
         }
+      } else {
+        // 이어 갈 단어가 자기 자신 하나뿐인 글자(늡 → 늡늡)라면, 그 단어는 내는 순간 한방이다.
+        const few = dictionary.fewContinuations(dict, syllable);
+        if (few?.length === 1 && lastSyllable(few[0]) === syllable) brain.remember(dict, few[0], '', 'shot');
       }
       state.cursor = (state.cursor + 1) % SYLLABLES.length;
       return true;
