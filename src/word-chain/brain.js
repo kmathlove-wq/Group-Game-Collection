@@ -15,13 +15,13 @@ const KINDS = ['shot', 'trap', 'risky', 'hard'];
 const REMOTE_NAME = 'word-chain-brain.json';
 
 // 배운 단어 개수(세 종류 합) → 컴퓨터의 실력.
-//   level: 화면에 보여 줄 레벨(1부터)
+//   level: 화면에 보여 줄 레벨(0부터, 배운 단어 10개마다 1)
 //   memoryChance: 기억 노트에 맞는 단어가 있을 때 실제로 꺼내 쓸 확률(0~1)
 //   attackChance: 한방 글자로 끝나는 단어를 일부러 골라 공격할 확률(0~1)
 function strengthOf(learned) {
-  // 10개 배울 때마다 레벨 1 업, 레벨 제한 없음.
+  // 10개 배울 때마다 레벨 1 업(0~9개 = 레벨 0), 레벨 제한 없음.
   // 목표는 "절대 이길 수 없는 컴퓨터"라서 기억·공격은 레벨과 상관없이 항상(100%) 쓴다. 레벨은 배운 양을 보여 주는 숫자다.
-  const level = 1 + Math.floor(learned / 10);
+  const level = Math.floor(learned / 10);
   return { level, memoryChance: 1, attackChance: 1 };
 }
 

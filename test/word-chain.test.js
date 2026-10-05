@@ -318,9 +318,9 @@ test('끝말잇기 성장 모드: 기억 노트는 종류별로 적고 파일에
   assert.deepEqual(createBrain(file).counts('opendict'), { shot: 1, trap: 1, risky: 1, hard: 0 });
 });
 
-test('끝말잇기 성장 모드: 레벨 규칙은 1부터 시작하고 확률은 0~1이며 배울수록 약해지지 않는다', () => {
+test('끝말잇기 성장 모드: 레벨 규칙은 0부터 시작해 10개마다 1씩 오르고 확률은 0~1이며 배울수록 약해지지 않는다', () => {
   let before = strengthOf(0);
-  assert.equal(before.level, 1);
+  assert.deepEqual([0, 9, 10, 20, 29, 30].map((n) => strengthOf(n).level), [0, 0, 1, 2, 2, 3]);
   for (let learned = 1; learned <= 300; learned += 1) {
     const now = strengthOf(learned);
     for (const key of ['memoryChance', 'attackChance']) {
