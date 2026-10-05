@@ -13,6 +13,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// 🧩 어려운 노트를 뺀 나머지 노트 내용(성장 모드에선 나온 단어마다 🧩가 적힐 수 있어 따로 본다).
+const notes = (brain, dict) => ({ shot: brain.words(dict, 'shot').sort(), trap: brain.words(dict, 'trap').sort(), risky: brain.words(dict, 'risky').sort() });
+
 // ── 가짜 사전: 실제 API 대신 정해진 낱말만 아는 사전(키 없이도 게임 흐름을 검사) ──
 const WORDS = ['사과', '과자', '자두', '두부', '부엉이', '이빨', '빨대', '알루미늄', '경력', '역사', '공알'];
 function fakeDictionary(words = WORDS) {
@@ -352,7 +355,7 @@ test('끝말잇기 성장 모드: 진 판(수산화나트륨→윰차→차풰�
   assert.equal((await game.say('수산화나트륨')).computer.word, '윰차');
   assert.equal((await game.say('차풰')).result, 'win');
   for (let i = 0; i < 50 && brain.count('opendict') < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.deepEqual(brain.counts('opendict'), { shot: 1, trap: 1, risky: 1, hard: 0 });
+  assert.deepEqual(notes(brain, 'opendict'), { shot: ['차풰'], trap: ['수산화나트륨'], risky: ['윰차'] });
   assert.deepEqual((await (await fetch(`${url}/api/word-chain/solo/brain?dictionary=opendict`)).json()).trap, 1);
 
   // 🪤 '수'가 오면 함정 단어를 먼저 쓰고, 윰차로 막으면 📒 차풰로 끝낸다.
@@ -404,7 +407,8 @@ test('끝말잇기 성장 모드: 기억한 한방단어가 한방이 아니게 
   // 끝낼 공격이 없으면 🧩 어려운 단어를 쓴다. 시간이 지나도 노트는 지우지 않는다.
   ({ reply } = await play('사차'));
   assert.equal(reply.computer.word, '차풰'); assert.equal(reply.computer.how, 'hard');
-  assert.deepEqual(brain.counts('opendict'), { shot: 0, trap: 0, risky: 0, hard: 1 });
+  assert.deepEqual(notes(brain, 'opendict'), { shot: [], trap: [], risky: [] });
+  assert.equal(brain.has('opendict', '차풰', 'hard'), true);
 });
 
 test('끝말잇기: 여럿이 방 — 한방 확인이 사전 문제로 실패해도 다시 물어서 상대를 탈락시킨다', async (t) => {
@@ -610,9 +614,9 @@ test('끝말잇기 성장 모드: 🪤 함정은 이어 갈 단어가 3개 이�
   let { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' });
   assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '요요' })).computer.word, '요리');
   assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '리튬' })).result, 'win');
-  await wait(() => brain.count('stdict') >= 2);
+  await wait(() => brain.has('stdict', '리튬', 'shot'));
   await new Promise((resolve) => setTimeout(resolve, 20)); // 함정 확인(뒤에서)이 끝날 시간
-  assert.deepEqual(brain.counts('stdict'), { shot: 1, trap: 0, risky: 1, hard: 0 });
+  assert.deepEqual(notes(brain, 'stdict'), { shot: ['리튬'], trap: [], risky: ['요리'] });
 
   // 예전에 조건 없이 적힌 함정(요요)은 쓰려고 할 때 확인해서 지운다.
   brain.remember('stdict', '요요', '', 'trap');
@@ -620,4 +624,23 @@ test('끝말잇기 성장 모드: 🪤 함정은 이어 갈 단어가 3개 이�
   const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공요' });
   assert.notEqual(reply.computer.how, 'trap');
   assert.equal(brain.has('stdict', '요요', 'trap'), false);
+});
+
+test('끝말잇기 성장 모드: 나온 단어 중 이어 갈 단어가 1~10개인 단어는 🧩 어려운 노트에 적는다(기본 모드는 안 적음)', async (t) => {
+  const manyJa = [...'가나다라마바사아차카타'].map((c) => `자${c}`); // '자'로 시작하는 단어 11개(그 뒤 '가' 등은 이어 갈 단어 없음)
+  const words = ['사과', '과자', ...manyJa];
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 200 }, words);
+  const play = async (mode) => {
+    const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode });
+    assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사과' })).computer.word, '과자');
+    assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '자가' })).result, 'win');
+    await new Promise((resolve) => setTimeout(resolve, 30)); // 뒤에서 세는 시간
+  };
+  await play('basic');
+  assert.equal(brain.count('stdict'), 0);
+  await play('growth');
+  assert.deepEqual(brain.words('stdict', 'hard'), ['사과']); // '과' 뒤 1개(과자) → 🧩
+  // 과자('자' 뒤 11개)는 너무 많아서, 자가('가' 뒤 0개)는 한방이라서 🧩가 아니다
+  assert.deepEqual(brain.words('stdict', 'shot'), ['자가']);
 });

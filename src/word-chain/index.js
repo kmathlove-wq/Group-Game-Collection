@@ -127,6 +127,17 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 📒 한방 노트의 단어가 이제는 한방이 아니라고 판정됐을 때(사전에 새 단어가 생기는 등): 게임은 그대로 두고
   // 뒤에서 조용히 이어 갈 단어 수를 세어, 10개 이하면 🧩 어려운 노트로 옮기고 더 많으면 노트에서 지운다.
+  // 🧩 성장 모드에서 나온 단어(나·컴퓨터 모두)마다 뒤에서 조용히 이어 갈 단어 수를 세어, 1~10개면 어려운 노트에 적는다.
+  // 0개(한방)이거나 이어 갈 단어가 자기 자신뿐인 단어(늡늡)는 📒 한방 쪽에서 다룬다. 같은 글자를 이미 물어 봤으면 30분 캐시를 다시 써서 거의 공짜다.
+  function noteHard(game, { word, definition }) {
+    if (game.mode !== 'growth') return;
+    const dict = game.dictionary; const syllable = lastSyllable(word);
+    if (brain.has(dict, word, 'hard') || brain.has(dict, word, 'shot')) return;
+    dictionary.countContinuation(dict, syllable, HARD_LIMIT).then((count) => {
+      const deadEnd = dictionary.knownContinuation(dict, syllable, usedWith(new Set(), word)) === false;
+      if (count >= 1 && count <= HARD_LIMIT && !deadEnd && !brain.has(dict, word, 'shot')) brain.remember(dict, word, definition, 'hard');
+    }).catch(() => {}); // 사전이 안 되면 이번엔 그냥 넘어간다
+  }
   function recheckShot(dict, word) {
     if (!brain.has(dict, word, 'shot')) return;
     dictionary.countContinuation(dict, lastSyllable(word), HARD_LIMIT).then((count) => {
@@ -150,7 +161,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 성장 모드 컴퓨터의 차례(위에서부터 되는 것을 쓴다):
   //   ① 📒 한방 노트로 바로 끝내기 → ② 🪤 함정 단어로 2단 공격 준비 → ③ 한방 글자로 끝나는 사전 단어로 공격
-  //   → ④ 🧩 어려운 노트 → ⑤ 🔭 한 수 내다보기: 🚫 조심 단어와 조심 단어의 끝 글자로 끝나는 단어는 빼고,
+  //   → ④ 🧩 어려운 노트(조심 단어·글자는 빼고) → ⑤ 🔭 한 수 내다보기: 🚫 조심 단어와 조심 단어의 끝 글자로 끝나는 단어는 빼고,
   //     상대가 이어 갈 단어가 가장 적게 남는 단어를 고른다.
   async function growthPick(dict, syllable, used) {
     const power = strength(brain.count(dict));
@@ -167,13 +178,14 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     if (!all.length) return null;
     const deadEnds = all.filter((c) => dictionary.knownContinuation(dict, lastSyllable(c.word), usedWith(used, c.word)) === false);
     if (deadEnds.length && random() < power.attackChance) return { ...pickFrom(deadEnds), how: 'attack' };
-    if (remembers) {
-      const hard = brain.find(dict, starts, used, random, 'hard');
-      if (hard) return { ...hard, how: 'hard' };
-    }
     const riskyWords = new Set(remembers ? brain.words(dict, 'risky') : []);
     const riskyEnds = new Set([...riskyWords].map(lastSyllable));
-    const safe = all.filter((c) => !riskyWords.has(c.word) && !riskyEnds.has(lastSyllable(c.word)));
+    const isSafe = (word) => !riskyWords.has(word) && !riskyEnds.has(lastSyllable(word));
+    if (remembers) {
+      const hard = brain.find(dict, starts, used, random, 'hard', isSafe); // 🧩 어려운 단어도 🚫 조심 단어·글자는 피한다
+      if (hard) return { ...hard, how: 'hard' };
+    }
+    const safe = all.filter((c) => isSafe(c.word));
     return lookahead(dict, safe.length ? safe : all, pickFrom);
   }
   // 🔭 후보 몇 개의 "다음에 상대가 이어 갈 단어 수"를 한꺼번에 세어 가장 적은 것을 고른다.
@@ -241,7 +253,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       try { computer = await takeOpener(dict, game.used); }
       catch (error) { return res.status(503).json({ ok: false, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' }); }
       if (!computer) return res.status(503).json({ ok: false, message: '컴퓨터가 첫 단어를 고르지 못했어요. 다시 시작해 주세요.' });
-      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word;
+      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game, computer);
     }
     if (soloGames.size >= SOLO_MAX) soloGames.delete(soloGames.keys().next().value);
     const id = crypto.randomUUID();
@@ -259,7 +271,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     try {
       const result = await checkWord(dictionary, game.dictionary, req.body?.word, game.lastWord, game.used);
       if (!result.ok) return res.json(result);
-      game.used.add(result.word); game.defs.set(result.word, result.definition);
+      game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game, result);
       const playerSyllable = lastSyllable(result.word);
       // 내 단어가 이미 단어장에 한방으로 있으면 컴퓨터에게 물어볼 것도 없이 바로 승리.
       const playerOneShot = dictionary.knownContinuation(game.dictionary, playerSyllable, game.used) === false;
@@ -278,7 +290,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
         if (game.mode !== 'growth' && !playerOneShot) learn(game.dictionary, playerSyllable); // 응답을 보낸 뒤 뒤에서 단어장에 남긴다
         return;
       }
-      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word;
+      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game, computer);
       const computerSyllable = lastSyllable(computer.word);
       const known = dictionary.knownContinuation(game.dictionary, computerSyllable, game.used);
       if (known === false) { // 컴퓨터가 한방단어를 썼다는 걸 이미 알면 바로 끝낸다

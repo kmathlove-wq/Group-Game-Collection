@@ -74,8 +74,9 @@ function createBrain(filePath, { remote = null } = {}) {
       return true;
     },
     // starts(두음 변형 포함 시작 글자들) 중 하나로 시작하고 아직 안 나온 기억 단어를 무작위로 하나 고른다.
-    find(dictionary, starts, used, random = Math.random, kind = 'shot') {
-      const hits = wordsOf(kind, dictionary).filter((word) => starts.includes(word[0]) && !used.has(word));
+    // accept(단어)가 주어지면 그 조건을 통과한 것만 고른다.
+    find(dictionary, starts, used, random = Math.random, kind = 'shot', accept = null) {
+      const hits = wordsOf(kind, dictionary).filter((word) => starts.includes(word[0]) && !used.has(word) && (!accept || accept(word)));
       if (!hits.length) return null;
       const word = hits[Math.floor(random() * hits.length)];
       return { word, definition: entries.get(prefixOf(kind, dictionary) + word).definition };
