@@ -303,9 +303,13 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     if (game.finished) return res.status(400).json({ ok: false, message: '이미 끝난 게임이에요.' });
     if (game.busy) return res.status(429).json({ ok: false, message: '앞 단어를 확인하는 중이에요.' });
     game.busy = true; game.lastActive = Date.now();
+    // 느린 곳을 찾으려고 걸린 시간(ms)을 응답에 함께 적는다: check = 내 단어 확인, computer = 컴퓨터 단어 고르기.
+    const startedAt = Date.now(); let checkedAt = startedAt;
+    const took = () => ({ check: checkedAt - startedAt, computer: Date.now() - checkedAt });
     try {
       const result = await checkWord(dictionary, game.dictionary, req.body?.word, game.lastWord, game.used);
-      if (!result.ok) return res.json(result);
+      checkedAt = Date.now();
+      if (!result.ok) return res.json({ ...result, took: took() });
       game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game, result);
       const playerSyllable = lastSyllable(result.word);
       // 내 단어가 이미 단어장에 한방으로 있으면 컴퓨터에게 물어볼 것도 없이 바로 승리.
@@ -321,7 +325,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (!computer) {
         game.finished = true; game.lastWord = result.word;
         if (game.mode === 'growth') learnWin(game, playerOneShot ? false : undefined);
-        res.json({ ok: true, player, computer: null, finished: true, result: 'win', oneShot: playerOneShot, score: game.score });
+        res.json({ ok: true, player, computer: null, finished: true, result: 'win', oneShot: playerOneShot, score: game.score, took: took() });
         if (game.mode !== 'growth' && !playerOneShot) learn(game.dictionary, playerSyllable); // 응답을 보낸 뒤 뒤에서 단어장에 남긴다
         return;
       }
@@ -331,7 +335,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (known === false) { // 컴퓨터가 한방단어를 썼다는 걸 이미 알면 바로 끝낸다
         game.finished = true;
         if (game.mode === 'growth') learnWin(game, known); // 컴퓨터가 이긴 판도 기억한다
-        return res.json({ ok: true, player, computer, finished: true, result: 'lose', oneShot: true, score: game.score });
+        return res.json({ ok: true, player, computer, finished: true, result: 'lose', oneShot: true, score: game.score, took: took() });
       }
       // 모르면 게임은 그대로 진행하고, 뒤에서 확인해 단어장에 남긴다(화면은 /one-shot으로 결과를 따로 받는다).
       const remembered = computer.how === 'memory'; // 📒 한방 노트에서 꺼낸 단어인데 한방이 아니면 뒤에서 다시 분류한다
@@ -340,7 +344,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
         ? { word: computer.word, promise: continuationWithRetry(game.dictionary, computerSyllable, game.used, () => !game.finished && game.lastWord === computer.word)
           .then((has) => { if (has && remembered) recheckShot(game.dictionary, computer.word); return has; }).catch(() => true) }
         : null;
-      res.json({ ok: true, player, computer, nextStarts: allowedStarts(computerSyllable), finished: false, checkOneShot: Boolean(game.pending), score: game.score });
+      res.json({ ok: true, player, computer, nextStarts: allowedStarts(computerSyllable), finished: false, checkOneShot: Boolean(game.pending), score: game.score, took: took() });
     } finally { game.busy = false; }
   });
 

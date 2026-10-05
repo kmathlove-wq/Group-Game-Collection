@@ -10,7 +10,8 @@ const DICTIONARIES = {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_MAX = 5_000;
 const REQUEST_TIMEOUT_MS = 8_000;
-const HEDGE_MS = 1_500; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
+const HEDGE_MS = 1_500;
+const SLOW_LOG_MS = 2_000; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
 const PAGE_SIZE = 100;
 const RANDOM_PAGE_MAX = 10;
 const FEW_WORDS = 5; // 이어 갈 단어가 이만큼 이하면 목록을 기억해 "이미 나온 단어"를 빼고 한방 여부를 판단한다
@@ -84,6 +85,15 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
 
     async function ask() {
       requests += 1;
+      const askedAt = Date.now();
+      try { return await answer(); }
+      finally {
+        // 2초 넘게 걸린 질문은 Render 기록(Logs)에 남긴다(키는 남기지 않음). 느린 곳을 찾는 데 쓴다.
+        const ms = Date.now() - askedAt;
+        if (ms > SLOW_LOG_MS) console.warn(`[word-chain] 느린 사전 질문 ${config.name} ${method} '${query}' ${start}쪽: ${ms}ms`);
+      }
+    }
+    async function answer() {
       const controller = new AbortController(); controllers.push(controller);
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
       const response = await fetchImpl(`${config.endpoint}?${params}`, { signal });
