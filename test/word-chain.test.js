@@ -27,6 +27,12 @@ function fakeDictionary(words = WORDS) {
       known.set(syllable, has); return has;
     },
     async countContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])).length; },
+    requests: 0,
+    async candidates(_dict, syllable, used) {
+      const starts = R.allowedStarts(syllable);
+      return words.filter((w) => starts.includes(w[0]) && !used.has(w)).map((word) => ({ word, definition: `${word}의 뜻` }));
+    },
+    async wordsEndingWith(_dict, syllable) { return words.filter((w) => w.at(-1) === syllable).map((word) => ({ word, definition: `${word}의 뜻` })); },
     async pickWord(_dict, syllable, used, { dueum = true, prefer = null } = {}) { // extraPage는 가짜 사전에선 의미 없음
       const starts = dueum ? R.allowedStarts(syllable) : [syllable];
       const all = words.filter((w) => starts.includes(w[0]) && !used.has(w));
@@ -440,4 +446,66 @@ test('끝말잇기: 두음 시작 글자들을 한꺼번에 묻고, 일부만 �
   const pick = await make(null, { 역: ['역사'] }).pickWord('stdict', '력', new Set());
   assert.equal(pick.word, '역사');
   assert.deepEqual([...new Set(asked)].sort(), [...R_STARTS].sort());
+});
+
+test('끝말잇기 성장 모드: 🔭 상대가 이어 갈 단어가 적은 쪽을 고르고, 🚫 조심 단어의 끝 글자로 끝나는 단어는 피한다', async (t) => {
+  const words = ['사과', '과자', '과일', '자두', '자라', '자석', '일기'];
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 500, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const play = async () => {
+    const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' });
+    return post(`${url}/api/word-chain/solo/${id}/word`, { word: '사과' });
+  };
+  // '과자'를 내면 상대가 '자'로 3개, '과일'을 내면 '일'로 1개 → 과일
+  assert.equal((await play()).computer.word, '과일');
+  // '일'로 끝나는 단어에서 진 적이 있으면(조심 단어 '추일') '일'로 끝나는 단어는 피한다 → 과자
+  brain.remember('stdict', '추일', '', 'risky');
+  assert.equal((await play()).computer.word, '과자');
+});
+
+test('끝말잇기 성장 모드: 📚 미리 공부하기 — 한방 글자를 찾아 그 글자로 끝나는 단어를 외우고 하루 한도·게임 중 쉬기를 지킨다', async () => {
+  const { createStudy, SYLLABLES } = require('../src/word-chain/study');
+  assert.equal(SYLLABLES.length, 11_172);
+  let clock = Date.parse('2026-10-05T03:00:00Z');
+  let failing = false; let requests = 0;
+  const known = new Map();
+  const dictionary = {
+    isConfigured: () => true,
+    knownContinuation: (_d, s) => known.get(s),
+    get requests() { return requests; },
+    async hasContinuation(_d, s) {
+      requests += 1;
+      if (failing) throw new DictionaryError('사전 응답이 늦어요.');
+      known.set(s, s !== '각'); return s !== '각'; // '각'만 한방 글자
+    },
+    async wordsEndingWith(_d, s) { requests += 1; return s === '각' ? [{ word: '시각', definition: '뜻' }, { word: '감각', definition: '뜻' }] : []; }
+  };
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-study-')), 'study.json');
+  const brain = createBrain(null);
+  const errors = []; const original = console.error; console.error = (...a) => errors.push(a.join(' '));
+  try {
+    const study = createStudy({ dictionary, brain, dictionaries: ['stdict'], filePath: file, budget: 4, idleMs: 30_000, backoffMs: 60_000, now: () => clock });
+    for (let i = 0; i < 5; i += 1) await study.step();
+    // 가(1번) → 각(한방: 묻기 1 + 끝나는 단어 1) → 갂(1번) = 4번에서 오늘은 멈춘다
+    assert.deepEqual(study.info('stdict'), { studied: 3, total: 11_172, usedToday: 4, budget: 4 });
+    assert.deepEqual(brain.words('stdict', 'shot').sort(), ['감각', '시각']);
+
+    clock += 24 * 60 * 60 * 1000; // 다음 날
+    study.gameActive(); await study.step();
+    assert.equal(study.info('stdict').studied, 3); // 게임 중이면 쉰다
+    clock += 31_000; known.set('갃', true); await study.step();
+    assert.equal(study.info('stdict').studied, 5); // 이미 아는 '갃'은 묻지 않고 건너뛰고 '간'을 공부
+
+    failing = true; clock += 1; await study.step();
+    assert.equal(study.info('stdict').studied, 5); // 사전이 안 되면 그 글자에 머물고 1분 쉰다
+    failing = false; clock += 1; await study.step();
+    assert.equal(study.info('stdict').studied, 5);
+    clock += 60_000; await study.step();
+    assert.equal(study.info('stdict').studied, 6);
+
+    await new Promise((resolve) => setTimeout(resolve, 2_200)); // 파일 저장(2초 모아 쓰기)
+    const again = createStudy({ dictionary, brain, dictionaries: ['stdict'], filePath: file, now: () => clock });
+    assert.equal(again.info('stdict').studied, 6); // 서버가 다시 켜져도 이어서
+  } finally { console.error = original; }
+  assert.ok(errors.some((e) => e.includes('잠시 쉼')));
 });

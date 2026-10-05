@@ -21,6 +21,9 @@ const ONE_SHOT_RETRY_MS = 3_000;  // 다시 묻기 전 기다리는 시간
 // 컴퓨터가 먼저 할 때 첫 단어를 고를 시작 글자 후보(흔하게 쓰이는 글자)
 const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
 const HARD_LIMIT = 10; // 기억한 한방단어가 한방이 아니게 됐을 때, 이어 갈 단어가 이 수 이하면 🧩 어려운 단어로 남긴다
+const LOOKAHEAD_SIZE = 6;     // 🔭 한 번에 비교해 볼 후보 수
+const LOOKAHEAD_LIMIT = 30;   // 상대가 이어 갈 단어는 이만큼까지만 센다(그 이상은 "많음")
+const LOOKAHEAD_MS = 1_500;   // 내다보기에 쓰는 최대 시간
 const OPENER_PARALLEL = 3; // 첫 단어 후보 글자를 동시에 몇 개 알아볼지 // 컴퓨터 대결 화면이 뒤에서 한방 확인 결과를 기다리는 최대 시간
 
 function text(value, maxLength) {
@@ -60,7 +63,7 @@ function rankPlayers(players, eliminated) {
 
 // secondMs는 테스트에서 차례 시간을 짧게 돌리려고 둔 값이다(운영은 항상 1000).
 // brain·strength·random은 성장 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
-function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, brain = createBrain(null), strength = strengthOf, random = Math.random }) {
+function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, lookaheadMs = LOOKAHEAD_MS, study = null, brain = createBrain(null), strength = strengthOf, random = Math.random }) {
   const page = (name) => (_req, res) => res.sendFile(path.join(rootDir, 'public', name));
   app.get('/word-chain', page('word-chain.html'));
   app.get('/word-chain/solo', page('word-chain-solo.html'));
@@ -95,7 +98,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   soloCleanup.unref();
 
   // ── 성장 모드: 진 판의 마지막 세 단어를 기억 노트(brain.js)에 적고, 다음 판에 꺼내 쓴다. 기본 모드는 아래 함수들을 쓰지 않는다 ──
-  const brainInfo = (dict) => { const learned = brain.count(dict); return { learned, level: strength(learned).level, ...brain.counts(dict) }; };
+  const brainInfo = (dict) => { const learned = brain.count(dict); return { learned, level: strength(learned).level, ...brain.counts(dict), study: study?.info(dict) ?? null }; };
   // 사람이 이긴 단어(C)의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾은 경우는 빼려고).
   // 이 판의 단어 순서가 사람 A → 컴퓨터 B → 사람 C였다면 A는 🪤 함정, B는 🚫 조심 단어로도 적는다.
   function learnWin(game, known) {
@@ -119,13 +122,14 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (count <= HARD_LIMIT) brain.remember(dict, word, definition, 'hard');
     }).catch(() => {}); // 사전에 못 물어보면 다음에 다시 쓸 때 또 확인한다
   }
-  // 성장 모드 컴퓨터의 차례:
-  //   ① 📒 한방 노트로 바로 끝내기 → ② 🪤 함정 단어로 2단 공격 준비
-  //   → ③ 사전에서 고르되 🚫 조심 단어는 피하고, 공격할 땐 한방 글자로 끝나는 단어를 노린다.
-  //   → ④ 그런 공격 단어가 없으면 🧩 어려운 노트(이어 갈 단어가 10개 이하인 단어)를 쓴다.
+  // 성장 모드 컴퓨터의 차례(위에서부터 되는 것을 쓴다):
+  //   ① 📒 한방 노트로 바로 끝내기 → ② 🪤 함정 단어로 2단 공격 준비 → ③ 한방 글자로 끝나는 사전 단어로 공격
+  //   → ④ 🧩 어려운 노트 → ⑤ 🔭 한 수 내다보기: 🚫 조심 단어와 조심 단어의 끝 글자로 끝나는 단어는 빼고,
+  //     상대가 이어 갈 단어가 가장 적게 남는 단어를 고른다.
   async function growthPick(dict, syllable, used) {
     const power = strength(brain.count(dict));
     const starts = allowedStarts(syllable);
+    const pickFrom = (list) => list[Math.floor(random() * list.length)];
     const remembers = random() < power.memoryChance;
     if (remembers) {
       const shot = brain.find(dict, starts, used, random, 'shot');
@@ -133,14 +137,34 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       const trap = brain.find(dict, starts, used, random, 'trap');
       if (trap) return { ...trap, how: 'trap' };
     }
-    const deadEnd = (word) => dictionary.knownContinuation(dict, lastSyllable(word)) === false;
-    const attack = random() < power.attackChance;
-    const score = (word) => (remembers && brain.has(dict, word, 'risky') ? -1 : 0) + (attack && deadEnd(word) ? 1 : 0);
-    const pick = await dictionary.pickWord(dict, syllable, used, { prefer: score });
-    if (pick && attack && deadEnd(pick.word)) return { ...pick, how: 'attack' };
-    const hard = remembers && brain.find(dict, starts, used, random, 'hard');
-    return hard ? { ...hard, how: 'hard' } : pick;
+    const all = await dictionary.candidates(dict, syllable, used);
+    if (!all.length) return null;
+    const deadEnds = all.filter((c) => dictionary.knownContinuation(dict, lastSyllable(c.word)) === false);
+    if (deadEnds.length && random() < power.attackChance) return { ...pickFrom(deadEnds), how: 'attack' };
+    if (remembers) {
+      const hard = brain.find(dict, starts, used, random, 'hard');
+      if (hard) return { ...hard, how: 'hard' };
+    }
+    const riskyWords = new Set(remembers ? brain.words(dict, 'risky') : []);
+    const riskyEnds = new Set([...riskyWords].map(lastSyllable));
+    const safe = all.filter((c) => !riskyWords.has(c.word) && !riskyEnds.has(lastSyllable(c.word)));
+    return lookahead(dict, safe.length ? safe : all, pickFrom);
   }
+  // 🔭 후보 몇 개의 "다음에 상대가 이어 갈 단어 수"를 한꺼번에 세어 가장 적은 것을 고른다.
+  // 사전이 느려도 컴퓨터 차례가 너무 길어지지 않게 lookaheadMs(1.5초) 안에 센 것만 보고 고른다.
+  async function lookahead(dict, pool, pickFrom) {
+    const offset = Math.floor(random() * pool.length);
+    const sample = pool.length <= LOOKAHEAD_SIZE ? pool : Array.from({ length: LOOKAHEAD_SIZE }, (_, i) => pool[(offset + i) % pool.length]);
+    const counts = new Map();
+    const jobs = sample.map((c) => dictionary.countContinuation(dict, lastSyllable(c.word), LOOKAHEAD_LIMIT).then((n) => counts.set(c.word, n)).catch(() => {}));
+    let timer;
+    await Promise.race([Promise.all(jobs), new Promise((resolve) => { timer = setTimeout(resolve, lookaheadMs); })]);
+    clearTimeout(timer);
+    if (!counts.size) return pickFrom(pool);
+    const fewest = Math.min(...counts.values());
+    return pickFrom(sample.filter((c) => counts.get(c.word) === fewest));
+  }
+
   app.get('/api/word-chain/solo/brain', (req, res) => res.json({ ok: true, ...brainInfo(dictionaryCode(req.query.dictionary)) }));
 
   // 컴퓨터가 먼저 할 때: 흔한 글자로 시작하는, 한방단어가 아닌 첫 단어를 고른다.
@@ -181,6 +205,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   });
 
   app.post('/api/word-chain/solo', json, async (req, res) => {
+    study?.gameActive(); // 게임이 사전을 쓰는 동안 미리 공부하기는 쉰다
     const dict = dictionaryCode(req.body?.dictionary);
     if (!dictionary.isConfigured(dict)) return res.status(503).json({ ok: false, message: `${DICTIONARIES[dict].name} API 키가 아직 설정되지 않았어요.` });
     const mode = req.body?.mode === 'growth' ? 'growth' : 'basic'; // basic = 원래의 무작위 컴퓨터
@@ -199,6 +224,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   });
 
   app.post('/api/word-chain/solo/:id/word', json, async (req, res) => {
+    study?.gameActive();
     const game = soloGames.get(req.params.id);
     if (!game) return res.status(404).json({ ok: false, message: '게임이 오래되어 끝났어요. 새 게임을 시작해 주세요.' });
     if (game.finished) return res.status(400).json({ ok: false, message: '이미 끝난 게임이에요.' });
@@ -521,6 +547,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     });
 
     socket.on('wc:word', async (raw, ack = () => {}) => {
+      study?.gameActive();
       if (typeof ack !== 'function') return;
       const { room, player } = membership(socket);
       if (!room || room.state !== 'playing') return ack({ ok: false, message: '게임 중이 아닙니다.' });

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const WRITE_DELAY_MS = 2_000;
-const MAX_WORDS = 5_000; // 사전·종류마다 이만큼까지만 기억한다(넘치면 가장 오래된 것부터 잊음)
+const MAX_WORDS = 30_000; // 사전·종류마다 이만큼까지만 기억한다(미리 공부하기로 한방단어가 수천 개 생길 수 있음, 넘치면 가장 오래된 것부터 잊음)
 const KINDS = ['shot', 'trap', 'risky', 'hard'];
 const REMOTE_NAME = 'word-chain-brain.json';
 
@@ -88,6 +88,7 @@ function createBrain(filePath, { remote = null } = {}) {
     },
     definitionOf: (dictionary, word, kind) => entries.get(prefixOf(kind, dictionary) + word)?.definition ?? '',
     has: (dictionary, word, kind) => entries.has(prefixOf(kind, dictionary) + word),
+    words: (dictionary, kind) => wordsOf(kind, dictionary),
     counts: (dictionary) => Object.fromEntries(KINDS.map((kind) => [kind, wordsOf(kind, dictionary).length])),
     count: (dictionary) => KINDS.reduce((sum, kind) => sum + wordsOf(kind, dictionary).length, 0),
     flush: () => { clearTimeout(timer); return Promise.all([flush(), remote?.flush()]); }

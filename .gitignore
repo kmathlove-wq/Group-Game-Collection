@@ -8,6 +8,7 @@ data/geometry-dash-scores.json
 data/bubble-bobble-scores.json
 data/word-chain-one-shot.json*
 data/word-chain-brain.json*
+data/word-chain-study.json*
 uploads/audio/*
 uploads/images/*
 !uploads/audio/.gitkeep

@@ -49,6 +49,7 @@ const definitionOf = (item) => item.senses.find(isNounSense)?.definition || '';
 function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, random = Math.random, store = createOneShotStore(null) } = {}) {
   const cache = new Map();
   const checking = new Map(); // 같은 글자를 동시에 두 번 묻지 않게 진행 중인 확인을 공유한다
+  let requests = 0; // 실제로 사전에 물어본 횟수(미리 공부하기가 하루 한도를 지키는 데 쓴다)
 
   function remember(key, make) {
     const hit = cache.get(key);
@@ -71,6 +72,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     const config = configOf(dictionary);
     const key = String(env[config.keyEnv] || '').trim();
     if (!key) throw new DictionaryError(`${config.name} API 키가 설정되지 않았어요. 관리자에게 알려 주세요.`);
+    requests += 1;
     const params = new URLSearchParams({ key, q: query, req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y' });
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -154,10 +156,30 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return count;
   }
 
+  // 이 글자로 "끝나는" 낱말들(미리 공부하기: 한방 글자를 찾으면 그 글자로 끝나는 단어가 곧 한방단어다). 최대 pages 묶음.
+  async function wordsEndingWith(dictionary, syllable, pages = 3) {
+    const found = new Map();
+    for (let page = 1; page <= pages; page += 1) {
+      const { items, total } = await search(dictionary, syllable, 'end', page);
+      for (const item of items) if (item.word.at(-1) === syllable && playable(item) && !found.has(item.word)) found.set(item.word, definitionOf(item));
+      if (page * PAGE_SIZE >= total) break;
+    }
+    return [...found].map(([word, definition]) => ({ word, definition }));
+  }
+
   // 컴퓨터 차례: 이어 갈 수 있는 낱말 중 아직 안 나온 것을 무작위로 고른다. 없으면 null(컴퓨터 패배).
   // dueum=false면 그 글자 하나만, extraPage=false면 첫 묶음만 본다(컴퓨터의 첫 단어처럼 빨리 골라야 할 때).
   // prefer(단어) → 점수. 주어지면 점수가 가장 높은 후보들 중에서만 고른다(성장 모드의 공격·방어).
   async function pickWord(dictionary, syllable, usedWords, { dueum = true, extraPage = true, prefer = null } = {}) {
+    const all = await candidates(dictionary, syllable, usedWords, { dueum, extraPage });
+    if (!all.length) return null;
+    const best = prefer ? Math.max(...all.map((c) => prefer(c.word))) : 0;
+    const words = prefer ? all.filter((c) => prefer(c.word) === best) : all;
+    return words[Math.floor(random() * words.length)];
+  }
+
+  // 이어 갈 수 있는 낱말 후보 전부([{ word, definition }]). 성장 컴퓨터는 이걸 받아 직접 비교해서 고른다.
+  async function candidates(dictionary, syllable, usedWords, { dueum = true, extraPage = true } = {}) {
     const candidates = new Map();
     // 시작 글자(두음 변형 포함)마다 차례로 묻지 않고 한꺼번에 물어서 기다리는 시간을 줄인다.
     const starts = dueum ? allowedStarts(syllable) : [syllable];
@@ -176,15 +198,10 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
         }
       }
     }
-    if (!candidates.size) return null;
-    const all = [...candidates.keys()];
-    const best = prefer ? Math.max(...all.map(prefer)) : 0;
-    const words = prefer ? all.filter((w) => prefer(w) === best) : all;
-    const word = words[Math.floor(random() * words.length)];
-    return { word, definition: candidates.get(word) };
+    return [...candidates].map(([word, definition]) => ({ word, definition }));
   }
 
-  return { isConfigured, lookup, hasContinuation, knownContinuation, countContinuation, pickWord };
+  return { isConfigured, lookup, hasContinuation, knownContinuation, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };

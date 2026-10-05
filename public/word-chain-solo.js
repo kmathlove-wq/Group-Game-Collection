@@ -46,7 +46,9 @@
   }
 
   // 성장 모드: 컴퓨터가 지금 몇 레벨인지 서버에 물어 시작 화면에 보여 준다.
-  const growthText = (brain) => `🧠 컴퓨터 레벨 ${brain.level} (배운 단어 ${brain.learned}개) · 📒 한방 ${brain.shot} · 🪤 함정 ${brain.trap} · 🚫 조심 ${brain.risky} · 🧩 어려운 ${brain.hard}`;
+  // 📚 미리 공부하기 진행률: 한글 11,172자 중 몇 번째 글자까지 사전에 물어봤는지(서버가 깨어 있을 때만 공부한다).
+  const studyText = (study) => (study ? ` · 📚 사전 공부 ${Math.floor((study.studied / study.total) * 100)}% (${study.studied.toLocaleString()}/${study.total.toLocaleString()}자)` : '');
+  const growthText = (brain) => `🧠 컴퓨터 레벨 ${brain.level} (배운 단어 ${brain.learned}개) · 📒 한방 ${brain.shot} · 🪤 함정 ${brain.trap} · 🚫 조심 ${brain.risky} · 🧩 어려운 ${brain.hard}${studyText(brain.study)}`;
   async function showBrain() {
     const el = $('#brainInfo');
     if (document.querySelector('input[name=mode]:checked').value !== 'growth') { el.classList.add('hidden'); return; }
