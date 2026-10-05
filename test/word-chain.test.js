@@ -666,3 +666,43 @@ test('끝말잇기 성장 모드: 📒 한방단어(가돌리늄)를 알면 그 
     assert.equal(start.computer.word, '다자');
   }
 });
+
+test('끝말잇기: 사전이 대답을 안 하면 1.5초 뒤 같은 질문을 하나 더 보내 먼저 온 답을 쓴다', async () => {
+  const answer = { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: 1, item: [{ word: '사과', pos: '명사', sense: { definition: '열매.' } }] } }) };
+  // plan: 질문마다 'answer'(바로 답) / 'hang'(신호로 취소될 때까지 무응답) / 'reset'(바로 연결 끊김)
+  const makeDict = (plan, extra = {}) => {
+    const calls = { sent: 0, aborted: 0 };
+    const fetchImpl = (_url, { signal }) => {
+      const kind = plan[calls.sent++] ?? 'answer';
+      if (kind === 'answer') return Promise.resolve(answer);
+      if (kind === 'reset') return Promise.reject(new TypeError('fetch failed'));
+      return new Promise((_resolve, reject) => signal.addEventListener('abort', () => { calls.aborted += 1; reject(signal.reason); }));
+    };
+    return { calls, dict: createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl, hedgeMs: 30, requestTimeoutMs: 300, ...extra }) };
+  };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // 바로 답하면 질문은 하나뿐(1.5초가 지나도 더 보내지 않는다).
+  let { calls, dict } = makeDict(['answer']);
+  assert.equal((await dict.lookup('stdict', '사과')).found, true);
+  await wait(60); assert.equal(calls.sent, 1);
+
+  // 첫 질문이 무응답이면 1.5초(여기선 30ms) 뒤 하나 더 보내고, 답이 오면 남은 질문은 취소한다.
+  ({ calls, dict } = makeDict(['hang', 'answer']));
+  const started = Date.now();
+  assert.equal((await dict.lookup('stdict', '사과')).found, true);
+  assert.ok(Date.now() - started < 250, '8초(여기선 300ms)를 기다리지 않는다');
+  assert.equal(calls.sent, 2); assert.equal(calls.aborted, 1);
+  assert.equal(dict.requests, 2); // 하루 한도 계산에는 실제로 보낸 질문 수가 들어간다
+
+  // 첫 질문이 바로 끊기면 1.5초를 기다리지 않고 곧바로 다시 묻는다.
+  ({ calls, dict } = makeDict(['reset', 'answer'], { hedgeMs: 10_000 }));
+  assert.equal((await dict.lookup('stdict', '사과')).found, true);
+  assert.equal(calls.sent, 2);
+
+  // 둘 다 안 되면 알려 준다(끊김 → 연결 못 함, 무응답 → 늦어요).
+  ({ dict } = makeDict(['reset', 'reset']));
+  await assert.rejects(dict.lookup('stdict', '사과'), /연결하지 못했어요/);
+  ({ dict } = makeDict(['hang', 'hang']));
+  await assert.rejects(dict.lookup('stdict', '사과'), /응답이 늦어요/);
+});

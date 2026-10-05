@@ -10,6 +10,7 @@ const DICTIONARIES = {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_MAX = 5_000;
 const REQUEST_TIMEOUT_MS = 8_000;
+const HEDGE_MS = 1_500; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
 const PAGE_SIZE = 100;
 const RANDOM_PAGE_MAX = 10;
 const FEW_WORDS = 5; // 이어 갈 단어가 이만큼 이하면 목록을 기억해 "이미 나온 단어"를 빼고 한방 여부를 판단한다
@@ -47,7 +48,9 @@ function playable(item) {
 const definitionOf = (item) => item.senses.find(isNounSense)?.definition || '';
 
 // store: 끝 글자별 한방 여부 단어장(없으면 메모리에만 기억).
-function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, random = Math.random, store = createOneShotStore(null) } = {}) {
+// hedgeMs·requestTimeoutMs는 테스트에서 짧게 돌리려고 둔 값이다.
+function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, random = Math.random, store = createOneShotStore(null),
+  hedgeMs = HEDGE_MS, requestTimeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const cache = new Map();
   const checking = new Map(); // 같은 글자를 동시에 두 번 묻지 않게 진행 중인 확인을 공유한다
   let requests = 0; // 실제로 사전에 물어본 횟수(미리 공부하기가 하루 한도를 지키는 데 쓴다)
@@ -69,34 +72,60 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   }
   const isConfigured = (dictionary) => Boolean(String(env[configOf(dictionary).keyEnv] || '').trim());
 
+  // 사전 서버가 어떤 질문엔 아예 대답을 안 하는 날이 있다(대답할 땐 1초 안에 온다). 그래서 1.5초(hedgeMs) 안에
+  // 답이 없거나 첫 질문이 바로 실패하면 같은 질문을 하나 더 보내고 먼저 온 답을 쓴다(나머지는 취소).
+  // 각 질문은 최대 8초 기다린다. 둘 다 실패하면 "응답이 늦어요/연결하지 못했어요"를 알린다.
   async function request(dictionary, query, method, start, num) {
     const config = configOf(dictionary);
     const key = String(env[config.keyEnv] || '').trim();
     if (!key) throw new DictionaryError(`${config.name} API 키가 설정되지 않았어요. 관리자에게 알려 주세요.`);
-    requests += 1;
     const params = new URLSearchParams({ key, q: query, req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y' });
-    let lastError;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const response = await fetchImpl(`${config.endpoint}?${params}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const body = await response.text();
-        if (!body.trim()) return { items: [], total: 0 }; // 결과가 하나도 없으면 빈 응답이 올 때가 있다
-        let data;
-        try { data = JSON.parse(body); } catch {
-          // 키 오류 같은 응답은 JSON 대신 XML로 올 수 있다.
-          const message = body.match(/<message>\s*(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*<\/message>/s)?.[1]?.trim();
-          throw new DictionaryError(message ? `${config.name}: ${message}` : `${config.name}에서 이상한 응답이 왔어요. 잠시 후 다시 해 주세요.`);
-        }
-        return parseResponse(data);
-      } catch (error) {
-        if (error instanceof DictionaryError) throw error;
-        lastError = error;
+    const controllers = [];
+
+    async function ask() {
+      requests += 1;
+      const controller = new AbortController(); controllers.push(controller);
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
+      const response = await fetchImpl(`${config.endpoint}?${params}`, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.text();
+      if (!body.trim()) return { items: [], total: 0 }; // 결과가 하나도 없으면 빈 응답이 올 때가 있다
+      let data;
+      try { data = JSON.parse(body); } catch {
+        // 키 오류 같은 응답은 JSON 대신 XML로 올 수 있다.
+        const message = body.match(/<message>\s*(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*<\/message>/s)?.[1]?.trim();
+        throw new DictionaryError(message ? `${config.name}: ${message}` : `${config.name}에서 이상한 응답이 왔어요. 잠시 후 다시 해 주세요.`);
       }
+      return parseResponse(data);
     }
-    const slow = lastError?.name === 'TimeoutError' || lastError?.name === 'AbortError';
-    throw new DictionaryError(slow ? `${config.name} 응답이 늦어요. 잠시 후 다시 해 주세요.` : `${config.name}에 연결하지 못했어요.`);
+
+    let hedgeTimer = null;
+    try {
+      return await new Promise((resolve, reject) => {
+        let pending = 0; let secondSent = false;
+        const launch = () => {
+          pending += 1;
+          ask().then(resolve, (error) => {
+            pending -= 1;
+            if (error instanceof DictionaryError) reject(error); // 서버가 분명히 거절한 건 다시 물어도 같다
+            else if (!secondSent) sendSecond(); // 첫 질문이 금방 실패하면 1.5초를 기다리지 않고 바로 다시
+            else if (pending === 0) reject(error); // 둘 다 실패
+          });
+        };
+        const sendSecond = () => { if (secondSent) return; secondSent = true; clearTimeout(hedgeTimer); launch(); };
+        launch();
+        hedgeTimer = setTimeout(sendSecond, hedgeMs);
+      });
+    } catch (error) {
+      if (error instanceof DictionaryError) throw error;
+      const slow = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      throw new DictionaryError(slow ? `${config.name} 응답이 늦어요. 잠시 후 다시 해 주세요.` : `${config.name}에 연결하지 못했어요.`);
+    } finally {
+      clearTimeout(hedgeTimer); // 답이 왔으면 "하나 더 묻기"는 하지 않는다
+      for (const controller of controllers) controller.abort(); // 늦게 오는 나머지 질문은 취소
+    }
   }
+
 
   const search = (dictionary, query, method, start = 1, num = PAGE_SIZE) =>
     remember(`${dictionary}|${method}|${query}|${start}|${num}`, () => request(dictionary, query, method, start, num));
