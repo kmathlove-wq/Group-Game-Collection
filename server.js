@@ -10,6 +10,8 @@ const { setupTriangleGame } = require('./src/triangle');
 const { setupWordChainGame } = require('./src/word-chain');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createOneShotStore } = require('./src/word-chain/one-shot-store');
+const { createBrain } = require('./src/word-chain/brain');
+const { createGistSync } = require('./lib/gist-sync');
 const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -44,8 +46,11 @@ const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
 const triangleGame = setupTriangleGame({ app, io, rootDir: __dirname });
-const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'));
-const wordChainGame = setupWordChainGame({ app, io, rootDir: __dirname, dictionary: createDictionary({ store: oneShotStore }) });
+// Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
+const gistSync = createGistSync({ token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID });
+const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
+const wordChainBrain = createBrain(process.env.WORD_CHAIN_BRAIN_PATH || path.join(__dirname, 'data', 'word-chain-brain.json'), { remote: gistSync });
+const wordChainGame = setupWordChainGame({ app, io, rootDir: __dirname, dictionary: createDictionary({ store: oneShotStore }), brain: wordChainBrain });
 app.use(express.json({ limit: '2kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
 app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -926,6 +931,14 @@ setInterval(() => {
 
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Group Game Collection server: http://localhost:${PORT}`));
+  // Render가 서버를 재우거나 새로 올릴 때 보내는 종료 신호: 아직 못 올린 기억을 마저 저장하고 끝낸다(최대 8초).
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.once(signal, () => {
+      const done = () => process.exit(0);
+      setTimeout(done, 8_000).unref();
+      Promise.all([oneShotStore.flush(), wordChainBrain.flush()]).finally(done);
+    });
+  }
 }
 
 module.exports = {

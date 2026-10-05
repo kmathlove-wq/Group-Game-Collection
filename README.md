@@ -113,6 +113,9 @@ npm start
 | `STDICT_API_KEY` | 없음 | 끝말잇기용 표준국어대사전 Open API 키 |
 | `OPENDICT_API_KEY` | 없음 | 끝말잇기용 우리말샘 Open API 키 |
 | `WORD_CHAIN_STORE_PATH` | `data/word-chain-one-shot.json` | 끝말잇기 한방단어 단어장 파일 경로 |
+| `WORD_CHAIN_BRAIN_PATH` | `data/word-chain-brain.json` | 끝말잇기 성장 컴퓨터 기억 노트 파일 경로 |
+| `GIST_TOKEN` | 없음 | 위 두 파일을 GitHub Gist에도 보관할 때 쓰는 토큰(Gists 읽기·쓰기 권한만) |
+| `GIST_ID` | 없음 | 보관할 비공개 Gist의 ID |
 
 `.env.example`을 `.env`로 복사하고 값을 바꿔 실행하세요. 운영에서는 `SESSION_SECRET`을 반드시 길고 고정된 무작위 값으로 설정해야 합니다. 최초 관리자 생성 후 `/admin-login`에서 로그인하고 관리자 화면에서 비밀번호를 바꿀 수 있습니다. 이 주소는 일반 게임 메뉴에 노출하지 않습니다.
 
@@ -189,6 +192,7 @@ GitHub Pages는 Node.js/Socket.IO 서버를 실행하지 못하므로 사용할 
 4. `SESSION_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` 환경 변수를 설정합니다.
 5. SQLite와 음원을 재배포 후에도 보존하려면 Persistent Disk를 붙이고 `MUSIC_DB_PATH=/var/data/music-game.db`, `MUSIC_UPLOAD_DIR=/var/data/uploads`처럼 두 경로를 디스크 안으로 지정합니다. 영구 디스크가 없으면 재배포 때 업로드가 사라집니다.
 6. 무료 인스턴스는 비활성 시 휴면과 첫 접속 지연이 있을 수 있습니다.
+7. 무료 인스턴스는 다시 켜질 때(재배포·휴면 뒤) 디스크 파일이 지워집니다. 끝말잇기 한방 단어장과 성장 컴퓨터 기억 노트를 지키려면 `GIST_TOKEN`·`GIST_ID`를 설정하세요. 시작할 때 Gist에서 불러오고, 바뀌면 10초 모아 올리며, 종료 신호(SIGTERM) 때 마저 올립니다. 불러오기에 실패한 동안에는 Gist를 덮어쓰지 않습니다.
 
 ### Railway
 

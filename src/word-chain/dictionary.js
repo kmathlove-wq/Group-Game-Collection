@@ -135,9 +135,22 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return checking.get(key);
   }
 
+  // 이 글자 뒤에 이어 갈 수 있는 낱말이 몇 개인지 센다. limit을 넘으면 거기서 멈춘다(정확한 수보다 "많다"만 알면 됨).
+  async function countContinuation(dictionary, syllable, limit) {
+    let count = 0;
+    for (const start of allowedStarts(syllable)) {
+      const first = await search(dictionary, start, 'start');
+      count += first.items.filter(playable).length;
+      if (count <= limit && first.total > PAGE_SIZE) count += (await search(dictionary, start, 'start', 2)).items.filter(playable).length;
+      if (count > limit) return count;
+    }
+    return count;
+  }
+
   // 컴퓨터 차례: 이어 갈 수 있는 낱말 중 아직 안 나온 것을 무작위로 고른다. 없으면 null(컴퓨터 패배).
   // dueum=false면 그 글자 하나만, extraPage=false면 첫 묶음만 본다(컴퓨터의 첫 단어처럼 빨리 골라야 할 때).
-  async function pickWord(dictionary, syllable, usedWords, { dueum = true, extraPage = true } = {}) {
+  // prefer(단어) → 점수. 주어지면 점수가 가장 높은 후보들 중에서만 고른다(성장 모드의 공격·방어).
+  async function pickWord(dictionary, syllable, usedWords, { dueum = true, extraPage = true, prefer = null } = {}) {
     const candidates = new Map();
     for (const start of dueum ? allowedStarts(syllable) : [syllable]) {
       const first = await search(dictionary, start, 'start');
@@ -152,12 +165,14 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
       }
     }
     if (!candidates.size) return null;
-    const words = [...candidates.keys()];
+    const all = [...candidates.keys()];
+    const best = prefer ? Math.max(...all.map(prefer)) : 0;
+    const words = prefer ? all.filter((w) => prefer(w) === best) : all;
     const word = words[Math.floor(random() * words.length)];
     return { word, definition: candidates.get(word) };
   }
 
-  return { isConfigured, lookup, hasContinuation, knownContinuation, pickWord };
+  return { isConfigured, lookup, hasContinuation, knownContinuation, countContinuation, pickWord };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };

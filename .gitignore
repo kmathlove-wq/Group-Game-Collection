@@ -7,6 +7,7 @@ data/music-game.db*
 data/geometry-dash-scores.json
 data/bubble-bobble-scores.json
 data/word-chain-one-shot.json*
+data/word-chain-brain.json*
 uploads/audio/*
 uploads/images/*
 !uploads/audio/.gitkeep

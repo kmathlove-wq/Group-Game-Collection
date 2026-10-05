@@ -8,6 +8,7 @@ const R = require('../src/word-chain/rules');
 const { createDictionary, DictionaryError } = require('../src/word-chain/dictionary');
 const { setupWordChainGame, rankPlayers } = require('../src/word-chain');
 const { createOneShotStore } = require('../src/word-chain/one-shot-store');
+const { createBrain, strengthOf } = require('../src/word-chain/brain');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -25,9 +26,12 @@ function fakeDictionary(words = WORDS) {
       const starts = R.allowedStarts(syllable); const has = words.some((w) => starts.includes(w[0]));
       known.set(syllable, has); return has;
     },
-    async pickWord(_dict, syllable, used, { dueum = true } = {}) { // extraPage는 가짜 사전에선 의미 없음
+    async countContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])).length; },
+    async pickWord(_dict, syllable, used, { dueum = true, prefer = null } = {}) { // extraPage는 가짜 사전에선 의미 없음
       const starts = dueum ? R.allowedStarts(syllable) : [syllable];
-      const word = words.find((w) => starts.includes(w[0]) && !used.has(w));
+      const all = words.filter((w) => starts.includes(w[0]) && !used.has(w));
+      const best = prefer && all.length ? Math.max(...all.map(prefer)) : 0;
+      const word = all.find((w) => !prefer || prefer(w) === best); // 진짜는 무작위, 가짜는 목록 순서대로
       return word ? { word, definition: `${word}의 뜻` } : null;
     }
   };
@@ -284,4 +288,111 @@ test('끝말잇기: 방장이 차례 순서를 바꾸고 섞을 수 있다', asy
   assert.equal((await playing).game.turnUserId, shuffled[0]);
   a.removeAllListeners('wc:room:state');
   assert.match((await emitAck(a, 'wc:room:order', { shuffle: true })).message, /게임 중/);
+});
+
+test('끝말잇기 성장 모드: 기억 노트는 종류별로 적고 파일에 남는다', async () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-brain-')), 'brain.json');
+  const brain = createBrain(file);
+  assert.equal(brain.remember('opendict', '차풰', '뜻'), true);
+  assert.equal(brain.remember('opendict', '차풰', '뜻'), false); // 같은 건 두 번 적지 않는다
+  brain.remember('opendict', '수산화나트륨', '', 'trap'); brain.remember('opendict', '윰차', '', 'risky');
+  assert.deepEqual(brain.find('opendict', ['차'], new Set()), { word: '차풰', definition: '뜻' });
+  assert.equal(brain.find('opendict', ['차'], new Set(['차풰'])), null); // 이미 나온 단어는 안 쓴다
+  assert.equal(brain.find('stdict', ['차'], new Set()), null); // 사전마다 따로
+  assert.equal(brain.has('opendict', '윰차', 'risky'), true);
+  assert.throws(() => brain.remember('opendict', '사과', '', 'nope'));
+  await brain.flush();
+  assert.deepEqual(createBrain(file).counts('opendict'), { shot: 1, trap: 1, risky: 1, hard: 0 });
+});
+
+test('끝말잇기 성장 모드: 레벨 규칙은 1부터 시작하고 확률은 0~1이며 배울수록 약해지지 않는다', () => {
+  let before = strengthOf(0);
+  assert.equal(before.level, 1);
+  for (let learned = 1; learned <= 300; learned += 1) {
+    const now = strengthOf(learned);
+    for (const key of ['memoryChance', 'attackChance']) {
+      assert.ok(now[key] >= 0 && now[key] <= 1, `${key}=${now[key]} (배운 단어 ${learned}개)`);
+      assert.ok(now[key] >= before[key], `${key}가 줄었어요 (배운 단어 ${learned}개)`);
+    }
+    assert.ok(now.level >= before.level);
+    before = now;
+  }
+});
+
+test('끝말잇기 성장 모드: 진 판(수산화나트륨→윰차→차풰💥)을 배워 함정·한방·조심으로 쓴다', async (t) => {
+  const words = ['수산화나트륨', '윰차', '윰호', '차풰', '과수', '호박', '박수'];
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 5, memoryChance: 1, attackChance: 0 }) }, words);
+  const play = async (mode) => {
+    const { id, brain: info } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode });
+    return { info, say: (word) => post(`${url}/api/word-chain/solo/${id}/word`, { word }) };
+  };
+
+  // 기본 모드는 이겨도 아무것도 배우지 않는다.
+  let game = await play('basic');
+  assert.equal(game.info, null);
+  assert.equal((await game.say('수산화나트륨')).computer.word, '윰차');
+  assert.equal((await game.say('차풰')).result, 'win');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(brain.count('opendict'), 0);
+
+  // 성장 모드에서 이기면 마지막 세 단어를 배운다.
+  game = await play('growth');
+  assert.equal(game.info.level, 5);
+  assert.equal((await game.say('수산화나트륨')).computer.word, '윰차');
+  assert.equal((await game.say('차풰')).result, 'win');
+  for (let i = 0; i < 50 && brain.count('opendict') < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(brain.counts('opendict'), { shot: 1, trap: 1, risky: 1, hard: 0 });
+  assert.deepEqual((await (await fetch(`${url}/api/word-chain/solo/brain?dictionary=opendict`)).json()).trap, 1);
+
+  // 🪤 '수'가 오면 함정 단어를 먼저 쓰고, 윰차로 막으면 📒 차풰로 끝낸다.
+  game = await play('growth');
+  let reply = await game.say('과수');
+  assert.equal(reply.computer.word, '수산화나트륨'); assert.equal(reply.computer.how, 'trap');
+  reply = await game.say('윰차');
+  assert.equal(reply.computer.word, '차풰'); assert.equal(reply.computer.how, 'memory');
+  assert.equal(reply.finished, true); assert.equal(reply.result, 'lose');
+
+  // 🚫 '륨'이 오면 졌던 윰차 대신 다른 단어로 막는다.
+  game = await play('growth');
+  assert.equal((await game.say('수산화나트륨')).computer.word, '윰호');
+});
+
+test('끝말잇기 성장 모드: 기억한 한방단어가 한방이 아니게 되면 게임은 계속되고, 뒤에서 🧩 어려운 단어로 옮기거나 지운다', async (t) => {
+  const words = ['사차', '차풰', '풰공', '공알', '차뢔'];
+  const brain = createBrain(null);
+  brain.remember('opendict', '차풰', '뜻', 'shot'); brain.remember('opendict', '차뢔', '뜻', 'shot');
+  const { url, dictionary } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const wait = async (check) => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise((resolve) => setTimeout(resolve, 5)); };
+  const play = async (word) => {
+    const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' });
+    return { id, reply: await post(`${url}/api/word-chain/solo/${id}/word`, { word }) };
+  };
+
+  // 사전에 '풰공'이 새로 생겨서 '차풰'는 이제 한방이 아니다 → 이어 갈 단어 1개라 🧩 어려운 노트로 옮긴다.
+  let { id, reply } = await play('사차');
+  assert.equal(reply.computer.word, '차풰'); assert.equal(reply.computer.how, 'memory');
+  assert.equal(reply.finished, false); // 게임은 그대로 진행
+  assert.equal((await (await fetch(`${url}/api/word-chain/solo/${id}/one-shot`)).json()).oneShot, false);
+  await wait(() => brain.has('opendict', '차풰', 'hard'));
+  assert.deepEqual([brain.has('opendict', '차풰', 'shot'), brain.has('opendict', '차풰', 'hard')], [false, true]);
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '풰공' })).computer.word, '공알'); // 내가 이어 갔다
+
+  // '차뢔'는 아직 진짜 한방이라 컴퓨터가 이긴다.
+  ({ reply } = await play('사차'));
+  assert.equal(reply.computer.word, '차뢔');
+  assert.equal(await dictionary.hasContinuation('opendict', '뢔'), false);
+
+  // 6개월이 지나 '뢔'를 다시 확인했더니 이어 갈 단어가 11개 생겼다 → 노트에서 지운다.
+  words.push(...[...'가나다라마바사아자차카'].map((c) => `뢔${c}`));
+  dictionary.known.delete('뢔'); // 한방 단어장이 6개월 지나 잊은 상태
+  ({ reply } = await play('사차'));
+  assert.equal(reply.computer.word, '차뢔'); assert.equal(reply.finished, false);
+  await wait(() => !brain.has('opendict', '차뢔', 'shot'));
+  assert.deepEqual([brain.has('opendict', '차뢔', 'shot'), brain.has('opendict', '차뢔', 'hard')], [false, false]);
+
+  // 끝낼 공격이 없으면 🧩 어려운 단어를 쓴다. 시간이 지나도 노트는 지우지 않는다.
+  ({ reply } = await play('사차'));
+  assert.equal(reply.computer.word, '차풰'); assert.equal(reply.computer.how, 'hard');
+  assert.deepEqual(brain.counts('opendict'), { shot: 0, trap: 0, risky: 0, hard: 1 });
 });

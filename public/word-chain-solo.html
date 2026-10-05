@@ -15,6 +15,7 @@
       <a class="wc-brand" href="/word-chain"><span aria-hidden="true">가</span><b>끝말잇기</b></a>
       <h1>🤖 컴퓨터랑 대결</h1>
       <span id="dictBadge" class="wc-dict-badge hidden"></span>
+      <span id="brainBadge" class="wc-dict-badge hidden"></span>
     </header>
 
     <section id="setup" class="panel wc-setup">
@@ -22,6 +23,13 @@
       <div class="wc-dict-choice" role="radiogroup" aria-label="사전 선택">
         <label><input type="radio" name="dictionary" value="stdict" checked><span><b>표준국어대사전</b><small>꼭 필요한 표준어 위주 · 깔끔해요</small></span></label>
         <label><input type="radio" name="dictionary" value="opendict"><span><b>우리말샘</b><small>신조어·방언·전문어까지 · 단어가 아주 많아요</small></span></label>
+      </div>
+      <div class="field"><span class="wc-field-label">어떤 컴퓨터랑 할까요?</span>
+        <div class="wc-dict-choice wc-first-choice" role="radiogroup" aria-label="컴퓨터 종류">
+          <label><input type="radio" name="mode" value="basic" checked><span><b>🎲 기본 컴퓨터</b><small>단어를 무작위로 골라요</small></span></label>
+          <label><input type="radio" name="mode" value="growth"><span><b>🌱 성장하는 컴퓨터</b><small>진 한방단어를 기억해서 점점 강해져요</small></span></label>
+        </div>
+        <p id="brainInfo" class="wc-brain-info hidden" aria-live="polite"></p>
       </div>
       <div class="field"><span class="wc-field-label">누가 먼저 할까요?</span>
         <div class="wc-dict-choice wc-first-choice" role="radiogroup" aria-label="먼저 할 사람">

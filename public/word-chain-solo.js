@@ -13,6 +13,7 @@
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
     if (saved.dictionary) document.querySelector(`input[name=dictionary][value="${saved.dictionary === 'opendict' ? 'opendict' : 'stdict'}"]`).checked = true;
     if (saved.first === 'computer') document.querySelector('input[name=first][value="computer"]').checked = true;
+    if (saved.mode === 'growth') document.querySelector('input[name=mode][value="growth"]').checked = true;
     if (saved.turnTime !== undefined) $('#turnTime').value = String(saved.turnTime);
   } catch { /* 저장된 설정이 없어도 기본값으로 시작 */ }
 
@@ -44,6 +45,18 @@
     $('#chain').scrollTop = $('#chain').scrollHeight;
   }
 
+  // 성장 모드: 컴퓨터가 지금 몇 레벨인지 서버에 물어 시작 화면에 보여 준다.
+  const growthText = (brain) => `🧠 컴퓨터 레벨 ${brain.level} (배운 단어 ${brain.learned}개) · 📒 한방 ${brain.shot} · 🪤 함정 ${brain.trap} · 🚫 조심 ${brain.risky} · 🧩 어려운 ${brain.hard}`;
+  async function showBrain() {
+    const el = $('#brainInfo');
+    if (document.querySelector('input[name=mode]:checked').value !== 'growth') { el.classList.add('hidden'); return; }
+    const dictionary = document.querySelector('input[name=dictionary]:checked').value;
+    try {
+      const brain = await (await fetch(`/api/word-chain/solo/brain?dictionary=${dictionary}`)).json();
+      el.textContent = growthText(brain); el.classList.remove('hidden');
+    } catch { el.classList.add('hidden'); }
+  }
+
   async function finish(win, title, detail = '') {
     if (over) return; over = true; deadline = null;
     $('#word').disabled = true; $('#send').disabled = true; $('#giveup').disabled = true;
@@ -60,14 +73,16 @@
     const dictionary = document.querySelector('input[name=dictionary]:checked').value;
     const turnTime = Number($('#turnTime').value);
     const first = document.querySelector('input[name=first]:checked').value;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime, first })); } catch { /* 저장 못 해도 진행 */ }
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime, first, mode })); } catch { /* 저장 못 해도 진행 */ }
     $('#start').disabled = true;
     $('#setupNotice').classList.add('hidden');
     if (first === 'computer') $('#start').textContent = '🤖 컴퓨터가 첫 단어를 고르는 중…';
     try {
-      const data = await post('/api/word-chain/solo', { dictionary, first });
+      const data = await post('/api/word-chain/solo', { dictionary, first, mode });
       if (!data.ok) throw new Error(data.message);
-      game = { id: data.id, turnTime }; over = false; busy = false;
+      game = { id: data.id, turnTime, mode };
+      $('#brainBadge').textContent = data.brain ? `🌱 레벨 ${data.brain.level} · ${data.brain.learned}개` : ''; $('#brainBadge').classList.toggle('hidden', !data.brain); over = false; busy = false;
       $('#dictBadge').textContent = `📖 ${dictionary === 'opendict' ? '우리말샘' : '표준국어대사전'}`; $('#dictBadge').classList.remove('hidden');
       $('#setup').classList.add('hidden'); $('#game').classList.remove('hidden');
       $('#chain').replaceChildren(); $('#score').textContent = '0'; message('');
@@ -97,14 +112,18 @@
       $('#score').textContent = String(data.score); $('#word').value = '';
       if (!data.computer) {
         message('');
-        finish(true, '', data.oneShot ? `💥 한방단어! 컴퓨터가 이어 말할 단어가 없어요. 단어 ${data.score}개를 이었어요!` : '');
+        const teach = game.mode === 'growth' ? ' 🧠 컴퓨터가 이번 판을 기억해 둘 거예요…' : '';
+        finish(true, '', (data.oneShot ? `💥 한방단어! 컴퓨터가 이어 말할 단어가 없어요. 단어 ${data.score}개를 이었어요!` : `컴퓨터가 이어 말할 단어를 못 찾았어요. 단어 ${data.score}개를 이었어요!`) + teach);
         return;
       }
       beep([660, 880], 0.08);
       addWord(data.computer.word, data.computer.definition, false);
-      if (data.finished) { oneShotLose(data.computer.word, data.score); return; }
+      if (data.finished) { oneShotLose(data.computer.word, data.score, data.computer.how); return; }
+      const hint = { attack: '🌱 컴퓨터가 노리고 낸 단어 같아요… 조심!', trap: '🪤 컴퓨터가 함정을 판 것 같아요… 다음 단어를 잘 골라요!', hard: '🧩 컴퓨터가 대답하기 어려운 단어를 냈어요!' }[data.computer.how];
+      if (hint) message(hint);
       if (data.checkOneShot) watchOneShot(game.id, data.computer.word);
-      message(''); $('#prompt').textContent = `${startsText(data.nextStarts)}(으)로 시작하는 단어`;
+      if (!hint) message('');
+      $('#prompt').textContent = `${startsText(data.nextStarts)}(으)로 시작하는 단어`;
       setTurn(game.turnTime * 1000);
     } catch (error) {
       message(error.message || '서버에 연결하지 못했어요.', 'error'); setTurn(Math.max(pausedMs ?? 0, 1500));
@@ -113,9 +132,11 @@
     }
   }
 
-  function oneShotLose(word, score) {
+  // how: 성장 모드에서 컴퓨터가 단어를 고른 방법('memory' = 기억 노트, 'attack' = 노리고 낸 단어)
+  function oneShotLose(word, score, how) {
     $('#chain').lastElementChild?.classList.add('one-shot');
-    finish(false, '💥 컴퓨터의 한방단어!', `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.`);
+    const title = how === 'memory' ? '😎 지난번에 배운 단어야!' : how === 'attack' ? '🌱 컴퓨터의 공격 성공!' : '💥 컴퓨터의 한방단어!';
+    finish(false, title, `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.`);
   }
   // 컴퓨터 단어가 한방단어인지 서버가 뒤에서 확인하는 동안 나는 계속 입력할 수 있다. 결과가 오면 그때 반응한다.
   async function watchOneShot(id, word) {
@@ -132,11 +153,12 @@
     fetch('/api/word-chain/solo/warm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dictionary }) }).catch(() => {});
   }
   for (const input of document.querySelectorAll('input[name=first], input[name=dictionary]')) input.addEventListener('change', warmOpener);
-  warmOpener();
+  for (const input of document.querySelectorAll('input[name=mode], input[name=dictionary]')) input.addEventListener('change', showBrain);
+  warmOpener(); showBrain();
 
   $('#start').onclick = start;
   $('#wordForm').addEventListener('submit', submit);
   $('#giveup').onclick = () => { if (confirm('정말 포기할까요?')) finish(false, '🏳 포기했어요'); };
-  $('#again').onclick = () => { $('#resultDialog').close(); $('#game').classList.add('hidden'); $('#setup').classList.remove('hidden'); $('#dictBadge').classList.add('hidden'); game = null; };
+  $('#again').onclick = () => { $('#resultDialog').close(); $('#game').classList.add('hidden'); $('#setup').classList.remove('hidden'); $('#dictBadge').classList.add('hidden'); $('#brainBadge').classList.add('hidden'); game = null; showBrain(); };
   $('#closeResult').onclick = () => $('#resultDialog').close();
 })();
