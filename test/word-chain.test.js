@@ -259,7 +259,7 @@ test('끝말잇기: 컴퓨터 먼저 — 한방단어가 아닌 첫 단어로 �
   assert.match(start.computer.word, /^.과$/); assert.deepEqual(start.nextStarts, ['과']);
   const reply = await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '과자' });
   assert.equal(reply.computer.word[0], '자');
-  assert.match((await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '두부' })).message, new RegExp(`'${reply.computer.word.at(-1)}'`));
+  assert.match((await post(`${url}/api/word-chain/solo/${start.id}/word`, { word: '호과' })).message, new RegExp(`'${reply.computer.word.at(-1)}'`)); // 컴퓨터 단어(자과·자두 중 하나)의 끝 글자로 시작하지 않는 단어
   const second = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', first: 'computer' }); // 미리 준비된 다음 단어
   assert.equal(second.ok, true); assert.match(second.computer.word, /^.과$/);
 });
@@ -395,4 +395,49 @@ test('끝말잇기 성장 모드: 기억한 한방단어가 한방이 아니게 
   ({ reply } = await play('사차'));
   assert.equal(reply.computer.word, '차풰'); assert.equal(reply.computer.how, 'hard');
   assert.deepEqual(brain.counts('opendict'), { shot: 0, trap: 0, risky: 0, hard: 1 });
+});
+
+test('끝말잇기: 여럿이 방 — 한방 확인이 사전 문제로 실패해도 다시 물어서 상대를 탈락시킨다', async (t) => {
+  const { url, dictionary } = await startServer(t, { oneShotRetryMs: 10 });
+  let calls = 0; const original = dictionary.hasContinuation;
+  dictionary.hasContinuation = async (dict, syllable) => { // '늄' 확인은 처음 두 번 실패(사전 서버가 불안정한 날)
+    if (syllable === '늄' && (calls += 1) <= 2) throw new DictionaryError('표준국어대사전 응답이 늦어요.');
+    return original(dict, syllable);
+  };
+  const a = await connect(url); const b = await connect(url);
+  t.after(() => { a.close(); b.close(); });
+  const { code } = await emitAck(a, 'wc:room:create', { userId: 'r-a', nickname: '가', turnTime: 0 });
+  assert.equal((await emitAck(b, 'wc:room:join', { userId: 'r-b', nickname: '나', code })).ok, true);
+  assert.equal((await emitAck(b, 'wc:room:ready', true)).ok, true);
+  const playing = new Promise((resolve) => a.on('wc:room:state', (room) => { if (room.state === 'playing') resolve(room); }));
+  assert.equal((await emitAck(a, 'wc:game:start')).ok, true);
+  await playing; a.removeAllListeners('wc:room:state');
+
+  assert.equal((await emitAck(a, 'wc:word', { word: '공알' })).ok, true);
+  const boom = new Promise((resolve) => b.once('wc:one-shot', resolve));
+  const finished = new Promise((resolve) => b.once('wc:game:finished', resolve));
+  assert.equal((await emitAck(b, 'wc:word', { word: '알루미늄' })).ok, true);
+  assert.deepEqual(await boom, { word: '알루미늄', userId: 'r-b', victimId: 'r-a' });
+  assert.deepEqual((await finished).ranking.map((r) => [r.userId, r.rank]), [['r-b', 1], ['r-a', 2]]);
+  assert.equal(calls, 3); // 미리 묻기 실패 → 확인 실패 → 다시 물어 성공
+});
+
+test('끝말잇기: 두음 시작 글자들을 한꺼번에 묻고, 일부만 실패하면 한방이라고 단정하지 않는다', async () => {
+  const R_STARTS = R.allowedStarts('력'); // 력·역 등
+  const asked = [];
+  const make = (fail, words) => createDictionary({ env: { STDICT_API_KEY: 'k' }, random: () => 0, fetchImpl: async (url) => {
+    const q = new URL(url).searchParams.get('q'); asked.push(q);
+    if (q === fail) return { ok: false, status: 500 };
+    const item = (words[q] || []).map((word) => ({ word, pos: '명사', sense: { definition: `${word}의 뜻` } }));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length, item } }) };
+  } });
+  // '력'은 사전이 실패해도 '역'에 단어가 있으면 이어 갈 수 있다(나머지를 기다리지 않음).
+  assert.equal(await make('력', { 역: ['역사'] }).hasContinuation('stdict', '력'), true);
+  // '력'을 못 물었는데 나머지는 비었으면 한방인지 모르는 것이므로 실패로 돌려준다.
+  await assert.rejects(make('력', {}).hasContinuation('stdict', '력'));
+  // 컴퓨터 단어 고르기도 시작 글자들을 한꺼번에 묻는다.
+  asked.length = 0;
+  const pick = await make(null, { 역: ['역사'] }).pickWord('stdict', '력', new Set());
+  assert.equal(pick.word, '역사');
+  assert.deepEqual([...new Set(asked)].sort(), [...R_STARTS].sort());
 });

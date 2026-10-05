@@ -16,6 +16,8 @@ const MIN_RESUME_MS = 1_500;   // 틀린 단어를 낸 뒤 다시 입력할 최�
 const SOLO_TTL_MS = 30 * 60 * 1000;
 const SOLO_MAX = 1_000;
 const ONE_SHOT_WAIT_MS = 25_000;
+const ONE_SHOT_TRIES = 3;         // 한방 확인이 사전 문제로 실패하면 이만큼까지 다시 묻는다
+const ONE_SHOT_RETRY_MS = 3_000;  // 다시 묻기 전 기다리는 시간
 // 컴퓨터가 먼저 할 때 첫 단어를 고를 시작 글자 후보(흔하게 쓰이는 글자)
 const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
 const HARD_LIMIT = 10; // 기억한 한방단어가 한방이 아니게 됐을 때, 이어 갈 단어가 이 수 이하면 🧩 어려운 단어로 남긴다
@@ -31,6 +33,9 @@ async function checkWord(dictionary, dictName, raw, previousWord, usedWords) {
   const word = String(raw ?? '').replace(/\s/g, '').slice(0, 40);
   const problem = precheck(word, previousWord, usedWords);
   if (problem) return { ok: false, message: problem };
+  // 규칙을 통과하면 사전 확인을 기다리는 동안 이 단어 끝 글자의 한방 여부도 미리 물어 둔다(동시에 묻기).
+  // 그러면 단어가 통과될 때쯤 답이 와 있어서 한방이면 바로 처리되고, 컴퓨터가 단어를 찾을 때도 같은 답을 다시 쓴다.
+  dictionary.hasContinuation(dictName, lastSyllable(word)).catch(() => {}); // 미리 묻기(결과는 단어장에 남는다)
   try {
     const found = await dictionary.lookup(dictName, word);
     if (!found.found) return { ok: false, message: found.reason };
@@ -55,7 +60,7 @@ function rankPlayers(players, eliminated) {
 
 // secondMs는 테스트에서 차례 시간을 짧게 돌리려고 둔 값이다(운영은 항상 1000).
 // brain·strength·random은 성장 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
-function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, brain = createBrain(null), strength = strengthOf, random = Math.random }) {
+function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, brain = createBrain(null), strength = strengthOf, random = Math.random }) {
   const page = (name) => (_req, res) => res.sendFile(path.join(rootDir, 'public', name));
   app.get('/word-chain', page('word-chain.html'));
   app.get('/word-chain/solo', page('word-chain-solo.html'));
@@ -68,6 +73,18 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, bra
   app.get('/api/word-chain/status', (_req, res) => {
     res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code) })) });
   });
+
+  // 끝 글자의 한방 여부를 묻는다. 사전 문제로 실패하면 3초 뒤 다시 묻고(최대 3번), stillNeeded()가 거짓이 되면 그만둔다.
+  async function continuationWithRetry(dict, syllable, stillNeeded) {
+    for (let attempt = 1; ; attempt += 1) {
+      try { return await dictionary.hasContinuation(dict, syllable); }
+      catch (error) {
+        if (attempt >= ONE_SHOT_TRIES || !stillNeeded()) throw error;
+        await new Promise((resolve) => setTimeout(resolve, oneShotRetryMs));
+        if (!stillNeeded()) throw error;
+      }
+    }
+  }
 
   // ── 컴퓨터랑 대결: 진행 상황은 서버가 기억하고, 단어 검사도 서버가 한다 ──
   const soloGames = new Map();
@@ -220,7 +237,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, bra
       const remembered = computer.how === 'memory'; // 📒 한방 노트에서 꺼낸 단어인데 한방이 아니면 뒤에서 다시 분류한다
       if (remembered && known === true) recheckShot(game.dictionary, computer.word);
       game.pending = known === undefined
-        ? { word: computer.word, promise: dictionary.hasContinuation(game.dictionary, computerSyllable)
+        ? { word: computer.word, promise: continuationWithRetry(game.dictionary, computerSyllable, () => !game.finished && game.lastWord === computer.word)
           .then((has) => { if (has && remembered) recheckShot(game.dictionary, computer.word); return has; }).catch(() => true) }
         : null;
       res.json({ ok: true, player, computer, nextStarts: allowedStarts(computerSyllable), finished: false, checkOneShot: Boolean(game.pending), score: game.score });
@@ -359,7 +376,8 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, bra
     const known = dictionary.knownContinuation(room.dictionary, syllable);
     if (known === true) return;
     if (known === false) { oneShotHit(room, game, entry); return; }
-    dictionary.hasContinuation(room.dictionary, syllable).then((has) => { if (!has) oneShotHit(room, game, entry); }).catch(() => {});
+    const stillNeeded = () => rooms.get(room.code) === room && room.game === game && room.state === 'playing' && game.lastWord === entry.word;
+    continuationWithRetry(room.dictionary, syllable, stillNeeded).then((has) => { if (!has) oneShotHit(room, game, entry); }).catch(() => {});
   }
   function oneShotHit(room, game, entry) {
     // 그사이 게임이 끝났거나 끝말이 이미 바뀌었으면 아무것도 하지 않는다.

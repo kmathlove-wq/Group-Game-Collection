@@ -107,14 +107,21 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return { found: false, reason: same.length ? '명사가 아니라서 쓸 수 없어요.' : `${configOf(dictionary).name}에 없는 단어예요.` };
   }
 
-  async function askContinuation(dictionary, syllable) {
-    for (const start of allowedStarts(syllable)) {
+  // 시작 글자(두음 변형 포함)들을 한꺼번에 묻고, 하나라도 "있다"가 오면 나머지를 기다리지 않고 바로 답한다.
+  // 하나라도 묻지 못했는데 나머지가 다 "없다"면 한방이라고 단정할 수 없으므로 실패로 돌려준다.
+  function askContinuation(dictionary, syllable) {
+    const askOne = async (start) => {
       const first = await search(dictionary, start, 'start');
       if (first.items.some(playable)) return true;
       // 첫 묶음이 전부 한 글자 단어 등으로 걸러져도 뒤에 더 있으면 한 묶음만 더 본다(P07과 같은 기준).
-      if (first.total > PAGE_SIZE && (await search(dictionary, start, 'start', 2)).items.some(playable)) return true;
-    }
-    return false;
+      return first.total > PAGE_SIZE && (await search(dictionary, start, 'start', 2)).items.some(playable);
+    };
+    const starts = allowedStarts(syllable);
+    return new Promise((resolve, reject) => {
+      let left = starts.length; let failure = null;
+      const settle = () => { if (--left === 0) (failure ? reject(failure) : resolve(false)); };
+      for (const start of starts) askOne(start).then((has) => (has ? resolve(true) : settle()), (error) => { failure = error; settle(); });
+    });
   }
 
   // 단어장에 이미 있으면 바로 답한다(true/false). 모르면 undefined — 사전에 묻지 않는다.
@@ -152,13 +159,18 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   // prefer(단어) → 점수. 주어지면 점수가 가장 높은 후보들 중에서만 고른다(성장 모드의 공격·방어).
   async function pickWord(dictionary, syllable, usedWords, { dueum = true, extraPage = true, prefer = null } = {}) {
     const candidates = new Map();
-    for (const start of dueum ? allowedStarts(syllable) : [syllable]) {
+    // 시작 글자(두음 변형 포함)마다 차례로 묻지 않고 한꺼번에 물어서 기다리는 시간을 줄인다.
+    const starts = dueum ? allowedStarts(syllable) : [syllable];
+    const pagesOf = async (start) => {
       const first = await search(dictionary, start, 'start');
-      const pages = [first];
       const pageCount = Math.min(RANDOM_PAGE_MAX, Math.ceil(first.total / PAGE_SIZE));
       // 늘 같은 단어만 나오지 않게, 결과가 많으면 다른 묶음 하나를 더 섞는다.
-      if (extraPage && pageCount > 1) pages.push(await search(dictionary, start, 'start', 2 + Math.floor(random() * (pageCount - 1))).catch(() => ({ items: [] })));
-      for (const page of pages) {
+      if (!extraPage || pageCount <= 1) return [first];
+      return [first, await search(dictionary, start, 'start', 2 + Math.floor(random() * (pageCount - 1))).catch(() => ({ items: [] }))];
+    };
+    const found = await Promise.all(starts.map(pagesOf));
+    for (const [i, start] of starts.entries()) {
+      for (const page of found[i]) {
         for (const item of page.items) {
           if (item.word[0] === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));
         }
