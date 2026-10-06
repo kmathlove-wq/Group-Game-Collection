@@ -13,8 +13,11 @@ const REQUEST_TIMEOUT_MS = 8_000;
 const HEDGE_MS = 1_500;
 const EXTRA_PAGE_KEEP_MS = 30_000;
 const SLOW_LOG_MS = 2_000; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
-const PAGE_SIZE = 100;
-const RANDOM_PAGE_MAX = 10;
+// 'start' 질문 한 묶음의 단어 수. 100개씩 받으면 사전 서버가 3초쯤 걸려서 40개로 줄였다(2026-10 실측 비교).
+// 무작위 묶음은 앞쪽 약 1,000개 안에서 고르도록 묶음 번호 상한을 25로 둔다(예전 100개 × 10묶음과 같은 범위).
+const PAGE_SIZE = 40;
+const RANDOM_PAGE_MAX = 25;
+const END_PAGE_SIZE = 100; // 미리 공부하기의 "○로 끝나는 단어"는 속도보다 많이 받는 게 중요해서 100개씩
 const FEW_WORDS = 5; // 이어 갈 단어가 이만큼 이하면 목록을 기억해 "이미 나온 단어"를 빼고 한방 여부를 판단한다
 
 class DictionaryError extends Error {}
@@ -255,9 +258,9 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   async function wordsEndingWith(dictionary, syllable, pages = 3) {
     const found = new Map();
     for (let page = 1; page <= pages; page += 1) {
-      const { items, total } = await search(dictionary, syllable, 'end', page);
+      const { items, total } = await search(dictionary, syllable, 'end', page, END_PAGE_SIZE);
       for (const item of items) if (item.word.at(-1) === syllable && playable(item) && !found.has(item.word)) found.set(item.word, definitionOf(item));
-      if (page * PAGE_SIZE >= total) break;
+      if (page * END_PAGE_SIZE >= total) break;
     }
     return [...found].map(([word, definition]) => ({ word, definition }));
   }

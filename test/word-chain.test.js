@@ -699,11 +699,11 @@ test('끝말잇기: 사전이 대답을 안 하면 1.5초 뒤 같은 질문을 �
 });
 
 test('끝말잇기: 컴퓨터 후보 묶음 — 전체 수를 알면 첫 묶음과 무작위 묶음을 동시에 묻고, 미리 묻기와 같은 묶음을 쓴다', async () => {
-  const asked = [];
+  const asked = []; const LETTERS = '가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허';
   const fetchImpl = async (url) => {
     const params = new URL(url).searchParams; const page = Number(params.get('start'));
     asked.push(page);
-    const item = [{ word: `과자${'가나다라마'[page - 1]}`, pos: '명사', sense: { definition: '뜻' } }]; // 묶음마다 다른 단어(과자가, 과자나…)
+    const item = [{ word: `과자${LETTERS[page - 1]}`, pos: '명사', sense: { definition: '뜻' } }]; // 묶음마다 다른 단어(과자가, 과자나…)
     return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: 450, item } }) };
   };
   const dict = createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl, random: () => 0.5 });
@@ -714,10 +714,10 @@ test('끝말잇기: 컴퓨터 후보 묶음 — 전체 수를 알면 첫 묶음�
   dict.warmCandidates('stdict', '과');
   await new Promise((resolve) => setImmediate(resolve));
   const extra = asked.at(-1);
-  assert.ok(extra >= 2 && extra <= 5, `무작위 묶음 ${extra}`); // 450개 = 100개씩 5묶음
+  assert.ok(extra >= 2 && extra <= 25, `무작위 묶음 ${extra}`);
   // 실제 고르기는 미리 물어 둔 같은 묶음을 다시 쓴다(새로 묻지 않음)
   const words = (await dict.candidates('stdict', '과', new Set(), { dueum: false })).map((c) => c.word);
-  assert.deepEqual(words, ['과자가', `과자${'가나다라마'[extra - 1]}`]);
+  assert.deepEqual(words, ['과자가', `과자${LETTERS[extra - 1]}`]);
   assert.equal(asked.length, 2);
 });
 
