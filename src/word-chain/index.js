@@ -1,7 +1,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
-const { precheck, lastSyllable, allowedStarts } = require('./rules');
+const { precheck, typedWord, lastSyllable, allowedStarts } = require('./rules');
 const { DictionaryError, DICTIONARIES } = require('./dictionary');
 const { createBrain, strengthOf } = require('./brain');
 
@@ -35,7 +35,7 @@ const dictionaryCode = (value) => (Object.hasOwn(DICTIONARIES, value) ? value : 
 // 단어 하나를 규칙 → 사전 → (첫 단어면) 한방단어 순서로 검사한다. 빠른 검사부터 해서 사전 호출을 아낀다.
 // warm = true(컴퓨터 대결)면 컴퓨터가 쓸 후보 묶음도 미리 물어 둔다(여럿이 방엔 컴퓨터가 없으니 묻지 않는다).
 async function checkWord(dictionary, dictName, raw, previousWord, usedWords, { warm = false } = {}) {
-  const word = String(raw ?? '').replace(/\s/g, '').slice(0, 40);
+  const word = typedWord(raw); // 띄어쓰기·특수문자는 지우고 검사한다
   const problem = precheck(word, previousWord, usedWords);
   if (problem) return { ok: false, message: problem };
   // 규칙을 통과하면 사전 확인을 기다리는 동안 이 단어 끝 글자의 한방 여부도 미리 물어 둔다(동시에 묻기).
@@ -654,7 +654,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (rooms.get(room.code) !== room || room.game !== game || game.checkToken !== token) return ack({ ok: false, message: '차례가 이미 넘어갔어요.' });
       game.checking = false; game.checkToken = null;
       if (!result.ok) {
-        const tried = String(raw?.word ?? '').replace(/\s/g, '').slice(0, 20);
+        const tried = typedWord(raw?.word).slice(0, 20);
         if (tried) addChat(room, { type: 'reject', userId: player.userId, color: player.color, text: `${player.nickname}: ${tried} ✗ ${result.message}` });
         if (room.turnTime) startTimer(room, Math.max(game.pausedMs, Math.min(MIN_RESUME_MS, room.turnTime * secondMs)));
         game.pausedMs = null;

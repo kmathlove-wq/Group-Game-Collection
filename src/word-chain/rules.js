@@ -54,6 +54,11 @@ function cleanWord(word) {
 }
 
 // 사전에 묻기 전에 먼저 검사할 수 있는 규칙. 통과하면 null, 아니면 이유 문장을 돌려준다.
+// 사람이 입력한 단어 다듬기: 띄어쓰기와 특수문자(!?-~·, 이모지 등)는 자동으로 지운다('사과!' → '사과').
+// 글자(한글·영어 등)와 숫자는 남겨서, 한글이 아니면 precheck가 "완성된 한글 글자만"이라고 알려 준다.
+function typedWord(raw) {
+  return String(raw ?? '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 40);
+}
 function precheck(word, previousWord, usedWords) {
   if (!word) return '단어를 입력해 주세요.';
   if (!/^[가-힣]+$/.test(word)) return '완성된 한글 글자만 입력할 수 있어요.';
@@ -67,4 +72,4 @@ function precheck(word, previousWord, usedWords) {
   return null;
 }
 
-module.exports = { dueumVariant, dueumReverseVariants, allowedStarts, lastSyllable, cleanWord, precheck, WORD_MIN, WORD_MAX };
+module.exports = { typedWord, dueumVariant, dueumReverseVariants, allowedStarts, lastSyllable, cleanWord, precheck, WORD_MIN, WORD_MAX };

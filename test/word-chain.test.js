@@ -751,3 +751,16 @@ test('끝말잇기: 여럿이 방과 첫 단어 막힘도 성장 컴퓨터가 �
   assert.deepEqual(notes(brain, 'stdict'), { shot: ['과늄', '알루미늄'], trap: ['공사'], risky: ['사과'] });
   assert.equal(brain.has('stdict', '사과', 'hard'), true); // '과' 뒤 1개 → 🧩
 });
+
+test('끝말잇기: 특수문자·띄어쓰기는 자동으로 지우고 낸다', async (t) => {
+  assert.equal(R.typedWord(' 사과! '), '사과');
+  assert.equal(R.typedWord('사-과?~'), '사과');
+  assert.equal(R.typedWord('🍎사과…'), '사과');
+  assert.equal(R.typedWord('사과a1'), '사과a1'); // 영어·숫자는 남겨서 "한글만" 안내를 받는다
+  const { url } = await startServer(t);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
+  assert.match((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '!!!' })).message, /입력/);
+  assert.match((await post(`${url}/api/word-chain/solo/${id}/word`, { word: 'apple' })).message, /한글/);
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사과!!' });
+  assert.equal(reply.player.word, '사과'); assert.equal(reply.computer.word, '과자');
+});
