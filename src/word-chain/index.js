@@ -33,18 +33,21 @@ function text(value, maxLength) {
 const dictionaryCode = (value) => (Object.hasOwn(DICTIONARIES, value) ? value : 'stdict');
 
 // 단어 하나를 규칙 → 사전 → (첫 단어면) 한방단어 순서로 검사한다. 빠른 검사부터 해서 사전 호출을 아낀다.
-async function checkWord(dictionary, dictName, raw, previousWord, usedWords) {
+// warm = true(컴퓨터 대결)면 컴퓨터가 쓸 후보 묶음도 미리 물어 둔다(여럿이 방엔 컴퓨터가 없으니 묻지 않는다).
+async function checkWord(dictionary, dictName, raw, previousWord, usedWords, { warm = false } = {}) {
   const word = String(raw ?? '').replace(/\s/g, '').slice(0, 40);
   const problem = precheck(word, previousWord, usedWords);
   if (problem) return { ok: false, message: problem };
   // 규칙을 통과하면 사전 확인을 기다리는 동안 이 단어 끝 글자의 한방 여부도 미리 물어 둔다(동시에 묻기).
   // 그러면 단어가 통과될 때쯤 답이 와 있어서 한방이면 바로 처리되고, 컴퓨터가 단어를 찾을 때도 같은 답을 다시 쓴다.
   dictionary.hasContinuation(dictName, lastSyllable(word)).catch(() => {}); // 미리 묻기(결과는 단어장에 남는다)
+  if (warm) dictionary.warmCandidates?.(dictName, lastSyllable(word));
   try {
     const found = await dictionary.lookup(dictName, word);
     if (!found.found) return { ok: false, message: found.reason };
     if (!previousWord && !(await dictionary.hasContinuation(dictName, lastSyllable(word), usedWith(usedWords, word)))) {
-      return { ok: false, message: '첫 단어로는 한방단어(이어 말할 단어가 없는 단어)를 쓸 수 없어요.' };
+      // oneShotWord: 막힌 단어도 확실한 한방단어라 성장 컴퓨터가 배운다(부르는 쪽에서 learnChain).
+      return { ok: false, message: '첫 단어로는 한방단어(이어 말할 단어가 없는 단어)를 쓸 수 없어요.', oneShotWord: { word, definition: found.definition } };
     }
     return { ok: true, word, definition: found.definition };
   } catch (error) {
@@ -75,8 +78,6 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   app.get('/word-chain/lobby', page('word-chain-lobby.html'));
   app.get('/word-chain/room', page('word-chain-room.html'));
   const json = express.json({ limit: '2kb' });
-  // 응답과 상관없이 뒤에서 끝 글자의 한방 여부를 확인해 단어장에 남긴다.
-  const learn = (dict, syllable) => { if (dictionary.knownContinuation(dict, syllable) === undefined) dictionary.hasContinuation(dict, syllable).catch(() => {}); };
 
   app.get('/api/word-chain/status', (_req, res) => {
     res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code) })) });
@@ -108,30 +109,34 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   //   사람이 이김: 사람 A → 컴퓨터 B → 사람 C💥 / 컴퓨터가 이김: 컴퓨터 A → 사람 B → 컴퓨터 C💥
   //   C는 📒 한방, B는 🚫 조심(컴퓨터가 B를 말하면 상대가 C로 끝낼 수 있다), A는 🪤 함정.
   // C의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾았거나 이번 판에서만 막힌 경우는 빼려고).
-  function learnWin(game, known) {
-    const chain = [...game.used]; // Set은 넣은 순서를 지키므로 곧 단어가 나온 순서다
-    const [a, b, c] = [chain.at(-3), chain.at(-2), chain.at(-1)]; // 짧은 판이면 a·b가 없을 수 있다
+  // chain: 한 끝말 줄기에서 나온 단어들(순서대로), defOf(단어) → 뜻. 혼자 모드·여럿이 방·첫 단어 막힘이 모두 이걸로 배운다.
+  function learnChain(dict, chain, defOf, known) {
+    const [a, b, c] = [chain.at(-3), chain.at(-2), chain.at(-1)]; // 짧은 줄기면 a·b가 없을 수 있다
+    if (!c) return;
     const note = () => {
-      brain.remember(game.dictionary, c, game.defs.get(c), 'shot');
-      if (b) brain.remember(game.dictionary, b, game.defs.get(b), 'risky');
+      brain.remember(dict, c, defOf(c), 'shot');
+      if (b) brain.remember(dict, b, defOf(b), 'risky');
       // 🪤 A 뒤에 이어 갈 단어가 3개 이하일 때만 함정이다(요요 → '요'로 시작하는 단어는 많아서 함정이 못 된다).
       if (a) {
-        dictionary.countContinuation(game.dictionary, lastSyllable(a), TRAP_LIMIT)
-          .then((count) => { if (count <= TRAP_LIMIT) brain.remember(game.dictionary, a, game.defs.get(a), 'trap'); })
+        dictionary.countContinuation(dict, lastSyllable(a), TRAP_LIMIT)
+          .then((count) => { if (count <= TRAP_LIMIT) brain.remember(dict, a, defOf(a), 'trap'); })
           .catch(() => {});
       }
     };
-    if (known === false && dictionary.knownContinuation(game.dictionary, lastSyllable(c), usedWith(new Set(), c)) === false) { note(); return; }
+    if (known === false && dictionary.knownContinuation(dict, lastSyllable(c), usedWith(new Set(), c)) === false) { note(); return; }
     // 이번 판에서만 막힌 경우(이어 갈 단어가 앞에서 이미 다 나옴)는 다음 판엔 한방이 아니므로, C 자신만 뺀 채로 다시 판단한다.
-    dictionary.hasContinuation(game.dictionary, lastSyllable(c), usedWith(new Set(), c)).then((has) => { if (!has) note(); }).catch(() => {});
+    dictionary.hasContinuation(dict, lastSyllable(c), usedWith(new Set(), c)).then((has) => { if (!has) note(); }).catch(() => {});
   }
+  // 혼자 모드(기본·성장 모두): 이 판에 나온 단어 순서(Set은 넣은 순서를 지킨다)로 배운다.
+  const learnWin = (game, known) => learnChain(game.dictionary, [...game.used], (word) => game.defs.get(word), known);
+  // 첫 단어로 한방단어를 내서 막혔을 때: 그 단어 하나를 📒로 배운다.
+  const learnBlocked = (dict, { word, definition }) => learnChain(dict, [word], () => definition, undefined);
   // 📒 한방 노트의 단어가 이제는 한방이 아니라고 판정됐을 때(사전에 새 단어가 생기는 등): 게임은 그대로 두고
   // 뒤에서 조용히 이어 갈 단어 수를 세어, 10개 이하면 🧩 어려운 노트로 옮기고 더 많으면 노트에서 지운다.
-  // 🧩 성장 모드에서 나온 단어(나·컴퓨터 모두)마다 뒤에서 조용히 이어 갈 단어 수를 세어, 1~10개면 어려운 노트에 적는다.
+  // 🧩 나온 단어(혼자 모드 기본·성장, 여럿이 방 — 사람·컴퓨터 모두)마다 뒤에서 조용히 이어 갈 단어 수를 세어, 1~10개면 어려운 노트에 적는다.
   // 0개(한방)이거나 이어 갈 단어가 자기 자신뿐인 단어(늡늡)는 📒 한방 쪽에서 다룬다. 같은 글자를 이미 물어 봤으면 30분 캐시를 다시 써서 거의 공짜다.
-  function noteHard(game, { word, definition }) {
-    if (game.mode !== 'growth') return;
-    const dict = game.dictionary; const syllable = lastSyllable(word);
+  function noteHard(dict, { word, definition }) {
+    const syllable = lastSyllable(word);
     if (brain.has(dict, word, 'hard') || brain.has(dict, word, 'shot')) return;
     dictionary.countContinuation(dict, syllable, HARD_LIMIT).then((count) => {
       const deadEnd = dictionary.knownContinuation(dict, syllable, usedWith(new Set(), word)) === false;
@@ -288,7 +293,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       }
       catch (error) { return res.status(503).json({ ok: false, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' }); }
       if (!computer) return res.status(503).json({ ok: false, message: '컴퓨터가 첫 단어를 고르지 못했어요. 다시 시작해 주세요.' });
-      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game, computer);
+      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game.dictionary, computer);
     }
     if (soloGames.size >= SOLO_MAX) soloGames.delete(soloGames.keys().next().value);
     const id = crypto.randomUUID();
@@ -307,10 +312,14 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const startedAt = Date.now(); let checkedAt = startedAt;
     const took = () => ({ check: checkedAt - startedAt, computer: Date.now() - checkedAt });
     try {
-      const result = await checkWord(dictionary, game.dictionary, req.body?.word, game.lastWord, game.used);
+      const result = await checkWord(dictionary, game.dictionary, req.body?.word, game.lastWord, game.used, { warm: true });
       checkedAt = Date.now();
-      if (!result.ok) return res.json({ ...result, took: took() });
-      game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game, result);
+      if (!result.ok) {
+        if (result.oneShotWord) learnBlocked(game.dictionary, result.oneShotWord);
+        const { oneShotWord, ...reply } = result;
+        return res.json({ ...reply, took: took() });
+      }
+      game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game.dictionary, result);
       const playerSyllable = lastSyllable(result.word);
       // 내 단어가 이미 단어장에 한방으로 있으면 컴퓨터에게 물어볼 것도 없이 바로 승리.
       const playerOneShot = dictionary.knownContinuation(game.dictionary, playerSyllable, game.used) === false;
@@ -324,17 +333,16 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       const player = { word: result.word, definition: result.definition };
       if (!computer) {
         game.finished = true; game.lastWord = result.word;
-        if (game.mode === 'growth') learnWin(game, playerOneShot ? false : undefined);
+        learnWin(game, playerOneShot ? false : undefined); // 기본 모드에서 이긴 판도 성장 컴퓨터가 배운다
         res.json({ ok: true, player, computer: null, finished: true, result: 'win', oneShot: playerOneShot, score: game.score, took: took() });
-        if (game.mode !== 'growth' && !playerOneShot) learn(game.dictionary, playerSyllable); // 응답을 보낸 뒤 뒤에서 단어장에 남긴다
         return;
       }
-      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game, computer);
+      game.used.add(computer.word); game.defs.set(computer.word, computer.definition); game.lastWord = computer.word; noteHard(game.dictionary, computer);
       const computerSyllable = lastSyllable(computer.word);
       const known = dictionary.knownContinuation(game.dictionary, computerSyllable, game.used);
       if (known === false) { // 컴퓨터가 한방단어를 썼다는 걸 이미 알면 바로 끝낸다
         game.finished = true;
-        if (game.mode === 'growth') learnWin(game, known); // 컴퓨터가 이긴 판도 기억한다
+        learnWin(game, known); // 컴퓨터가 이긴 판도 기억한다(기본 모드도 성장 컴퓨터가 배운다)
         return res.json({ ok: true, player, computer, finished: true, result: 'lose', oneShot: true, score: game.score, took: took() });
       }
       // 모르면 게임은 그대로 진행하고, 뒤에서 확인해 단어장에 남긴다(화면은 /one-shot으로 결과를 따로 받는다).
@@ -356,7 +364,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const has = await Promise.race([pending.promise, new Promise((resolve) => setTimeout(resolve, ONE_SHOT_WAIT_MS, true))]);
     if (has || game.finished || game.lastWord !== pending.word) return res.json({ ok: true, oneShot: false });
     game.finished = true; game.pending = null;
-    if (game.mode === 'growth') learnWin(game, false); // 컴퓨터가 이긴 판도 기억한다
+    learnWin(game, false); // 컴퓨터가 이긴 판도 기억한다(기본 모드도 성장 컴퓨터가 배운다)
     res.json({ ok: true, oneShot: true, word: pending.word, result: 'lose', score: game.score });
   });
 
@@ -490,6 +498,10 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const victim = room.players.get(game.turnUserId);
     if (!victim) return;
     entry.oneShot = true;
+    // 이 끝말 줄기(마지막 fresh 단어부터)의 마지막 세 단어를 성장 컴퓨터가 배운다.
+    const from = game.words.findLastIndex((w) => w.fresh);
+    const chain = game.words.slice(Math.max(0, from));
+    learnChain(room.dictionary, chain.map((w) => w.word), (word) => chain.find((w) => w.word === word)?.definition ?? '', false);
     if (game.checking) { game.checking = false; game.checkToken = null; } // 확인 중이던 단어는 어차피 이어질 수 없다
     io.to(channel(room)).emit('wc:one-shot', { word: entry.word, userId: entry.userId, victimId: victim.userId });
     eliminate(room, victim, `💥 한방단어 '${entry.word}'! ${victim.nickname}님은 이어 갈 단어가 없어 탈락했어요.`);
@@ -646,10 +658,14 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
         if (tried) addChat(room, { type: 'reject', userId: player.userId, color: player.color, text: `${player.nickname}: ${tried} ✗ ${result.message}` });
         if (room.turnTime) startTimer(room, Math.max(game.pausedMs, Math.min(MIN_RESUME_MS, room.turnTime * secondMs)));
         game.pausedMs = null;
-        emitState(room); return ack(result);
+        if (result.oneShotWord) learnBlocked(room.dictionary, result.oneShotWord); // 첫 단어로 막힌 한방단어도 배운다
+        const { oneShotWord, ...reply } = result;
+        emitState(room); return ack(reply);
       }
-      const entry = { word: result.word, definition: result.definition, userId: player.userId, nickname: player.nickname, color: player.color };
+      // fresh: 새 끝말 줄기의 첫 단어(게임 시작·탈락 직후). 한방 탈락 때 이 줄기 단어만 배우려고 표시한다.
+      const entry = { word: result.word, definition: result.definition, userId: player.userId, nickname: player.nickname, color: player.color, fresh: !game.lastWord };
       game.words.push(entry);
+      noteHard(room.dictionary, result);
       game.used.add(result.word); game.lastWord = result.word; player.score += 1;
       io.to(channel(room)).emit('wc:word:accepted', { word: result.word, userId: player.userId });
       ack({ ok: true, word: result.word });

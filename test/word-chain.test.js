@@ -341,16 +341,8 @@ test('끝말잇기 성장 모드: 진 판(수산화나트륨→윰차→차풰�
     return { info, say: (word) => post(`${url}/api/word-chain/solo/${id}/word`, { word }) };
   };
 
-  // 기본 모드는 이겨도 아무것도 배우지 않는다.
-  let game = await play('basic');
-  assert.equal(game.info, null);
-  assert.equal((await game.say('수산화나트륨')).computer.word, '윰차');
-  assert.equal((await game.say('차풰')).result, 'win');
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(brain.count('opendict'), 0);
-
   // 성장 모드에서 이기면 마지막 세 단어를 배운다.
-  game = await play('growth');
+  let game = await play('growth');
   assert.equal(game.info.level, 5);
   assert.equal((await game.say('수산화나트륨')).computer.word, '윰차');
   assert.equal((await game.say('차풰')).result, 'win');
@@ -587,18 +579,19 @@ test('끝말잇기 성장 모드: 컴퓨터가 한방단어로 이긴 판도 배
   const { url } = await startServer(t, { brain, random: () => 0, lookaheadMs: 200 }, words);
   const wait = async (check) => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise((resolve) => setTimeout(resolve, 5)); };
 
-  // 기본 모드에서 져도 배우지 않는다.
+  // 기본 모드에서 져도 성장 컴퓨터가 배운다(공알 → 알루미늄💥: 알루미늄 한방, 공알 조심).
   let { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
   await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
   await (await fetch(`${url}/api/word-chain/solo/${id}/one-shot`)).json();
-  assert.equal(brain.count('stdict'), 0);
+  await wait(() => brain.has('stdict', '알루미늄', 'shot'));
+  assert.deepEqual(notes(brain, 'stdict'), { shot: ['알루미늄'], trap: [], risky: ['공알'] });
 
   // 성장 모드: 나 '가자' → 컴퓨터 '자공' → 나 '공알' → 컴퓨터 '알루미늄' 💥 ('늄'은 이미 한방 글자로 알고 있음)
   ({ id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'growth' }));
   assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '가자' })).computer.word, '자공');
   const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '공알' });
   assert.equal(reply.computer.word, '알루미늄'); assert.equal(reply.result, 'lose');
-  await wait(() => brain.count('stdict') >= 3);
+  await wait(() => brain.has('stdict', '자공', 'trap'));
   assert.deepEqual(brain.words('stdict', 'shot'), ['알루미늄']);
   assert.deepEqual(brain.words('stdict', 'risky'), ['공알']); // 내가 말한 단어 = 컴퓨터가 조심할 단어
   assert.deepEqual(brain.words('stdict', 'trap'), ['자공']);
@@ -626,7 +619,7 @@ test('끝말잇기 성장 모드: 🪤 함정은 이어 갈 단어가 3개 이�
   assert.equal(brain.has('stdict', '요요', 'trap'), false);
 });
 
-test('끝말잇기 성장 모드: 나온 단어 중 이어 갈 단어가 1~10개인 단어는 🧩 어려운 노트에 적는다(기본 모드는 안 적음)', async (t) => {
+test('끝말잇기 성장 모드: 나온 단어 중 이어 갈 단어가 1~10개인 단어는 🧩 어려운 노트에 적는다(기본 모드도)', async (t) => {
   const manyJa = [...'가나다라마바사아차카타'].map((c) => `자${c}`); // '자'로 시작하는 단어 11개(그 뒤 '가' 등은 이어 갈 단어 없음)
   const words = ['사과', '과자', ...manyJa];
   const brain = createBrain(null);
@@ -638,8 +631,6 @@ test('끝말잇기 성장 모드: 나온 단어 중 이어 갈 단어가 1~10개
     await new Promise((resolve) => setTimeout(resolve, 30)); // 뒤에서 세는 시간
   };
   await play('basic');
-  assert.equal(brain.count('stdict'), 0);
-  await play('growth');
   assert.deepEqual(brain.words('stdict', 'hard'), ['사과']); // '과' 뒤 1개(과자) → 🧩
   // 과자('자' 뒤 11개)는 너무 많아서, 자가('가' 뒤 0개)는 한방이라서 🧩가 아니다
   assert.deepEqual(brain.words('stdict', 'shot'), ['자가']);
@@ -705,4 +696,58 @@ test('끝말잇기: 사전이 대답을 안 하면 1.5초 뒤 같은 질문을 �
   await assert.rejects(dict.lookup('stdict', '사과'), /연결하지 못했어요/);
   ({ dict } = makeDict(['hang', 'hang']));
   await assert.rejects(dict.lookup('stdict', '사과'), /응답이 늦어요/);
+});
+
+test('끝말잇기: 컴퓨터 후보 묶음 — 전체 수를 알면 첫 묶음과 무작위 묶음을 동시에 묻고, 미리 묻기와 같은 묶음을 쓴다', async () => {
+  const asked = [];
+  const fetchImpl = async (url) => {
+    const params = new URL(url).searchParams; const page = Number(params.get('start'));
+    asked.push(page);
+    const item = [{ word: `과자${'가나다라마'[page - 1]}`, pos: '명사', sense: { definition: '뜻' } }]; // 묶음마다 다른 단어(과자가, 과자나…)
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: 450, item } }) };
+  };
+  const dict = createDictionary({ env: { STDICT_API_KEY: 'k' }, fetchImpl, random: () => 0.5 });
+  // 처음 보는 글자: 전체 수를 모르니 첫 묶음만
+  assert.deepEqual((await dict.candidates('stdict', '과', new Set(), { dueum: false })).map((c) => c.word), ['과자가']);
+  assert.deepEqual(asked, [1]);
+  // 미리 묻기: 전체 수(450)를 아니까 무작위 묶음을 바로 묻는다(첫 묶음은 이미 기억)
+  dict.warmCandidates('stdict', '과');
+  await new Promise((resolve) => setImmediate(resolve));
+  const extra = asked.at(-1);
+  assert.ok(extra >= 2 && extra <= 5, `무작위 묶음 ${extra}`); // 450개 = 100개씩 5묶음
+  // 실제 고르기는 미리 물어 둔 같은 묶음을 다시 쓴다(새로 묻지 않음)
+  const words = (await dict.candidates('stdict', '과', new Set(), { dueum: false })).map((c) => c.word);
+  assert.deepEqual(words, ['과자가', `과자${'가나다라마'[extra - 1]}`]);
+  assert.equal(asked.length, 2);
+});
+
+test('끝말잇기: 여럿이 방과 첫 단어 막힘도 성장 컴퓨터가 배운다', async (t) => {
+  const brain = createBrain(null);
+  const { url } = await startServer(t, { brain }, ['공사', '사과', '과늄', '알루미늄']);
+  const wait = async (check) => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise((resolve) => setTimeout(resolve, 5)); };
+
+  // 혼자 모드(기본): 첫 단어로 한방단어를 내서 막혀도 그 단어를 📒로 배운다.
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
+  const blocked = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '알루미늄' });
+  assert.match(blocked.message, /한방단어/); assert.equal(blocked.oneShotWord, undefined); // 화면엔 학습 정보를 보내지 않는다
+  await wait(() => brain.has('stdict', '알루미늄', 'shot'));
+  assert.equal(brain.has('stdict', '알루미늄', 'shot'), true);
+
+  // 여럿이 방: 공사 → 사과 → 과늄💥 로 탈락하면 이 줄기의 세 단어를 배운다('사' 뒤엔 사과 하나뿐이라 공사는 함정).
+  const a = await connect(url); const b = await connect(url);
+  t.after(() => { a.close(); b.close(); });
+  const { code } = await emitAck(a, 'wc:room:create', { userId: 'L-a', nickname: '가', turnTime: 0 });
+  assert.equal((await emitAck(b, 'wc:room:join', { userId: 'L-b', nickname: '나', code })).ok, true);
+  assert.equal((await emitAck(b, 'wc:room:ready', true)).ok, true);
+  const playing = new Promise((resolve) => a.on('wc:room:state', (room) => { if (room.state === 'playing') resolve(room); }));
+  assert.equal((await emitAck(a, 'wc:game:start')).ok, true);
+  await playing; a.removeAllListeners('wc:room:state');
+  assert.equal((await emitAck(a, 'wc:word', { word: '공사' })).ok, true);
+  assert.equal((await emitAck(b, 'wc:word', { word: '사과' })).ok, true);
+  const boom = new Promise((resolve) => b.once('wc:one-shot', resolve));
+  assert.equal((await emitAck(a, 'wc:word', { word: '과늄' })).ok, true);
+  await boom;
+  await wait(() => brain.has('stdict', '공사', 'trap'));
+  assert.deepEqual(notes(brain, 'stdict'), { shot: ['과늄', '알루미늄'], trap: ['공사'], risky: ['사과'] });
+  assert.equal(brain.has('stdict', '사과', 'hard'), true); // '과' 뒤 1개 → 🧩
 });

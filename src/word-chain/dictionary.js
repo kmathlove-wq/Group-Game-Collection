@@ -11,6 +11,7 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_MAX = 5_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const HEDGE_MS = 1_500;
+const EXTRA_PAGE_KEEP_MS = 30_000;
 const SLOW_LOG_MS = 2_000; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
 const PAGE_SIZE = 100;
 const RANDOM_PAGE_MAX = 10;
@@ -138,7 +139,38 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
 
 
   const search = (dictionary, query, method, start = 1, num = PAGE_SIZE) =>
-    remember(`${dictionary}|${method}|${query}|${start}|${num}`, () => request(dictionary, query, method, start, num));
+    remember(`${dictionary}|${method}|${query}|${start}|${num}`, () => request(dictionary, query, method, start, num).then((page) => {
+      if (method === 'start' && start === 1 && num === PAGE_SIZE) totals.set(`${dictionary}|${query}`, page.total);
+      return page;
+    }));
+
+  // 컴퓨터 단어 고르기는 첫 묶음 + 다양하게 고르려고 무작위 묶음 하나를 더 본다. 예전엔 첫 묶음이 와야 전체 수를 알고
+  // 무작위 묶음을 물어서 "3초 + 3초"가 걸렸다. 이제 시작 글자별 전체 수를 기억해 두고 두 묶음을 동시에 묻는다.
+  // 처음 보는 글자는 첫 묶음만 쓴다. 고른 무작위 묶음 번호는 30초 동안 같게 해서, 미리 묻기와 실제 고르기가 같은 답을 함께 쓴다.
+  const totals = new Map();      // "사전|시작 글자" → 전체 단어 수
+  const extraPages = new Map();  // "사전|시작 글자" → { page, at }
+  function extraPageFor(dictionary, start) {
+    const key = `${dictionary}|${start}`;
+    const total = totals.get(key);
+    const pageCount = total ? Math.min(RANDOM_PAGE_MAX, Math.ceil(total / PAGE_SIZE)) : 0;
+    if (pageCount <= 1) return null;
+    const chosen = extraPages.get(key);
+    if (chosen && Date.now() - chosen.at < EXTRA_PAGE_KEEP_MS && chosen.page <= pageCount) return chosen.page;
+    const page = 2 + Math.floor(random() * (pageCount - 1));
+    extraPages.set(key, { page, at: Date.now() });
+    if (extraPages.size > CACHE_MAX) extraPages.delete(extraPages.keys().next().value);
+    return page;
+  }
+  // 시작 글자 하나의 후보 묶음들(첫 묶음 + 무작위 묶음)을 동시에 묻는다.
+  function pagesOf(dictionary, start, extraPage = true) {
+    const page = extraPage ? extraPageFor(dictionary, start) : null;
+    return Promise.all([search(dictionary, start, 'start'), page ? search(dictionary, start, 'start', page).catch(() => ({ items: [] })) : null])
+      .then((pages) => pages.filter(Boolean));
+  }
+  // 내 단어를 확인하는 동안 컴퓨터가 쓸 후보 묶음을 미리 물어 둔다(결과는 캐시에 남아 실제 고르기가 다시 쓴다).
+  const warmCandidates = (dictionary, syllable) => {
+    for (const start of allowedStarts(syllable)) pagesOf(dictionary, start).catch(() => {});
+  };
 
   // 이 단어가 사전에 있는 명사인지 확인한다.
   async function lookup(dictionary, word) {
@@ -246,14 +278,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     const candidates = new Map();
     // 시작 글자(두음 변형 포함)마다 차례로 묻지 않고 한꺼번에 물어서 기다리는 시간을 줄인다.
     const starts = dueum ? allowedStarts(syllable) : [syllable];
-    const pagesOf = async (start) => {
-      const first = await search(dictionary, start, 'start');
-      const pageCount = Math.min(RANDOM_PAGE_MAX, Math.ceil(first.total / PAGE_SIZE));
-      // 늘 같은 단어만 나오지 않게, 결과가 많으면 다른 묶음 하나를 더 섞는다.
-      if (!extraPage || pageCount <= 1) return [first];
-      return [first, await search(dictionary, start, 'start', 2 + Math.floor(random() * (pageCount - 1))).catch(() => ({ items: [] }))];
-    };
-    const found = await Promise.all(starts.map(pagesOf));
+    const found = await Promise.all(starts.map((start) => pagesOf(dictionary, start, extraPage)));
     for (const [i, start] of starts.entries()) {
       for (const page of found[i]) {
         for (const item of page.items) {
@@ -264,7 +289,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return [...candidates].map(([word, definition]) => ({ word, definition }));
   }
 
-  return { isConfigured, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
+  return { isConfigured, warmCandidates, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };

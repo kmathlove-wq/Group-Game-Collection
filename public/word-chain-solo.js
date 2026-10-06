@@ -114,7 +114,7 @@
       $('#score').textContent = String(data.score); $('#word').value = '';
       if (!data.computer) {
         message('');
-        const teach = game.mode === 'growth' ? ' 🧠 컴퓨터가 이번 판을 기억해 둘 거예요…' : '';
+        const teach = learnNote();
         finish(true, '', (data.oneShot ? `💥 한방단어! 컴퓨터가 이어 말할 단어가 없어요. 단어 ${data.score}개를 이었어요!` : `컴퓨터가 이어 말할 단어를 못 찾았어요. 단어 ${data.score}개를 이었어요!`) + teach);
         return;
       }
@@ -134,11 +134,13 @@
     }
   }
 
+  // 한방단어로 끝난 판은 어느 모드든 성장 컴퓨터가 배운다(기본 컴퓨터 자체는 그대로 무작위).
+  const learnNote = () => (game?.mode === 'growth' ? ' 🧠 컴퓨터가 이번 판을 기억해 둘 거예요.' : ' 🌱 성장 컴퓨터가 이번 판을 배울 거예요.');
   // how: 성장 모드에서 컴퓨터가 단어를 고른 방법('memory' = 기억 노트, 'attack' = 노리고 낸 단어)
   function oneShotLose(word, score, how) {
     $('#chain').lastElementChild?.classList.add('one-shot');
     const title = how === 'memory' ? '😎 지난번에 배운 단어야!' : how === 'attack' ? '🌱 컴퓨터의 공격 성공!' : '💥 컴퓨터의 한방단어!';
-    const remember = game?.mode === 'growth' ? ' 🧠 컴퓨터가 이번 판도 기억해 둘 거예요.' : '';
+    const remember = learnNote();
     finish(false, title, `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.${remember}`);
   }
   // 컴퓨터 단어가 한방단어인지 서버가 뒤에서 확인하는 동안 나는 계속 입력할 수 있다. 결과가 오면 그때 반응한다.
