@@ -756,6 +756,8 @@ test('끝말잇기: 특수문자·띄어쓰기는 자동으로 지우고 낸다'
   assert.equal(R.typedWord(' 사과! '), '사과');
   assert.equal(R.typedWord('사-과?~'), '사과');
   assert.equal(R.typedWord('🍎사과…'), '사과');
+  assert.equal(R.typedWord('수산화^나트륨'), '수산화나트륨'); // 표준국어대사전에서 복사하면 붙는 ^(띄어 쓸 수 있는 자리)·-(붙임표)
+  assert.equal(R.typedWord('늑막-염'), '늑막염');
   assert.equal(R.typedWord('사과a1'), '사과a1'); // 영어·숫자는 남겨서 "한글만" 안내를 받는다
   const { url } = await startServer(t);
   const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });
