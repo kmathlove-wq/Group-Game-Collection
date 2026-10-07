@@ -621,6 +621,17 @@ test('끝말잇기: 앞 묶음이 한 글자 낱말(정 71개)로 가득해도 �
   assert.equal((await dict.pickWord('opendict', '정', new Set(['열정']))).word, '정열');
 });
 
+test('끝말잇기 성장 모드: 상대의 🏆 필승 단어로 이어지는 단어(나가나병 → 병아리매듭)는 내지 않는다', async (t) => {
+  const brain = createBrain(null);
+  for (const word of ['기픠', '새뱍']) brain.remember('opendict', word, `${word}의 뜻`, 'shot'); // 듭기 → 기픠💥, 듭새 → 새뱍💥
+  brain.remember('opendict', '병아리매듭', '병아리매듭의 뜻', 'trap');
+  const words = ['사나', '나가나병', '나무', '무지', '무게', '병아리매듭', '듭기', '듭새', '기픠', '새뱍'];
+  const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' });
+  // 🔭로만 보면 나가나병('병' 뒤 1개)이 나무('무' 뒤 2개)보다 좋아 보이지만, 병아리매듭에 지므로 피한다.
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사나' })).computer.word, '나무');
+});
+
 test('끝말잇기: 성장 컴퓨터는 🧩 어려운 단어를 내기 전에 다시 세어, 이어 갈 단어가 많으면 내지 않고 노트에서 지운다', async (t) => {
   const brain = createBrain(null);
   brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어

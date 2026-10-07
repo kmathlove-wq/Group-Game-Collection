@@ -227,20 +227,17 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   // 성장 컴퓨터가 "내면 위험한 단어"를 거르는 검사기를 만든다. 위험한 단어:
   //   - 🚫 조심 단어, 조심 단어의 끝 글자로 끝나는 단어
   //   - 끝 글자(두음 포함) 뒤에 상대가 쓸 수 있는 📒 한방단어가 있는 단어(가돌리늄을 알면 '…가'로 끝나는 단어는 위험)
+  //   - 끝 글자 뒤에 상대가 쓸 수 있는 🏆 필승 단어가 있는 단어(나가나병 → 병아리매듭: 듭기는 기픠💥, 듭새는 새뱍💥)
   // 고를 단어가 다 위험하면(어쩔 수 없을 때)는 부르는 쪽이 전체에서 고른다.
   function safeFor(dict, used) {
     const riskyWords = new Set(brain.words(dict, 'risky'));
     const riskyEnds = new Set([...riskyWords].map(lastSyllable));
-    const killers = new Map(); // 시작 글자 → 상대가 쓸 수 있는 📒 한방단어들
-    for (const word of brain.words(dict, 'shot')) {
-      if (used.has(word)) continue;
-      const start = firstSyllable(word);
-      if (!killers.has(start)) killers.set(start, []);
-      killers.get(start).push(word);
-    }
+    const book = answerBook(dict); // 📒·🪤·🧩 노트(상대도 같은 단어로 나를 이길 수 있다)
     return (word) => {
       if (riskyWords.has(word) || riskyEnds.has(lastSyllable(word))) return false;
-      return !allowedStarts(lastSyllable(word)).some((start) => (killers.get(start) || []).some((killer) => killer !== word));
+      const after = new Set(used).add(word);
+      return !allowedStarts(lastSyllable(word)).some((start) => [...(book.get(start) || [])]
+        .some((reply) => !after.has(reply) && forcedWin(dict, reply, after, book)));
     };
   }
   async function growthPick(dict, syllable, used) {
