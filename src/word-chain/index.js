@@ -151,6 +151,13 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       if (count <= HARD_LIMIT) brain.remember(dict, word, definition, 'hard');
     }).catch(() => {}); // 사전에 못 물어보면 다음에 다시 쓸 때 또 확인한다
   }
+  // 🧩 노트에서 꺼내 쓴 단어를 뒤에서 다시 센다. 예전 세기 실수로 잘못 적힌 단어(우리말샘 '름장' — '장' 단어는 6,000개 넘음)를
+  // 이렇게 하나씩 치운다. 게임은 기다리지 않는다.
+  function recheckHard(dict, word) {
+    dictionary.countContinuation(dict, lastSyllable(word), HARD_LIMIT).then((count) => {
+      if (count > HARD_LIMIT) brain.forget(dict, word, 'hard');
+    }).catch(() => {});
+  }
   // 쓸 수 있는 🪤 함정을 찾는다. 이미 아는 바로 이어 갈 단어가 3개보다 많아진 함정은(예전에 조건 없이 적혔거나
   // 사전에 단어가 늘어남) 쓰지 않고 노트에서 지운다. 모르면 배울 때 확인했으니 믿고 쓴다.
   function findTrap(dict, starts, used, isSafe) {
@@ -348,6 +355,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       // 모르면 게임은 그대로 진행하고, 뒤에서 확인해 단어장에 남긴다(화면은 /one-shot으로 결과를 따로 받는다).
       const remembered = computer.how === 'memory'; // 📒 한방 노트에서 꺼낸 단어인데 한방이 아니면 뒤에서 다시 분류한다
       if (remembered && known === true) recheckShot(game.dictionary, computer.word);
+      if (computer.how === 'hard') recheckHard(game.dictionary, computer.word);
       game.pending = known === undefined
         ? { word: computer.word, promise: continuationWithRetry(game.dictionary, computerSyllable, game.used, () => !game.finished && game.lastWord === computer.word)
           .then((has) => { if (has && remembered) recheckShot(game.dictionary, computer.word); return has; }).catch(() => true) }

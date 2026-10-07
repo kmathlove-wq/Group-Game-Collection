@@ -525,6 +525,32 @@ test('끝말잇기: 이어 갈 단어가 자기 자신뿐인 단어(늡늡)는 �
   assert.equal(dict.knownContinuation('stdict', '늡', new Set(['사과'])), true);
 });
 
+test('끝말잇기: 앞 묶음이 한 글자 낱말로 가득해도 전체 수가 많으면 이어 갈 단어가 "많다"고 센다(우리말샘 장)', async () => {
+  // 우리말샘 '장'은 6,229개인데 앞 80개가 장(場)·장(醬)… 한 글자 낱말이라 끝말잇기에 쓸 단어가 거의 안 보인다.
+  const fetchImpl = async (url) => {
+    const params = new URL(url).searchParams;
+    const page = Number(params.get('start'));
+    const item = params.get('q') !== '장' ? [] : page === 1
+      ? [...Array.from({ length: 39 }, () => ({ word: '장', sense: { pos: '명사', definition: '한 글자 낱말' } })), { word: '장가', sense: { pos: '명사', definition: '장가' } }]
+      : Array.from({ length: 40 }, () => ({ word: '장', sense: { pos: '명사', definition: '한 글자 낱말' } }));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length ? 6229 : 0, item } }) };
+  };
+  const dict = createDictionary({ env: { OPENDICT_API_KEY: 'k' }, fetchImpl });
+  assert.ok(await dict.countContinuation('opendict', '장', 10) > 10);
+});
+
+test('끝말잇기: 성장 컴퓨터가 🧩 어려운 단어를 쓰면 뒤에서 다시 세어 이어 갈 단어가 많으면 노트에서 지운다', async (t) => {
+  const brain = createBrain(null);
+  brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어
+  const words = ['사름', '름장', ...[...'가나다라마바사아자차카'].map((c) => `장${c}`)]; // '장' 뒤 11개
+  const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' });
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사름' });
+  assert.equal(reply.computer.word, '름장'); assert.equal(reply.computer.how, 'hard');
+  for (let i = 0; i < 100 && brain.has('opendict', '름장', 'hard'); i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(brain.has('opendict', '름장', 'hard'), false);
+});
+
 test('끝말잇기: 늡늡 — 혼자 모드는 컴퓨터가 쓰면 바로 지고, 여럿이 방은 첫 단어로 못 쓰고 쓰면 다음 사람이 탈락한다', async (t) => {
   const { url } = await startServer(t, {}, ['사늡', '늡늡', '공사']);
   const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict' });

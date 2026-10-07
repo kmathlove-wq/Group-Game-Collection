@@ -243,12 +243,20 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   const fewContinuations = (dictionary, syllable) => store.entry(dictionary, syllable)?.words;
 
   // 이 글자 뒤에 이어 갈 수 있는 낱말이 몇 개인지 센다. limit을 넘으면 거기서 멈춘다(정확한 수보다 "많다"만 알면 됨).
+  // 앞 두 묶음(80개)만 보는데, 우리말샘 '장'처럼 앞쪽이 한 글자 낱말(장·장·장…)로 가득하면 쓸 수 있는 단어가 몇 개 안 보인다.
+  // 그래서 아직 못 본 단어(전체 수 total - 본 수)가 limit보다 많으면 "많다"로 본다('름장'을 🧩 어려운 단어로 잘못 적던 문제).
   async function countContinuation(dictionary, syllable, limit) {
     let count = 0;
     for (const start of allowedStarts(syllable)) {
       const first = await search(dictionary, start, 'start');
+      let seen = first.items.length;
       count += first.items.filter(playable).length;
-      if (count <= limit && first.total > PAGE_SIZE) count += (await search(dictionary, start, 'start', 2)).items.filter(playable).length;
+      if (count <= limit && first.total > PAGE_SIZE) {
+        const second = await search(dictionary, start, 'start', 2);
+        seen += second.items.length;
+        count += second.items.filter(playable).length;
+      }
+      if (first.total - seen > limit) return limit + 1;
       if (count > limit) return count;
     }
     return count;
