@@ -111,10 +111,11 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   //   C는 📒 한방, B는 🚫 조심(컴퓨터가 B를 말하면 상대가 C로 끝낼 수 있다), A는 🪤 함정.
   // C의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾았거나 이번 판에서만 막힌 경우는 빼려고).
   // chain: 한 끝말 줄기에서 나온 단어들(순서대로), defOf(단어) → 뜻. 혼자 모드·여럿이 방·첫 단어 막힘이 모두 이걸로 배운다.
-  // 📒·🪤 노트 단어(+ extra)를 시작 글자별로 묶는다. 필승 판단에서 "이 글자가 오면 낼 수 있는 단어"를 빨리 찾으려고.
+  // 📒·🪤·🧩 노트 단어(+ extra)를 시작 글자별로 묶는다. 필승 판단에서 "이 글자가 오면 낼 수 있는 단어"를 빨리 찾으려고.
+  // 🧩 어려운 노트도 넣는다: 갈륨·왕듸처럼 이어 갈 단어가 적은 단어는 함정이 되기 전에 🧩에 먼저 적혀 있다.
   function answerBook(dict, extra = []) {
     const book = new Map();
-    for (const word of [...brain.words(dict, 'shot'), ...brain.words(dict, 'trap'), ...extra]) {
+    for (const word of [...brain.words(dict, 'shot'), ...brain.words(dict, 'trap'), ...brain.words(dict, 'hard'), ...extra]) {
       if (!book.has(word[0])) book.set(word[0], new Set());
       book.get(word[0]).add(word);
     }
@@ -193,11 +194,15 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 쓸 수 있는 🪤 함정을 찾는다. 이미 아는 바로 이어 갈 단어가 3개보다 많아진 함정은(예전에 조건 없이 적혔거나
   // 사전에 단어가 늘어남) 쓰지 않고 노트에서 지운다. 모르면 배울 때 확인했으니 믿고 쓴다.
-  // 🏆 필승 함정은 이어 갈 단어가 3개를 넘어도, 위험 검사가 없어도 먼저 쓴다(상대의 모든 답에 이길 답을 이미 확인했다).
+  // 🏆 필승 단어는 이어 갈 단어가 3개를 넘어도, 위험 검사가 없어도 먼저 쓴다(상대의 모든 답에 이길 답을 이미 확인했다).
+  // 🪤 함정 노트에 없어도 🧩 어려운 노트에서 필승인 단어(갈륨)를 찾으면 쓰고 🪤에 옮겨 적는다.
   function findTrap(dict, starts, used, isSafe) {
     const book = answerBook(dict);
-    const sure = brain.find(dict, starts, used, random, 'trap', (word) => forcedWin(dict, word, used, book));
+    const isSure = (word) => forcedWin(dict, word, used, book);
+    const sure = brain.find(dict, starts, used, random, 'trap', isSure);
     if (sure) return sure;
+    const found = brain.find(dict, starts, used, random, 'hard', isSure);
+    if (found) { brain.remember(dict, found.word, found.definition, 'trap'); return found; }
     for (;;) {
       const trap = brain.find(dict, starts, used, random, 'trap', isSafe);
       if (!trap) return null;

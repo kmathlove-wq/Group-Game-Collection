@@ -561,6 +561,18 @@ test('끝말잇기 성장 모드: 🏆 필승 단어 — 갈륨(→윰차는 차
   assert.equal(reply.computer.word, '갈륨'); assert.equal(reply.computer.how, 'trap');
 });
 
+test('끝말잇기 성장 모드: 🏆 갈륨·왕듸가 🧩 어려운 노트에만 있어도 필승인 걸 알아보고 갈가외 대신 갈륨을 낸다', async (t) => {
+  const brain = createBrain(null);
+  for (const word of ['차풰', '채매앝', '이리듐']) brain.remember('opendict', word, `${word}의 뜻`, 'shot');
+  for (const word of ['갈륨', '왕듸']) brain.remember('opendict', word, `${word}의 뜻`, 'hard'); // 이어 갈 단어가 2개뿐이라 🧩에 적혀 있던 단어
+  const words = ['사갈', '갈가외', '갈륨', '외계인', '윰차', '차풰', '윰라대왕', '왕듸', '듸굴이', '이리듐', '듸림부채', '채매앝'];
+  const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' });
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사갈' });
+  assert.equal(reply.computer.word, '갈륨'); assert.equal(reply.computer.how, 'trap');
+  assert.equal(brain.has('opendict', '갈륨', 'trap'), true); // 다음부터는 🪤 함정 노트에서 바로 꺼낸다
+});
+
 test('끝말잇기: 성장 컴퓨터가 🧩 어려운 단어를 쓰면 뒤에서 다시 세어 이어 갈 단어가 많으면 노트에서 지운다', async (t) => {
   const brain = createBrain(null);
   brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어
