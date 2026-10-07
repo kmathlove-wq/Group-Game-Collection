@@ -94,6 +94,14 @@
 .wc-word-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 0; font-size: 20px; font-weight: 800; outline: none; background: transparent; }
 .wc-word-form input:disabled { color: var(--muted); }
 .wc-word-form button:disabled { opacity: .5; cursor: not-allowed; }
+.wc-old-hangul { font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Source Han Sans K", sans-serif; }
+/* 옛한글 단추(입력창 아래, 접어 둠) */
+.wc-old-keys { margin-top: 8px; color: var(--muted); font-size: 14px; }
+.wc-old-keys summary { cursor: pointer; font-weight: 700; width: fit-content; }
+.wc-old-keys p { margin: 6px 0; }
+.wc-old-keys div { display: flex; flex-wrap: wrap; gap: 6px; }
+.wc-old-keys button { min-width: 40px; min-height: 40px; padding: 4px 8px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; font-size: 20px; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; cursor: pointer; }
+.wc-old-keys button:hover { border-color: var(--wc); }
 
 /* ── 컴퓨터랑 대결 ── */
 .wc-setup, .wc-game { padding: 22px; }

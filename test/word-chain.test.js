@@ -20,7 +20,7 @@ const notes = (brain, dict) => ({ shot: brain.words(dict, 'shot').sort(), trap: 
 const WORDS = ['사과', '과자', '자두', '두부', '부엉이', '이빨', '빨대', '알루미늄', '경력', '역사', '공알'];
 function fakeDictionary(words = WORDS) {
   const known = new Map(); // 진짜와 같이 한 번 확인한 끝 글자는 기억한다
-  const continuations = (syllable) => { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])); };
+  const continuations = (syllable) => { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(R.firstSyllable(w))); };
   const left = (syllable, used) => !used || continuations(syllable).some((w) => !used.has(w));
   return {
     known,
@@ -33,16 +33,16 @@ function fakeDictionary(words = WORDS) {
       const has = continuations(syllable).length > 0;
       known.set(syllable, has); return has && left(syllable, used);
     },
-    async countContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(w[0])).length; },
+    async countContinuation(_dict, syllable) { const starts = R.allowedStarts(syllable); return words.filter((w) => starts.includes(R.firstSyllable(w))).length; },
     requests: 0,
     async candidates(_dict, syllable, used) {
       const starts = R.allowedStarts(syllable);
-      return words.filter((w) => starts.includes(w[0]) && !used.has(w)).map((word) => ({ word, definition: `${word}의 뜻` }));
+      return words.filter((w) => starts.includes(R.firstSyllable(w)) && !used.has(w)).map((word) => ({ word, definition: `${word}의 뜻` }));
     },
     async wordsEndingWith(_dict, syllable) { return words.filter((w) => w.at(-1) === syllable).map((word) => ({ word, definition: `${word}의 뜻` })); },
     async pickWord(_dict, syllable, used, { dueum = true, prefer = null } = {}) { // extraPage는 가짜 사전에선 의미 없음
       const starts = dueum ? R.allowedStarts(syllable) : [syllable];
-      const all = words.filter((w) => starts.includes(w[0]) && !used.has(w));
+      const all = words.filter((w) => starts.includes(R.firstSyllable(w)) && !used.has(w));
       const best = prefer && all.length ? Math.max(...all.map(prefer)) : 0;
       const word = all.find((w) => !prefer || prefer(w) === best); // 진짜는 무작위, 가짜는 목록 순서대로
       return word ? { word, definition: `${word}의 뜻` } : null;
@@ -571,6 +571,41 @@ test('끝말잇기 성장 모드: 🏆 갈륨·왕듸가 🧩 어려운 노트�
   const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사갈' });
   assert.equal(reply.computer.word, '갈륨'); assert.equal(reply.computer.how, 'trap');
   assert.equal(brain.has('opendict', '갈륨', 'trap'), true); // 다음부터는 🪤 함정 노트에서 바로 꺼낸다
+});
+
+test('끝말잇기: 옛한글 — 우리말샘 PUA 코드를 표준 옛한글로 바꾸고, 단추로 넣은 낱자를 한 글자로 조립한다(놉ᄂᆞ가ᄫᅵ)', async (t) => {
+  const O = require('../src/word-chain/old-hangul');
+  const word = '놉ᄂᆞ가ᄫᅵ'; // 놉ᄂᆞ가ᄫᅵ(표준 옛한글)
+  const pua = '놉가'; // 우리말샘이 보내는 모양
+  assert.equal(R.typedWord('놉ㄴㆍ가ㅸㅣ'), word); // 놉 → ㄴ → [ㆍ] → 가 → [ㅸ] → ㅣ
+  assert.equal(R.typedWord('ㄱㅏ나'), '가나'); // 현대 글자로 조립되면 보통 글자
+  assert.equal(R.typedWord('양ㅅ깃'), '양ㅅ깃'); // 모음이 안 따라오는 낱자는 그대로
+  assert.deepEqual([O.fromPua(pua), O.toPua(word)], [word, pua]);
+  assert.equal(R.syllables(word).length, 4);
+  assert.equal(R.lastSyllable(word), 'ᄫᅵ'); // 끝 글자 ᄫᅵ
+  assert.equal(R.precheck(word, null, new Set()), null);
+  assert.equal(R.precheck(word, '사놉', new Set()), null);
+  assert.deepEqual(R.allowedStarts('ᄫᅵ'), ['ᄫᅵ']); // 옛한글은 두음법칙 없음
+
+  // 사전: 물을 땐 PUA로, 받은 낱말·뜻은 표준 옛한글로.
+  const asked = [];
+  const fetchImpl = async (url) => {
+    const params = new URL(url).searchParams; asked.push(params.get('q'));
+    const item = params.get('q') === pua ? [{ word: '놉-가', sense: { pos: '명사', definition: '‘높낮이’의 옛말.' } }] : [];
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length, item } }) };
+  };
+  const dict = createDictionary({ env: { OPENDICT_API_KEY: 'k' }, fetchImpl });
+  assert.deepEqual(await dict.lookup('opendict', word), { found: true, word, definition: '‘높낮이’의 옛말.' });
+  assert.equal(await dict.hasContinuation('opendict', 'ᄫᅵ'), false); // ᄫᅵ로 시작하는 낱말 없음 → 한방
+  assert.ok(asked.includes(''));
+
+  // 게임: 옛한글 끝 글자로도 끝말을 잇는다(가ᄫᅵ → ᄫᅵ다).
+  const { url } = await startServer(t, {}, ['가ᄫᅵ', 'ᄫᅵ다']);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict' });
+  const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: 'ㄱㅏㅸㅣ' });
+  assert.equal(reply.player.word, '가ᄫᅵ');
+  assert.equal(reply.computer.word, 'ᄫᅵ다');
+  assert.deepEqual(reply.nextStarts, ['다']);
 });
 
 test('끝말잇기: 성장 컴퓨터는 🧩 어려운 단어를 내기 전에 다시 세어, 이어 갈 단어가 많으면 내지 않고 노트에서 지운다', async (t) => {

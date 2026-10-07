@@ -1,7 +1,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
-const { precheck, typedWord, lastSyllable, allowedStarts } = require('./rules');
+const { precheck, typedWord, lastSyllable, firstSyllable, allowedStarts } = require('./rules');
 const { DictionaryError, DICTIONARIES } = require('./dictionary');
 const { createBrain, strengthOf } = require('./brain');
 
@@ -116,8 +116,9 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   function answerBook(dict, extra = []) {
     const book = new Map();
     for (const word of [...brain.words(dict, 'shot'), ...brain.words(dict, 'trap'), ...brain.words(dict, 'hard'), ...extra]) {
-      if (!book.has(word[0])) book.set(word[0], new Set());
-      book.get(word[0]).add(word);
+      const start = firstSyllable(word);
+      if (!book.has(start)) book.set(start, new Set());
+      book.get(start).add(word);
     }
     return book;
   }
@@ -233,8 +234,9 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     const killers = new Map(); // 시작 글자 → 상대가 쓸 수 있는 📒 한방단어들
     for (const word of brain.words(dict, 'shot')) {
       if (used.has(word)) continue;
-      if (!killers.has(word[0])) killers.set(word[0], []);
-      killers.get(word[0]).push(word);
+      const start = firstSyllable(word);
+      if (!killers.has(start)) killers.set(start, []);
+      killers.get(start).push(word);
     }
     return (word) => {
       if (riskyWords.has(word) || riskyEnds.has(lastSyllable(word))) return false;

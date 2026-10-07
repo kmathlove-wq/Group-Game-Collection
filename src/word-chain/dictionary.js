@@ -1,6 +1,7 @@
 // 국립국어원 공식 Open API(표준국어대사전·우리말샘) 조회기. 키는 서버 환경 변수에서만 읽고 응답에 넣지 않는다.
 // 요청 매개변수와 응답 해석은 P07(끝말잇기 한방단어 검색기) app.py의 fetch_dictionary()/normalize_item()과 같다.
-const { allowedStarts, cleanWord, isHangulWord, WORD_MIN, WORD_MAX } = require('./rules');
+const { allowedStarts, cleanWord, isHangulWord, syllables, firstSyllable, lastSyllable, WORD_MIN, WORD_MAX } = require('./rules');
+const { fromPua, toPua } = require('./old-hangul');
 const { createOneShotStore } = require('./one-shot-store');
 
 const DICTIONARIES = {
@@ -30,12 +31,13 @@ const scalar = (value) => {
 };
 
 // 사전 항목 하나를 { word, senses: [{ pos, definition }] } 꼴로 정리한다(동음이의어·뜻 여러 개 모두 보존).
+// 우리말샘 옛한글(PUA 코드)은 여기서 표준 옛한글로 바꾼다(낱말·뜻 모두).
 function normalizeItem(item) {
   const senses = asList(item.sense).map((sense) => ({
-    pos: scalar(sense?.pos || item.pos), definition: scalar(sense?.definition || item.definition)
+    pos: scalar(sense?.pos || item.pos), definition: fromPua(scalar(sense?.definition || item.definition))
   }));
-  if (!senses.length) senses.push({ pos: scalar(item.pos), definition: scalar(item.definition) });
-  return { word: cleanWord(scalar(item.word)), senses };
+  if (!senses.length) senses.push({ pos: scalar(item.pos), definition: fromPua(scalar(item.definition)) });
+  return { word: cleanWord(fromPua(scalar(item.word))), senses };
 }
 
 function parseResponse(data) {
@@ -47,7 +49,7 @@ function parseResponse(data) {
 // 끝말잇기에 쓸 수 있는 낱말: 한글 2~20자 명사(품사 정보가 없으면 P07처럼 통과). 가운데 낱자(양ㅅ깃)는 허용.
 const isNounSense = (sense) => sense.pos.includes('명사') || ['', '품사 미상', '품사 없음'].includes(sense.pos);
 function playable(item) {
-  const length = item.word.length;
+  const length = syllables(item.word).length;
   return isHangulWord(item.word) && length >= WORD_MIN && length <= WORD_MAX && item.senses.some(isNounSense);
 }
 const definitionOf = (item) => item.senses.find(isNounSense)?.definition || '';
@@ -84,7 +86,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     const config = configOf(dictionary);
     const key = String(env[config.keyEnv] || '').trim();
     if (!key) throw new DictionaryError(`${config.name} API 키가 설정되지 않았어요. 관리자에게 알려 주세요.`);
-    const params = new URLSearchParams({ key, q: query, req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y' });
+    const params = new URLSearchParams({ key, q: toPua(query), req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y' });
     const controllers = [];
 
     async function ask() {
@@ -191,7 +193,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   function askContinuation(dictionary, syllable) {
     const askOne = async (start) => {
       const first = await search(dictionary, start, 'start');
-      const wordsIn = (page) => page.items.filter((item) => item.word[0] === start && playable(item)).map((item) => item.word);
+      const wordsIn = (page) => page.items.filter((item) => firstSyllable(item.word) === start && playable(item)).map((item) => item.word);
       let words = wordsIn(first);
       // 첫 묶음이 전부 한 글자 단어 등으로 걸러져도 뒤에 더 있으면 한 묶음만 더 본다(P07과 같은 기준).
       if (!words.length && first.total > PAGE_SIZE) words = wordsIn(await search(dictionary, start, 'start', 2));
@@ -269,7 +271,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     const found = new Map();
     for (let page = 1; page <= pages; page += 1) {
       const { items, total } = await search(dictionary, syllable, 'end', page, END_PAGE_SIZE);
-      for (const item of items) if (item.word.at(-1) === syllable && playable(item) && !found.has(item.word)) found.set(item.word, definitionOf(item));
+      for (const item of items) if (lastSyllable(item.word) === syllable && playable(item) && !found.has(item.word)) found.set(item.word, definitionOf(item));
       if (page * END_PAGE_SIZE >= total) break;
     }
     return [...found].map(([word, definition]) => ({ word, definition }));
@@ -295,7 +297,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     for (const [i, start] of starts.entries()) {
       for (const page of found[i]) {
         for (const item of page.items) {
-          if (item.word[0] === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));
+          if (firstSyllable(item.word) === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));
         }
       }
     }

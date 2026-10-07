@@ -1,4 +1,6 @@
 // 끝말잇기 글자 규칙. 두음법칙 표는 P07(끝말잇기 한방단어 검색기) app.py와 같은 규칙을 옮겨 왔다.
+// "글자"는 눈에 보이는 한 글자다(옛한글 'ᄂᆞ'는 조각 2개지만 한 글자, old-hangul.js).
+const { composeTyped, graphemes, isSyllable, isJamo } = require('./old-hangul');
 const HANGUL_BASE = 0xac00;
 const HANGUL_END = 0xd7a3;
 const INITIALS = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
@@ -8,11 +10,15 @@ const L_TO_NIEUN = new Set(['ㅏ', 'ㅐ', 'ㅓ', 'ㅔ', 'ㅗ', 'ㅚ', 'ㅜ', '�
 const N_TO_IEUNG = new Set(['ㅑ', 'ㅕ', 'ㅖ', 'ㅛ', 'ㅠ', 'ㅣ']);
 const WORD_MIN = 2;
 const WORD_MAX = 20;
-// 끝말잇기 낱말 모양: 끝 글자는 완성된 한글(다음 사람이 이어야 하니까), 앞·가운데에는 우리말샘의 낱자도 허용한다
-// (양ㅅ-깃 → 양ㅅ깃, ㄱ자-관 → ㄱ자관, ㄱㄴㄷ-순 → ㄱㄴㄷ순). 낱자로 시작하는 단어는 끝말이 새로 시작될 때만 낼 수 있다.
-const WORD_PATTERN = /^[가-힣ㄱ-ㅣ]*[가-힣]$/;
-const isHangulWord = (word) => WORD_PATTERN.test(word);
-const startsWithJamo = (word) => /^[ㄱ-ㅣ]/.test(word);
+// 끝말잇기 낱말 모양: 끝 글자는 완성된 한글(현대·옛한글, 다음 사람이 이어야 하니까), 앞·가운데에는 우리말샘의 낱자도 허용한다
+// (양ㅅ-깃 → 양ㅅ깃, ㄱ자-관 → ㄱ자관, ㄱㄴㄷ-순 → ㄱㄴㄷ순, 옛말 놉ᄂᆞ가ᄫᅵ). 낱자로 시작하는 단어는 끝말이 새로 시작될 때만 낼 수 있다.
+const syllables = (word) => graphemes(word);
+const firstSyllable = (word) => syllables(word)[0] ?? '';
+function isHangulWord(word) {
+  const parts = syllables(word);
+  return parts.length > 0 && parts.every((g) => isSyllable(g) || isJamo(g)) && isSyllable(parts.at(-1));
+}
+const startsWithJamo = (word) => isJamo(firstSyllable(word));
 
 function split(syllable) {
   const code = syllable?.length === 1 ? syllable.charCodeAt(0) : 0;
@@ -49,8 +55,7 @@ function allowedStarts(lastSyllable) {
 }
 
 function lastSyllable(word) {
-  const matches = String(word || '').match(/[가-힣]/g);
-  return matches ? matches.at(-1) : '';
+  return syllables(word).findLast(isSyllable) ?? '';
 }
 
 // 사전 표제어의 띄어쓰기 기호(^)·붙임표(-)·공백을 지운다.
@@ -61,21 +66,23 @@ function cleanWord(word) {
 // 사전에 묻기 전에 먼저 검사할 수 있는 규칙. 통과하면 null, 아니면 이유 문장을 돌려준다.
 // 사람이 입력한 단어 다듬기: 띄어쓰기와 특수문자(!?-~·, 이모지 등)는 자동으로 지운다('사과!' → '사과').
 // 글자(한글·영어 등)와 숫자는 남겨서, 한글이 아니면 precheck가 "완성된 한글 글자만"이라고 알려 준다.
+// 옛한글 단추로 넣은 낱자('ㄴ'+'ㆍ')는 한 글자('ᄂᆞ')로 조립한다.
 function typedWord(raw) {
-  return String(raw ?? '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 40);
+  return composeTyped(String(raw ?? '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 60));
 }
 function precheck(word, previousWord, usedWords) {
   if (!word) return '단어를 입력해 주세요.';
   if (!isHangulWord(word)) return '한글만 입력할 수 있어요(끝 글자는 완성된 글자).';
-  if (word.length < WORD_MIN) return '두 글자 이상 단어만 쓸 수 있어요.';
-  if (word.length > WORD_MAX) return `${WORD_MAX}글자 이하로 입력해 주세요.`;
+  const length = syllables(word).length;
+  if (length < WORD_MIN) return '두 글자 이상 단어만 쓸 수 있어요.';
+  if (length > WORD_MAX) return `${WORD_MAX}글자 이하로 입력해 주세요.`;
   if (previousWord) {
     if (startsWithJamo(word)) return '낱자(ㄱ·ㄴ…)로 시작하는 단어는 끝말이 새로 시작될 때(첫 단어)만 쓸 수 있어요.';
     const starts = allowedStarts(lastSyllable(previousWord));
-    if (!starts.includes(word[0])) return `'${starts.join("' 또는 '")}'(으)로 시작해야 해요.`;
+    if (!starts.includes(firstSyllable(word))) return `'${starts.join("' 또는 '")}'(으)로 시작해야 해요.`;
   }
   if (usedWords.has(word)) return '이번 판에 이미 나온 단어예요.';
   return null;
 }
 
-module.exports = { typedWord, isHangulWord, dueumVariant, dueumReverseVariants, allowedStarts, lastSyllable, cleanWord, precheck, WORD_MIN, WORD_MAX };
+module.exports = { typedWord, isHangulWord, syllables, firstSyllable, dueumVariant, dueumReverseVariants, allowedStarts, lastSyllable, cleanWord, precheck, WORD_MIN, WORD_MAX };

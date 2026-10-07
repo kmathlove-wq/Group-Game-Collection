@@ -8,6 +8,7 @@
 // remote가 있으면 Gist에도 올려서 Render 무료 서버가 다시 켜져도 기억이 남는다).
 const fs = require('fs');
 const path = require('path');
+const { firstSyllable } = require('./rules');
 
 const WRITE_DELAY_MS = 2_000;
 const MAX_WORDS = 30_000; // 사전·종류마다 이만큼까지만 기억한다(미리 공부하기로 한방단어가 수천 개 생길 수 있음, 넘치면 가장 오래된 것부터 잊음)
@@ -76,7 +77,7 @@ function createBrain(filePath, { remote = null } = {}) {
     // starts(두음 변형 포함 시작 글자들) 중 하나로 시작하고 아직 안 나온 기억 단어를 무작위로 하나 고른다.
     // accept(단어)가 주어지면 그 조건을 통과한 것만 고른다.
     find(dictionary, starts, used, random = Math.random, kind = 'shot', accept = null) {
-      const hits = wordsOf(kind, dictionary).filter((word) => starts.includes(word[0]) && !used.has(word) && (!accept || accept(word)));
+      const hits = wordsOf(kind, dictionary).filter((word) => starts.includes(firstSyllable(word)) && !used.has(word) && (!accept || accept(word)));
       if (!hits.length) return null;
       const word = hits[Math.floor(random() * hits.length)];
       return { word, definition: entries.get(prefixOf(kind, dictionary) + word).definition };
