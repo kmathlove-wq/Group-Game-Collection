@@ -18,6 +18,7 @@ const SLOW_LOG_MS = 2_000; // 이 안에 답이 없으면 같은 질문을 하�
 // 무작위 묶음은 앞쪽 약 1,000개 안에서 고르도록 묶음 번호 상한을 25로 둔다(예전 100개 × 10묶음과 같은 범위).
 const PAGE_SIZE = 40;
 const RANDOM_PAGE_MAX = 25;
+const FALLBACK_PAGES = 5; // 후보가 하나도 없을 때 더 볼 묶음 수의 끝(5묶음 = 200개, 한 글자 낱말 71개인 '정'도 2묶음이면 충분)
 const END_PAGE_SIZE = 100; // 미리 공부하기의 "○로 끝나는 단어"는 속도보다 많이 받는 게 중요해서 100개씩
 const FEW_WORDS = 5; // 이어 갈 단어가 이만큼 이하면 목록을 기억해 "이미 나온 단어"를 빼고 한방 여부를 판단한다
 
@@ -294,11 +295,18 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     // 시작 글자(두음 변형 포함)마다 차례로 묻지 않고 한꺼번에 물어서 기다리는 시간을 줄인다.
     const starts = dueum ? allowedStarts(syllable) : [syllable];
     const found = await Promise.all(starts.map((start) => pagesOf(dictionary, start, extraPage)));
+    const add = (start, page) => {
+      for (const item of page.items) {
+        if (firstSyllable(item.word) === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));
+      }
+    };
+    for (const [i, start] of starts.entries()) for (const page of found[i]) add(start, page);
+    // 앞 묶음이 한 글자 낱말로 가득하면(우리말샘 '정' 71개 — 정情·정丁…) 고를 단어가 하나도 없다.
+    // 그러면 컴퓨터가 "이어 말할 단어를 못 찾았어요"로 억울하게 지므로, 쓸 단어가 나올 때까지 다음 묶음을 더 본다(최대 FALLBACK_PAGES).
     for (const [i, start] of starts.entries()) {
-      for (const page of found[i]) {
-        for (const item of page.items) {
-          if (firstSyllable(item.word) === start && playable(item) && !usedWords.has(item.word) && !candidates.has(item.word)) candidates.set(item.word, definitionOf(item));
-        }
+      const total = found[i][0]?.total ?? 0;
+      for (let page = 2; !candidates.size && page <= FALLBACK_PAGES && (page - 1) * PAGE_SIZE < total; page += 1) {
+        add(start, await search(dictionary, start, 'start', page));
       }
     }
     return [...candidates].map(([word, definition]) => ({ word, definition }));

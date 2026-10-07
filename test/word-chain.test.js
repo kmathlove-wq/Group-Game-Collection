@@ -608,6 +608,19 @@ test('끝말잇기: 옛한글 — 우리말샘 PUA 코드를 표준 옛한글로
   assert.deepEqual(reply.nextStarts, ['다']);
 });
 
+test('끝말잇기: 앞 묶음이 한 글자 낱말(정 71개)로 가득해도 컴퓨터는 다음 묶음에서 이어 갈 단어를 찾는다(열정 → 정열)', async () => {
+  const one = (n) => Array.from({ length: n }, () => ({ word: '정', sense: { pos: '명사', definition: '한 글자 낱말' } }));
+  const fetchImpl = async (url) => {
+    const params = new URL(url).searchParams;
+    const page = Number(params.get('start'));
+    const item = params.get('q') !== '정' ? [] : page === 1 ? one(40) : page === 2 ? [...one(31), { word: '정열', sense: { pos: '명사', definition: '뜨거운 마음' } }] : [];
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length ? 72 : 0, item } }) };
+  };
+  const dict = createDictionary({ env: { OPENDICT_API_KEY: 'k' }, fetchImpl, random: () => 0 });
+  assert.deepEqual((await dict.candidates('opendict', '정', new Set(['열정']))).map((c) => c.word), ['정열']);
+  assert.equal((await dict.pickWord('opendict', '정', new Set(['열정']))).word, '정열');
+});
+
 test('끝말잇기: 성장 컴퓨터는 🧩 어려운 단어를 내기 전에 다시 세어, 이어 갈 단어가 많으면 내지 않고 노트에서 지운다', async (t) => {
   const brain = createBrain(null);
   brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어
