@@ -97,3 +97,24 @@ test('Gist 보관: 시작할 때 GitHub가 안 돼도 서버는 돌고, 나중�
   assert.ok(errors.some((e) => e.includes('불러오기 실패')) && errors.some((e) => e.includes('저장 실패')));
   assert.ok(errors.every((e) => !e.includes('Bearer') && !e.includes(' t '))); // 토큰은 로그에 남기지 않는다
 });
+
+test('Gist 보관: 서버가 다시 켜져도 지오메트리 대쉬 순위가 남는다(같은 기록은 한 번만)', async () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const { createGeometryDashScoreStore } = require('../lib/geometry-dash-scores');
+  const github = fakeGitHub();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gd-scores-'));
+  const open = (file) => createGeometryDashScoreStore(path.join(dir, file), {
+    remote: createGistSync({ token: 't', gistId: 'g1', fetchImpl: github.fetchImpl, saveDelayMs: 60_000 }), remoteName: 'geometry-dash-scores.json' });
+
+  // 첫 번째 서버: 점수 두 개를 저장하고 꺼진다.
+  let store = open('a.json'); await store.ready;
+  store.addScore('하나', 300); store.addScore('둘', 500);
+  await store.remote.flush();
+
+  // 두 번째 서버: 디스크 파일이 지워진 상태(다른 파일)여도 Gist에서 순위를 불러온다.
+  store = open('b.json'); await store.ready;
+  assert.deepEqual(store.getTop().map((e) => [e.name, e.score]), [['둘', 500], ['하나', 300]]);
+  store.absorb(JSON.parse(github.files['geometry-dash-scores.json'])); // 같은 기록을 또 합쳐도
+  assert.equal(store.getTop().length, 2); // 두 번 들어가지 않는다
+  fs.rmSync(dir, { recursive: true, force: true });
+});

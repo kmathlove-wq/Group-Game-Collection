@@ -1,6 +1,6 @@
 // 국립국어원 공식 Open API(표준국어대사전·우리말샘) 조회기. 키는 서버 환경 변수에서만 읽고 응답에 넣지 않는다.
 // 요청 매개변수와 응답 해석은 P07(끝말잇기 한방단어 검색기) app.py의 fetch_dictionary()/normalize_item()과 같다.
-const { allowedStarts, cleanWord, WORD_MIN, WORD_MAX } = require('./rules');
+const { allowedStarts, cleanWord, isHangulWord, WORD_MIN, WORD_MAX } = require('./rules');
 const { createOneShotStore } = require('./one-shot-store');
 
 const DICTIONARIES = {
@@ -44,11 +44,11 @@ function parseResponse(data) {
   return { items: asList(channel.item).map(normalizeItem), total: Number(scalar(channel.total)) || 0 };
 }
 
-// 끝말잇기에 쓸 수 있는 낱말: 한글 2~20자 명사(품사 정보가 없으면 P07처럼 통과).
+// 끝말잇기에 쓸 수 있는 낱말: 한글 2~20자 명사(품사 정보가 없으면 P07처럼 통과). 가운데 낱자(양ㅅ깃)는 허용.
 const isNounSense = (sense) => sense.pos.includes('명사') || ['', '품사 미상', '품사 없음'].includes(sense.pos);
 function playable(item) {
   const length = item.word.length;
-  return /^[가-힣]+$/.test(item.word) && length >= WORD_MIN && length <= WORD_MAX && item.senses.some(isNounSense);
+  return isHangulWord(item.word) && length >= WORD_MIN && length <= WORD_MAX && item.senses.some(isNounSense);
 }
 const definitionOf = (item) => item.senses.find(isNounSense)?.definition || '';
 
@@ -245,18 +245,20 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   // 이 글자 뒤에 이어 갈 수 있는 낱말이 몇 개인지 센다. limit을 넘으면 거기서 멈춘다(정확한 수보다 "많다"만 알면 됨).
   // 앞 두 묶음(80개)만 보는데, 우리말샘 '장'처럼 앞쪽이 한 글자 낱말(장·장·장…)로 가득하면 쓸 수 있는 단어가 몇 개 안 보인다.
   // 그래서 아직 못 본 단어(전체 수 total - 본 수)가 limit보다 많으면 "많다"로 본다('름장'을 🧩 어려운 단어로 잘못 적던 문제).
+  // 사전이 전체 수를 제대로 안 알려 줘도, 마지막으로 본 묶음이 40개로 꽉 찼으면 뒤에 더 있다는 뜻이라 "많다"로 본다.
   async function countContinuation(dictionary, syllable, limit) {
     let count = 0;
+    const full = (page) => page.items.length >= PAGE_SIZE;
     for (const start of allowedStarts(syllable)) {
       const first = await search(dictionary, start, 'start');
-      let seen = first.items.length;
+      let seen = first.items.length; let last = first;
       count += first.items.filter(playable).length;
-      if (count <= limit && first.total > PAGE_SIZE) {
-        const second = await search(dictionary, start, 'start', 2);
-        seen += second.items.length;
-        count += second.items.filter(playable).length;
+      if (count <= limit && (first.total > PAGE_SIZE || full(first))) {
+        last = await search(dictionary, start, 'start', 2);
+        seen += last.items.length;
+        count += last.items.filter(playable).length;
       }
-      if (first.total - seen > limit) return limit + 1;
+      if (first.total - seen > limit || full(last)) return Math.max(count, limit + 1);
       if (count > limit) return count;
     }
     return count;

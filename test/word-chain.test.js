@@ -573,16 +573,40 @@ test('끝말잇기 성장 모드: 🏆 갈륨·왕듸가 🧩 어려운 노트�
   assert.equal(brain.has('opendict', '갈륨', 'trap'), true); // 다음부터는 🪤 함정 노트에서 바로 꺼낸다
 });
 
-test('끝말잇기: 성장 컴퓨터가 🧩 어려운 단어를 쓰면 뒤에서 다시 세어 이어 갈 단어가 많으면 노트에서 지운다', async (t) => {
+test('끝말잇기: 성장 컴퓨터는 🧩 어려운 단어를 내기 전에 다시 세어, 이어 갈 단어가 많으면 내지 않고 노트에서 지운다', async (t) => {
   const brain = createBrain(null);
   brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어
   const words = ['사름', '름장', ...[...'가나다라마바사아자차카'].map((c) => `장${c}`)]; // '장' 뒤 11개
   const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
   const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' });
   const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사름' });
-  assert.equal(reply.computer.word, '름장'); assert.equal(reply.computer.how, 'hard');
-  for (let i = 0; i < 100 && brain.has('opendict', '름장', 'hard'); i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.notEqual(reply.computer.how, 'hard'); // 🧩 힌트("대답하기 어려운 단어")가 다시 뜨지 않는다
   assert.equal(brain.has('opendict', '름장', 'hard'), false);
+});
+
+test('끝말잇기: 사전이 전체 수를 안 알려 줘도 묶음이 40개로 꽉 차면 이어 갈 단어가 "많다"고 센다', async () => {
+  const fetchImpl = async (url) => {
+    const item = new URL(url).searchParams.get('q') === '장' ? Array.from({ length: 40 }, () => ({ word: '장', sense: { pos: '명사', definition: '한 글자 낱말' } })) : [];
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length, item } }) };
+  };
+  const dict = createDictionary({ env: { OPENDICT_API_KEY: 'k' }, fetchImpl });
+  assert.ok(await dict.countContinuation('opendict', '장', 10) > 10);
+});
+
+test('끝말잇기: 우리말샘 낱자 낱말(양ㅅ-깃)은 가운데 낱자를 허용하고, 첫 글자·끝 글자는 완성된 글자여야 한다', async (t) => {
+  assert.equal(R.precheck('양ㅅ깃', null, new Set()), null);
+  assert.equal(R.typedWord('양ㅅ-깃'), '양ㅅ깃');
+  for (const word of ['ㅅ깃', '양ㅅ', 'ㅅㅅ']) assert.match(R.precheck(word, null, new Set()), /첫 글자와 끝 글자는 완성된 글자/);
+  assert.equal(R.lastSyllable('양ㅅ깃'), '깃');
+  const fetchImpl = async (url) => {
+    const q = new URL(url).searchParams.get('q');
+    const item = q === '양ㅅ깃' ? [{ word: '양ㅅ-깃', sense: { pos: '명사', definition: '옛말' } }] : [];
+    return { ok: true, status: 200, text: async () => JSON.stringify({ channel: { total: item.length, item } }) };
+  };
+  assert.equal((await createDictionary({ env: { OPENDICT_API_KEY: 'k' }, fetchImpl }).lookup('opendict', '양ㅅ깃')).found, true);
+  const { url } = await startServer(t, {}, ['사양', '양ㅅ깃', '깃발']);
+  const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict' });
+  assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '양ㅅ깃' })).computer.word, '깃발');
 });
 
 test('끝말잇기: 늡늡 — 혼자 모드는 컴퓨터가 쓰면 바로 지고, 여럿이 방은 첫 단어로 못 쓰고 쓰면 다음 사람이 탈락한다', async (t) => {

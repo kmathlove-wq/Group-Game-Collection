@@ -69,8 +69,9 @@ app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // 1인용 게임의 전체 순위 API(GET 조회, POST 제출)를 게임별 파일 저장소로 연결한다.
+// Gist 설정이 있으면 순위도 Gist(`<slug>-scores.json`)에 보관해 Render가 다시 켜져도 남는다.
 function registerScoreboard(slug, scoreMax) {
-  const store = createGeometryDashScoreStore(path.join(__dirname, 'data', `${slug}-scores.json`));
+  const store = createGeometryDashScoreStore(path.join(__dirname, 'data', `${slug}-scores.json`), { remote: gistSync, remoteName: `${slug}-scores.json` });
   const submitAt = new Map();
   app.get(`/api/${slug}/scores`, (_req, res) => {
     res.json({ scores: store.getTop(10) });
