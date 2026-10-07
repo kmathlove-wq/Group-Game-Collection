@@ -8,9 +8,11 @@ const L_TO_NIEUN = new Set(['ㅏ', 'ㅐ', 'ㅓ', 'ㅔ', 'ㅗ', 'ㅚ', 'ㅜ', '�
 const N_TO_IEUNG = new Set(['ㅑ', 'ㅕ', 'ㅖ', 'ㅛ', 'ㅠ', 'ㅣ']);
 const WORD_MIN = 2;
 const WORD_MAX = 20;
-// 끝말잇기 낱말 모양: 첫 글자·끝 글자는 완성된 한글, 가운데에는 우리말샘 옛말·방언의 낱자도 허용한다(양ㅅ-깃 → 양ㅅ깃).
-const WORD_PATTERN = /^[가-힣](?:[가-힣ㄱ-ㅣ]*[가-힣])?$/;
+// 끝말잇기 낱말 모양: 끝 글자는 완성된 한글(다음 사람이 이어야 하니까), 앞·가운데에는 우리말샘의 낱자도 허용한다
+// (양ㅅ-깃 → 양ㅅ깃, ㄱ자-관 → ㄱ자관, ㄱㄴㄷ-순 → ㄱㄴㄷ순). 낱자로 시작하는 단어는 끝말이 새로 시작될 때만 낼 수 있다.
+const WORD_PATTERN = /^[가-힣ㄱ-ㅣ]*[가-힣]$/;
 const isHangulWord = (word) => WORD_PATTERN.test(word);
+const startsWithJamo = (word) => /^[ㄱ-ㅣ]/.test(word);
 
 function split(syllable) {
   const code = syllable?.length === 1 ? syllable.charCodeAt(0) : 0;
@@ -64,10 +66,11 @@ function typedWord(raw) {
 }
 function precheck(word, previousWord, usedWords) {
   if (!word) return '단어를 입력해 주세요.';
-  if (!isHangulWord(word)) return '한글만 입력할 수 있어요(첫 글자와 끝 글자는 완성된 글자).';
+  if (!isHangulWord(word)) return '한글만 입력할 수 있어요(끝 글자는 완성된 글자).';
   if (word.length < WORD_MIN) return '두 글자 이상 단어만 쓸 수 있어요.';
   if (word.length > WORD_MAX) return `${WORD_MAX}글자 이하로 입력해 주세요.`;
   if (previousWord) {
+    if (startsWithJamo(word)) return '낱자(ㄱ·ㄴ…)로 시작하는 단어는 끝말이 새로 시작될 때(첫 단어)만 쓸 수 있어요.';
     const starts = allowedStarts(lastSyllable(previousWord));
     if (!starts.includes(word[0])) return `'${starts.join("' 또는 '")}'(으)로 시작해야 해요.`;
   }

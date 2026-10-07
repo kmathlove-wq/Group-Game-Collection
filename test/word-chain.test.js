@@ -593,10 +593,13 @@ test('끝말잇기: 사전이 전체 수를 안 알려 줘도 묶음이 40개로
   assert.ok(await dict.countContinuation('opendict', '장', 10) > 10);
 });
 
-test('끝말잇기: 우리말샘 낱자 낱말(양ㅅ-깃)은 가운데 낱자를 허용하고, 첫 글자·끝 글자는 완성된 글자여야 한다', async (t) => {
+test('끝말잇기: 우리말샘 낱자 낱말(양ㅅ-깃·ㄱ자-관)을 허용한다 — 끝 글자는 완성된 글자, 낱자로 시작하면 첫 단어로만', async (t) => {
   assert.equal(R.precheck('양ㅅ깃', null, new Set()), null);
   assert.equal(R.typedWord('양ㅅ-깃'), '양ㅅ깃');
-  for (const word of ['ㅅ깃', '양ㅅ', 'ㅅㅅ']) assert.match(R.precheck(word, null, new Set()), /첫 글자와 끝 글자는 완성된 글자/);
+  for (const word of ['양ㅅ', 'ㅅㅅ']) assert.match(R.precheck(word, null, new Set()), /끝 글자는 완성된 글자/);
+  // 낱자로 시작하는 단어(ㄱ자-관, ㄱㄴㄷ-순)는 첫 단어로만 낼 수 있다.
+  for (const word of ['ㄱ자관', 'ㄱㄴㄷ순']) assert.equal(R.precheck(word, null, new Set()), null);
+  assert.match(R.precheck('ㄱ자관', '얘기', new Set()), /첫 단어/);
   assert.equal(R.lastSyllable('양ㅅ깃'), '깃');
   const fetchImpl = async (url) => {
     const q = new URL(url).searchParams.get('q');
@@ -607,6 +610,9 @@ test('끝말잇기: 우리말샘 낱자 낱말(양ㅅ-깃)은 가운데 낱자�
   const { url } = await startServer(t, {}, ['사양', '양ㅅ깃', '깃발']);
   const { id } = await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict' });
   assert.equal((await post(`${url}/api/word-chain/solo/${id}/word`, { word: '양ㅅ깃' })).computer.word, '깃발');
+  const second = await startServer(t, {}, ['ㄱ자관', '관리']);
+  const game = await post(`${second.url}/api/word-chain/solo`, { dictionary: 'opendict' });
+  assert.equal((await post(`${second.url}/api/word-chain/solo/${game.id}/word`, { word: 'ㄱ자-관' })).computer.word, '관리');
 });
 
 test('끝말잇기: 늡늡 — 혼자 모드는 컴퓨터가 쓰면 바로 지고, 여럿이 방은 첫 단어로 못 쓰고 쓰면 다음 사람이 탈락한다', async (t) => {
