@@ -22,6 +22,7 @@ const ONE_SHOT_RETRY_MS = 3_000;  // 다시 묻기 전 기다리는 시간
 const COMPUTER_OPENERS = ['가', '고', '기', '나', '노', '다', '도', '마', '무', '바', '부', '사', '수', '시', '오', '우', '자', '주', '하', '호'];
 const TRAP_LIMIT = 3;  // 🪤 함정은 그 단어 뒤에 이어 갈 단어가 이 수 이하일 때만(많으면 상대가 다른 단어로 빠져나간다)
 const HARD_LIMIT = 10; // 기억한 한방단어가 한방이 아니게 됐을 때, 이어 갈 단어가 이 수 이하면 🧩 어려운 단어로 남긴다
+const FORCED_DEPTH = 3; // 🏆 필승 단어를 몇 단계까지 내다볼지(1 = 한방, 2 = 왕듸, 3 = 갈륨)
 const LOOKAHEAD_SIZE = 6;     // 🔭 한 번에 비교해 볼 후보 수
 const LOOKAHEAD_LIMIT = 30;   // 상대가 이어 갈 단어는 이만큼까지만 센다(그 이상은 "많음")
 const LOOKAHEAD_MS = 1_500;   // 내다보기에 쓰는 최대 시간
@@ -110,12 +111,44 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   //   C는 📒 한방, B는 🚫 조심(컴퓨터가 B를 말하면 상대가 C로 끝낼 수 있다), A는 🪤 함정.
   // C의 끝 글자가 정말 한방 글자일 때만 배운다(컴퓨터가 우연히 못 찾았거나 이번 판에서만 막힌 경우는 빼려고).
   // chain: 한 끝말 줄기에서 나온 단어들(순서대로), defOf(단어) → 뜻. 혼자 모드·여럿이 방·첫 단어 막힘이 모두 이걸로 배운다.
+  // 📒·🪤 노트 단어(+ extra)를 시작 글자별로 묶는다. 필승 판단에서 "이 글자가 오면 낼 수 있는 단어"를 빨리 찾으려고.
+  function answerBook(dict, extra = []) {
+    const book = new Map();
+    for (const word of [...brain.words(dict, 'shot'), ...brain.words(dict, 'trap'), ...extra]) {
+      if (!book.has(word[0])) book.set(word[0], new Set());
+      book.get(word[0]).add(word);
+    }
+    return book;
+  }
+  // 🏆 word가 필승 단어인지 본다: 한방이거나, 상대가 이어 낼 수 있는 단어(목록을 아는 5개 이하일 때만)
+  // 하나하나에 내가 이길 답(다시 필승인 단어)이 book에 있다. 예) 갈륨 → 윰차는 차풰💥, 윰라대왕은 왕듸(필승).
+  // depth 단계까지만 내다본다. 사전에 다시 묻지 않고 단어장·노트에 아는 것만 쓴다(그래서 빠르다).
+  function forcedWin(dict, word, used, book, depth = FORCED_DEPTH) {
+    const syllable = lastSyllable(word);
+    const known = dictionary.knownContinuation(dict, syllable, usedWith(used, word));
+    if (known === false || (known === undefined && brain.has(dict, word, 'shot'))) return true; // 한방이면 바로 이김
+    const replies = depth > 1 && dictionary.fewContinuations(dict, syllable);
+    if (!replies) return false; // 상대가 낼 단어를 다 모르면 필승이라고 할 수 없다
+    const next = new Set(used).add(word);
+    return replies.every((reply) => {
+      if (next.has(reply)) return true; // 이미 나온 단어는 상대가 못 낸다
+      const after = new Set(next).add(reply);
+      return allowedStarts(lastSyllable(reply)).some((start) => [...(book.get(start) || [])]
+        .some((answer) => !after.has(answer) && forcedWin(dict, answer, after, book, depth - 1)));
+    });
+  }
   function learnChain(dict, chain, defOf, known) {
     const [a, b, c] = [chain.at(-3), chain.at(-2), chain.at(-1)]; // 짧은 줄기면 a·b가 없을 수 있다
     if (!c) return;
     const note = () => {
       brain.remember(dict, c, defOf(c), 'shot');
       if (b) brain.remember(dict, b, defOf(b), 'risky');
+      // 🏆 C와 같은 쪽 단어(끝에서 3·5번째)를 거슬러 올라가며 필승이면 🪤 함정에 적는다(… 갈륨 → 윰라대왕 → 왕듸 → 듸굴이 → 이리듐💥).
+      const book = answerBook(dict, chain);
+      for (const back of [3, 5]) {
+        const word = chain.at(-back);
+        if (word && forcedWin(dict, word, new Set(), book)) brain.remember(dict, word, defOf(word), 'trap');
+      }
       // 🪤 A 뒤에 이어 갈 단어가 3개 이하일 때만 함정이다(요요 → '요'로 시작하는 단어는 많아서 함정이 못 된다).
       if (a) {
         dictionary.countContinuation(dict, lastSyllable(a), TRAP_LIMIT)
@@ -160,7 +193,11 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   }
   // 쓸 수 있는 🪤 함정을 찾는다. 이미 아는 바로 이어 갈 단어가 3개보다 많아진 함정은(예전에 조건 없이 적혔거나
   // 사전에 단어가 늘어남) 쓰지 않고 노트에서 지운다. 모르면 배울 때 확인했으니 믿고 쓴다.
+  // 🏆 필승 함정은 이어 갈 단어가 3개를 넘어도, 위험 검사가 없어도 먼저 쓴다(상대의 모든 답에 이길 답을 이미 확인했다).
   function findTrap(dict, starts, used, isSafe) {
+    const book = answerBook(dict);
+    const sure = brain.find(dict, starts, used, random, 'trap', (word) => forcedWin(dict, word, used, book));
+    if (sure) return sure;
     for (;;) {
       const trap = brain.find(dict, starts, used, random, 'trap', isSafe);
       if (!trap) return null;

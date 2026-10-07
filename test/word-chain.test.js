@@ -539,6 +539,28 @@ test('끝말잇기: 앞 묶음이 한 글자 낱말로 가득해도 전체 수�
   assert.ok(await dict.countContinuation('opendict', '장', 10) > 10);
 });
 
+test('끝말잇기 성장 모드: 🏆 필승 단어 — 갈륨(→윰차는 차풰💥, 윰라대왕은 왕듸 → 이리듐·채매앝💥)을 거슬러 배워 다음 판에 쓴다', async (t) => {
+  const brain = createBrain(null);
+  for (const word of ['차풰', '채매앝']) brain.remember('opendict', word, `${word}의 뜻`, 'shot'); // 다른 판에서 이미 배운 한방
+  const words = ['사갈', '갈륨', '갈가마귀', '귀신', '귀가', '귀환', '윰차', '차풰', '윰라대왕', '왕듸', '듸굴이', '이리듐', '듸림부채', '채매앝'];
+  const { url } = await startServer(t, { brain, random: () => 0, strength: () => ({ level: 1, memoryChance: 1, attackChance: 1 }) }, words);
+  const start = async () => (await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'growth' })).id;
+  const say = (id, word) => post(`${url}/api/word-chain/solo/${id}/word`, { word });
+
+  // 첫 판: 컴퓨터가 우연히(🔭 이어 갈 단어가 적은 쪽) 갈륨을 골라 이리듐으로 이긴다.
+  const id = await start();
+  assert.equal((await say(id, '사갈')).computer.word, '갈륨');
+  assert.equal((await say(id, '윰라대왕')).computer.word, '왕듸');
+  assert.equal((await say(id, '듸굴이')).computer.word, '이리듐');
+  assert.equal((await (await fetch(`${url}/api/word-chain/solo/${id}/one-shot`)).json()).oneShot, true);
+  // 마지막 세 단어(왕듸 → 듸굴이 → 이리듐)만이 아니라, 두 칸 앞의 갈륨도 필승이라 🪤에 적는다.
+  assert.deepEqual([brain.has('opendict', '왕듸', 'trap'), brain.has('opendict', '갈륨', 'trap')], [true, true]);
+
+  // 다음 판: 사갈에는 갈가마귀가 아니라 갈륨을 노리고 낸다.
+  const reply = await say(await start(), '사갈');
+  assert.equal(reply.computer.word, '갈륨'); assert.equal(reply.computer.how, 'trap');
+});
+
 test('끝말잇기: 성장 컴퓨터가 🧩 어려운 단어를 쓰면 뒤에서 다시 세어 이어 갈 단어가 많으면 노트에서 지운다', async (t) => {
   const brain = createBrain(null);
   brain.remember('opendict', '름장', '름장의 뜻', 'hard'); // 예전 세기 실수로 잘못 적힌 단어
