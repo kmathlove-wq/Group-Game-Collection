@@ -14,6 +14,9 @@ const REQUEST_TIMEOUT_MS = 8_000;
 const HEDGE_MS = 1_500;
 const EXTRA_PAGE_KEEP_MS = 30_000;
 const SLOW_LOG_MS = 2_000; // 이 안에 답이 없으면 같은 질문을 하나 더 보낸다
+// 단어(word)와 구(phrase, 띄어 쓴 명사 '고양이 걸음')만 묻는다. 속담·관용구('값싼 비지떡')는 품사가 비어 와서
+// 명사 검사를 통과해 버리므로 질문 단계에서 뺀다(2026-10 두 사전 모두 실측: 쉼표로 여러 개 고르기 가능).
+const WORD_TYPES = 'word,phrase';
 // 'start' 질문 한 묶음의 단어 수. 100개씩 받으면 사전 서버가 3초쯤 걸려서 40개로 줄였다(2026-10 실측 비교).
 // 무작위 묶음은 앞쪽 약 1,000개 안에서 고르도록 묶음 번호 상한을 25로 둔다(예전 100개 × 10묶음과 같은 범위).
 const PAGE_SIZE = 40;
@@ -87,7 +90,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     const config = configOf(dictionary);
     const key = String(env[config.keyEnv] || '').trim();
     if (!key) throw new DictionaryError(`${config.name} API 키가 설정되지 않았어요. 관리자에게 알려 주세요.`);
-    const params = new URLSearchParams({ key, q: toPua(query), req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y' });
+    const params = new URLSearchParams({ key, q: toPua(query), req_type: 'json', type_search: 'search', method, start: String(start), num: String(num), advanced: 'y', type1: WORD_TYPES });
     const controllers = [];
 
     async function ask() {

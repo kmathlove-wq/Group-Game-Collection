@@ -125,6 +125,7 @@ test('끝말잇기: 사전 응답(JSON·XML 오류)을 해석하고 결과를 �
   assert.equal(await dict.pickWord('stdict', '과', new Set(['과자'])), null);
   const params = calls[0];
   assert.equal(params.get('key'), 'test-key'); assert.equal(params.get('req_type'), 'json'); assert.equal(params.get('advanced'), 'y');
+  assert.equal(params.get('type1'), 'word,phrase', '속담·관용구(값싼 비지떡)는 묻지 않는다');
   const before = calls.length; await dict.lookup('stdict', '사과');
   assert.equal(calls.length, before, '같은 질문은 다시 보내지 않는다');
 
