@@ -14,6 +14,12 @@ const WRITE_DELAY_MS = 2_000;
 const MAX_WORDS = 30_000; // 사전·종류마다 이만큼까지만 기억한다(미리 공부하기로 한방단어가 수천 개 생길 수 있음, 넘치면 가장 오래된 것부터 잊음)
 const KINDS = ['shot', 'trap', 'risky', 'hard'];
 const REMOTE_NAME = 'word-chain-brain.json';
+// 사전에 없는 말이라 노트에서 뺄 단어("사전|단어", 종류 상관없음). 사전 질문이 속담·관용구까지 받던 때(2026-10 이전)
+// 적힌 속담들이다. 지금은 사전이 속담을 주지 않아 새로 생기지 않는다. 불러올 때 빼고, 뺀 게 있으면 바로 다시 저장한다.
+const RETIRED = new Set([
+  'opendict|고깔뒤의군헝겊', 'opendict|개가벼룩씹듯', 'opendict|곰배팔이담배목판끼듯', 'opendict|관가의조세는범보다도더무섭다',
+  'opendict|쿵그렁하면굿만여기고선산무당이춤춘다', 'opendict|갗에서좀난다', 'opendict|값싼것이갈치자반'
+]);
 
 // 배운 단어 개수(세 종류 합) → 컴퓨터의 실력.
 //   level: 화면에 보여 줄 레벨(0부터, 배운 단어 10개마다 1)
@@ -30,12 +36,20 @@ function createBrain(filePath, { remote = null } = {}) {
   const entries = new Map(); // "종류|사전|단어" → { definition, at }
   let timer = null;
   let writing = Promise.resolve();
+  // 바뀐 노트를 조금 모았다가 파일·Gist에 저장한다.
+  function changed() {
+    if (filePath && !timer) { timer = setTimeout(flush, WRITE_DELAY_MS); timer.unref?.(); }
+    remote?.save(REMOTE_NAME);
+  }
 
   // 저장된 노트를 읽어 들인다. 이미 아는 단어는 그대로 두고 모르는 것만 더한다(불러오는 사이에 배운 것을 지키려고).
   function absorb(saved) {
+    let retired = false;
     for (const [key, value] of Object.entries(saved?.entries || {})) {
+      if (RETIRED.has(key.slice(key.indexOf('|') + 1))) { retired = true; continue; }
       if (typeof value?.at === 'number' && KINDS.includes(key.split('|')[0]) && !entries.has(key)) entries.set(key, { definition: String(value.definition || ''), at: value.at });
     }
+    if (retired) changed(); // 저장본에서도 지운다
   }
   if (filePath) {
     try { absorb(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } catch { /* 파일이 없거나 깨졌으면 아무것도 모르는 컴퓨터로 시작 */ }
@@ -70,8 +84,7 @@ function createBrain(filePath, { remote = null } = {}) {
       entries.set(key, { definition, at: Date.now() });
       const mine = wordsOf(kind, dictionary);
       if (mine.length > MAX_WORDS) entries.delete(prefixOf(kind, dictionary) + mine[0]); // Map은 넣은 순서를 지키므로 맨 앞이 가장 오래됨
-      if (filePath && !timer) { timer = setTimeout(flush, WRITE_DELAY_MS); timer.unref?.(); }
-      remote?.save(REMOTE_NAME);
+      changed();
       return true;
     },
     // starts(두음 변형 포함 시작 글자들) 중 하나로 시작하고 아직 안 나온 기억 단어를 무작위로 하나 고른다.
@@ -84,8 +97,7 @@ function createBrain(filePath, { remote = null } = {}) {
     },
     forget(dictionary, word, kind) {
       if (!entries.delete(prefixOf(kind, dictionary) + word)) return false;
-      if (filePath && !timer) { timer = setTimeout(flush, WRITE_DELAY_MS); timer.unref?.(); }
-      remote?.save(REMOTE_NAME);
+      changed();
       return true;
     },
     definitionOf: (dictionary, word, kind) => entries.get(prefixOf(kind, dictionary) + word)?.definition ?? '',

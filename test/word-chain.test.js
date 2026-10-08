@@ -319,6 +319,20 @@ test('끝말잇기 성장 모드: 기억 노트는 종류별로 적고 파일에
   assert.deepEqual(createBrain(file).counts('opendict'), { shot: 1, trap: 1, risky: 1, hard: 0 });
 });
 
+test('끝말잇기 성장 모드: 예전에 적힌 속담은 불러올 때 빼고 저장본에서도 지운다', async () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wc-brain-')), 'brain.json');
+  fs.writeFileSync(file, JSON.stringify({ version: 1, entries: {
+    'shot|opendict|고깔뒤의군헝겊': { definition: '속담', at: 1 }, 'risky|opendict|값싼것이갈치자반': { definition: '속담', at: 1 },
+    'shot|stdict|고깔뒤의군헝겊': { definition: '다른 사전은 그대로', at: 1 }, 'shot|opendict|차풰': { definition: '뜻', at: 1 } } }));
+  const brain = createBrain(file);
+  assert.equal(brain.has('opendict', '고깔뒤의군헝겊', 'shot'), false);
+  assert.equal(brain.has('opendict', '값싼것이갈치자반', 'risky'), false);
+  assert.equal(brain.has('stdict', '고깔뒤의군헝겊', 'shot'), true);
+  assert.equal(brain.has('opendict', '차풰', 'shot'), true);
+  await brain.flush();
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).entries).sort(), ['shot|opendict|차풰', 'shot|stdict|고깔뒤의군헝겊']);
+});
+
 test('끝말잇기 성장 모드: 레벨 규칙은 0부터 시작해 10개마다 1씩 오르고 확률은 0~1이며 배울수록 약해지지 않는다', () => {
   let before = strengthOf(0);
   assert.deepEqual([0, 9, 10, 20, 29, 30].map((n) => strengthOf(n).level), [0, 0, 1, 2, 2, 3]);
