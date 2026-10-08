@@ -23,9 +23,11 @@ body{margin:0;min-height:100vh;background:var(--gd-bg);color:var(--gd-ink);font-
 .gd-lead{margin:0 0 20px;color:var(--gd-muted)}
 
 .gd-stage-wrap{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:900/340;border:1px solid var(--gd-line);border-radius:16px;overflow:hidden;box-shadow:0 20px 60px #00000055}
-#gdCanvas{display:block;width:100%;height:100%;touch-action:manipulation}
+.gd-stage-wrap{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+/* 누른 채 손가락을 움직여도 브라우저가 스크롤로 가로채지 않게 한다(비행 구간 누르기 유지). */
+#gdCanvas{display:block;width:100%;height:100%;touch-action:none}
 
-.gd-hud{position:absolute;top:14px;left:16px;display:flex;align-items:baseline;gap:6px;padding:8px 14px;border-radius:999px;background:#00000066;backdrop-filter:blur(3px);font-variant-numeric:tabular-nums}
+.gd-hud{pointer-events:none;position:absolute;top:14px;left:16px;display:flex;align-items:baseline;gap:6px;padding:8px 14px;border-radius:999px;background:#00000066;backdrop-filter:blur(3px);font-variant-numeric:tabular-nums}
 .gd-score-label{font-size:12px;color:var(--gd-muted)}
 .gd-hud strong{font-size:20px;color:var(--gd-ink)}
 
@@ -59,9 +61,39 @@ body{margin:0;min-height:100vh;background:var(--gd-bg);color:var(--gd-ink);font-
 .gd-my-rank{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--gd-line);color:var(--gd-accent2);font-weight:700;font-size:14px}
 .gd-my-rank:empty{display:none}
 
+/* 일시정지 뒤 이어하기 카운트다운 숫자 */
+.gd-countdown{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;background:#08091155;font-size:clamp(56px,14vw,120px);font-weight:900;color:var(--gd-ink);text-shadow:0 6px 24px #000a;animation:gd-pop .9s ease-out}
+.gd-countdown[hidden]{display:none}
+@keyframes gd-pop{from{transform:scale(1.5);opacity:0}30%{transform:scale(1);opacity:1}}
+
+.gd-rotate-hint{display:none;margin:-10px 0 14px;color:var(--gd-accent2);font-size:13px}
+
 @media (max-width:640px){
-  .gd-toolbar{flex-direction:column;align-items:flex-start}
-  .gd-hud{top:10px;left:10px;padding:6px 12px}
-  .gd-hud strong{font-size:17px}
+  .gd-toolbar{width:calc(100% - 32px);flex-direction:column;align-items:flex-start}
+  .gd-shell{width:calc(100% - 32px)}
+  .gd-stage-wrap{border-radius:12px}
+  .gd-hud{top:8px;left:8px;padding:4px 10px}
+  .gd-hud strong{font-size:16px}
+}
+
+/* 휴대폰: 게임 화면이 납작해서 안내 카드가 잘리므로, 카드는 휴대폰 화면 전체에 띄운다. */
+@media (max-width:640px),(max-height:500px){
+  .gd-overlay{position:fixed;z-index:20;padding:16px;overflow-y:auto;background:#080911ee}
+  .gd-overlay-card p{margin-bottom:14px}
+}
+
+/* 세로로 든 휴대폰에는 가로로 돌리라는 안내를 보여 준다. */
+@media (orientation:portrait) and (max-width:640px){
+  .gd-rotate-hint{display:block}
+}
+
+/* 가로로 든 휴대폰: 제목을 숨기고, 게임 중에는 메뉴·순위도 숨겨 화면을 게임으로 꽉 채운다. */
+@media (orientation:landscape) and (max-height:500px){
+  .gd-toolbar{margin-top:8px}
+  .gd-shell h1,.gd-lead{display:none}
+  .gd-stage-wrap{width:min(100%,calc((100dvh - 60px) * 900 / 340))}
+  body.gd-playing .gd-toolbar,body.gd-playing .gd-leaderboard{display:none}
+  body.gd-playing .gd-shell{width:100%;min-height:100dvh;margin:0;display:grid;place-items:center;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+  body.gd-playing .gd-stage-wrap{width:min(100%,calc(100dvh * 900 / 340));border:0;border-radius:0}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

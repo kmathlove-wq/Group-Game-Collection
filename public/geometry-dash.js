@@ -103,6 +103,11 @@
   const myBestRankText = document.querySelector('#gdMyBestRankText');
   const refreshScoresButton = document.querySelector('#gdRefreshScoresButton');
   const nameInput = document.querySelector('#gdNameInput');
+  const stageWrap = document.querySelector('.gd-stage-wrap');
+  const pauseOverlay = document.querySelector('#gdPauseOverlay');
+  const resumeButton = document.querySelector('#gdResumeButton');
+  const countdownText = document.querySelector('#gdCountdown');
+  const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
 
   let muted = localStorage.getItem(MUTE_KEY) === '1';
   let audioCtx = null;
@@ -125,6 +130,18 @@
   let flightCursorX = 0;
   let flightZones = [];
   let flightCenterY = (FLIGHT_CENTER_MIN + FLIGHT_CENTER_MAX) / 2;
+  let paused = false;
+  let countdownTimer = 0;
+  const activePointers = new Set();
+
+  if (IS_TOUCH) {
+    document.querySelector('#gdLead').textContent = '화면을 눌러 점프! 장애물에 닿으면 끝나요.';
+    document.querySelector('#gdStartHint').replaceChildren(
+      '게임 화면을 톡 누르면 점프해요.',
+      document.createElement('br'),
+      '보라색 비행 구간에서는 꾹 누르고 있으면 떠올라요.'
+    );
+  }
 
   nameInput.value = localStorage.getItem(NICKNAME_KEY) || '';
 
@@ -475,6 +492,7 @@
 
   function endGame() {
     running = false;
+    document.body.classList.remove('gd-playing');
     cancelAnimationFrame(rafId);
     stopBgm();
     playTone(300, 0.12, 'sawtooth', 0.14);
@@ -812,6 +830,7 @@
     lastTime = performance.now();
     startOverlay.hidden = true;
     overOverlay.hidden = true;
+    document.body.classList.add('gd-playing');
     draw();
     startBgm();
     rafId = requestAnimationFrame(loop);
@@ -827,6 +846,65 @@
     jumpHeld = false;
   }
 
+  // 다른 앱·탭으로 가면 멈추고 "이어하기" 카드를 보여 준다. 진행 중인 카운트다운도 취소한다.
+  function pauseGame() {
+    if (!running && countdownTimer === 0) return;
+    running = false;
+    paused = true;
+    cancelAnimationFrame(rafId);
+    window.clearInterval(countdownTimer);
+    countdownTimer = 0;
+    countdownText.hidden = true;
+    jumpHeld = false;
+    activePointers.clear();
+    stopBgm();
+    pauseOverlay.hidden = false;
+  }
+
+  // 3, 2, 1을 센 뒤 멈췄던 자리에서 그대로 다시 달린다.
+  function resumeGame() {
+    if (!paused || countdownTimer !== 0) return;
+    pauseOverlay.hidden = true;
+    let count = 3;
+    const showCount = () => {
+      // 숨겼다가 다시 보여 줘서 숫자가 바뀔 때마다 튀어나오는 애니메이션이 처음부터 돈다.
+      countdownText.hidden = true;
+      void countdownText.offsetWidth;
+      countdownText.textContent = String(count);
+      countdownText.hidden = false;
+      playTone(660, 0.08, 'square', 0.08);
+    };
+    showCount();
+    countdownTimer = window.setInterval(() => {
+      count -= 1;
+      if (count > 0) { showCount(); return; }
+      window.clearInterval(countdownTimer);
+      countdownTimer = 0;
+      countdownText.hidden = true;
+      paused = false;
+      running = true;
+      playTone(990, 0.12, 'square', 0.1);
+      startBgm();
+      lastTime = performance.now();
+      rafId = requestAnimationFrame(loop);
+    }, 1000);
+  }
+
+  // 손가락 여러 개를 썼을 때 모든 손가락을 뗐을 때만 "떼기"로 본다.
+  function handlePointerDown(event) {
+    if (event.target.closest('.gd-overlay')) return;
+    event.preventDefault();
+    activePointers.add(event.pointerId);
+    // 손가락이 게임 화면 밖으로 미끄러져도 계속 누르고 있는 것으로 받는다.
+    try { stageWrap.setPointerCapture(event.pointerId); } catch (error) { /* 무시 */ }
+    handlePressStart();
+  }
+
+  function handlePointerUp(event) {
+    activePointers.delete(event.pointerId);
+    if (activePointers.size === 0) handlePressEnd();
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.code !== 'Space' && event.code !== 'ArrowUp') return;
     event.preventDefault();
@@ -836,20 +914,19 @@
     if (event.code !== 'Space' && event.code !== 'ArrowUp') return;
     handlePressEnd();
   });
-  canvas.addEventListener('pointerdown', (event) => { event.preventDefault(); handlePressStart(); });
-  canvas.addEventListener('pointerup', handlePressEnd);
-  canvas.addEventListener('pointercancel', handlePressEnd);
-  canvas.addEventListener('pointerleave', handlePressEnd);
+  stageWrap.addEventListener('pointerdown', handlePointerDown);
+  stageWrap.addEventListener('pointerup', handlePointerUp);
+  stageWrap.addEventListener('pointercancel', handlePointerUp);
+  stageWrap.addEventListener('contextmenu', (event) => {
+    if (!event.target.closest('.gd-overlay')) event.preventDefault();
+  });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      running = false;
-      jumpHeld = false;
-      stopBgm();
-    }
+    if (document.hidden) pauseGame();
   });
 
   startButton.addEventListener('click', startGame);
   retryButton.addEventListener('click', startGame);
+  resumeButton.addEventListener('click', resumeGame);
   muteButton.addEventListener('click', () => {
     muted = !muted;
     localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
