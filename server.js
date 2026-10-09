@@ -9,6 +9,7 @@ const { setupMusicGame } = require('./src/music');
 const { setupTriangleGame } = require('./src/triangle');
 const { setupWordChainGame } = require('./src/word-chain');
 const { createDictionary } = require('./src/word-chain/dictionary');
+const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createOneShotStore } = require('./src/word-chain/one-shot-store');
 const { createBrain } = require('./src/word-chain/brain');
 const { createGistSync } = require('./lib/gist-sync');
@@ -55,7 +56,12 @@ const wordChainDictionary = createDictionary({ store: oneShotStore });
 // 성장 컴퓨터의 미리 공부하기(게임이 없을 때 사전을 조금씩 훑어 한방단어를 외움, 사전마다 하루 1,000번까지).
 const wordChainStudy = createStudy({ dictionary: wordChainDictionary, brain: wordChainBrain, dictionaries: ['stdict', 'opendict'],
   filePath: process.env.WORD_CHAIN_STUDY_PATH || path.join(__dirname, 'data', 'word-chain-study.json'), remote: gistSync });
-const wordChainGame = setupWordChainGame({ app, io, rootDir: __dirname, dictionary: wordChainDictionary, brain: wordChainBrain, study: wordChainStudy });
+// 🏆 고수 컴퓨터: 표준국어대사전 전체 단어 지도(data/word-chain-words-stdict.txt, 없으면 Gist)로 수를 읽는다. 지도는 서버를 직접 켤 때만 불러온다.
+const wordChainMaster = createMaster({
+  loadWords: (dict) => loadWordList(dict, { dir: path.join(__dirname, 'data'), token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID }),
+  extras: createExtras(process.env.WORD_CHAIN_EXTRA_PATH || path.join(__dirname, 'data', 'word-chain-words-extra.json'), { remote: gistSync })
+});
+const wordChainGame = setupWordChainGame({ app, io, rootDir: __dirname, dictionary: wordChainDictionary, brain: wordChainBrain, study: wordChainStudy, master: wordChainMaster });
 app.use(express.json({ limit: '2kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'games.html')));
 app.get('/doodlepang', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -939,12 +945,13 @@ setInterval(() => {
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Group Game Collection server: http://localhost:${PORT}`));
   wordChainStudy.start();
+  wordChainMaster.start();
   // Render가 서버를 재우거나 새로 올릴 때 보내는 종료 신호: 아직 못 올린 기억을 마저 저장하고 끝낸다(최대 8초).
   for (const signal of ['SIGTERM', 'SIGINT']) {
     process.once(signal, () => {
       const done = () => process.exit(0);
       setTimeout(done, 8_000).unref();
-      Promise.all([oneShotStore.flush(), wordChainBrain.flush(), wordChainStudy.flush()]).finally(done);
+      Promise.all([oneShotStore.flush(), wordChainBrain.flush(), wordChainStudy.flush(), wordChainMaster.flush()]).finally(done);
     });
   }
 }

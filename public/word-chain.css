@@ -36,6 +36,10 @@
 .wc-dict-choice small { color: var(--muted); line-height: 1.4; }
 .wc-dict-choice input:checked + span { border-color: var(--wc); background: #eff6ff; }
 .wc-dict-choice input:focus-visible + span { outline: 3px solid #3b82f655; outline-offset: 2px; }
+.wc-dict-choice input:disabled + span { opacity: .45; cursor: not-allowed; }
+.wc-mode-choice label:last-child:nth-child(odd) { grid-column: 1 / -1; } /* 컴퓨터 종류가 3개면 마지막 것은 한 줄 전체 */
+.wc-think-input { display: flex; align-items: center; gap: 8px; }
+.wc-think-input input { width: 110px; }
 
 /* ── 게임 화면 공통 ── */
 .wc-play-page { background: linear-gradient(135deg, #f0f7ff, #f0fdf7); min-height: 100vh; }

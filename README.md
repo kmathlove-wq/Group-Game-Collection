@@ -19,6 +19,15 @@
 - 사전 확인 중에는 시계가 멈추고, 컴퓨터가 이어 말할 단어를 못 찾으면 승리
 - 차례 시간에 `제한 없음` 추가(막히면 내 차례에 포기), 방장은 대기실에서 ▲▼·🔀로 차례 순서를 정하고, 컴퓨터 대결은 누가 먼저 할지 선택
 - 한방단어는 끝 글자별 단어장에 약 6개월 기억해 다음부터 바로 알아보며, 저장은 뒤에서 하므로 단어 확인 시간이 늘지 않음. 한방단어가 나오면 💥 알림과 함께 다음 사람이 바로 탈락
+- 컴퓨터는 🎲 기본(무작위)·🌱 성장(진 판을 기억)·🏆 고수 중에서 고름. 고수 컴퓨터는 표준국어대사전 전체 단어 지도로 필승·필패 글자를 계산하고 끝까지 수를 읽으며, 생각 시간(1~60초, 기본 5초)을 직접 정할 수 있음
+
+#### 🏆 고수 컴퓨터 단어 지도 만들기·새로 고치기
+
+```bash
+node scripts/collect-words.js stdict   # .env의 STDICT_API_KEY 사용, 약 30분~1시간, 끊기면 다시 실행하면 이어서 함
+```
+
+만들어진 `data/word-chain-words-stdict.txt`는 Git에 올리지 않습니다(저장소가 공개라서). Render에서 쓰려면 이 파일을 `GIST_ID`의 비공개 Gist에 같은 이름으로 올리세요. 사전은 자주 바뀌지 않으니 몇 달에 한 번 다시 모으면 되고, 그 사이 새로 생긴 낱말은 사람이 낼 때 자동으로 지도에 더해집니다.
 
 ### 삼각형 땅따먹기
 
@@ -114,6 +123,7 @@ npm start
 | `OPENDICT_API_KEY` | 없음 | 끝말잇기용 우리말샘 Open API 키 |
 | `WORD_CHAIN_STORE_PATH` | `data/word-chain-one-shot.json` | 끝말잇기 한방단어 단어장 파일 경로 |
 | `WORD_CHAIN_BRAIN_PATH` | `data/word-chain-brain.json` | 끝말잇기 성장 컴퓨터 기억 노트 파일 경로 |
+| `WORD_CHAIN_EXTRA_PATH` | `data/word-chain-words-extra.json` | 고수 컴퓨터 단어 지도에 더하거나 지운 낱말 기록 |
 | `WORD_CHAIN_STUDY_PATH` | `data/word-chain-study.json` | 끝말잇기 성장 컴퓨터 미리 공부하기 진행 파일 경로(사전별 하루 1,000번) |
 | `GIST_TOKEN` | 없음 | 위 두 파일을 GitHub Gist에도 보관할 때 쓰는 토큰(Gists 읽기·쓰기 권한만) |
 | `GIST_ID` | 없음 | 보관할 비공개 Gist의 ID |

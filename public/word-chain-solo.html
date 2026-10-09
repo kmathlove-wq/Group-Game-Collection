@@ -25,12 +25,15 @@
         <label><input type="radio" name="dictionary" value="opendict"><span><b>우리말샘</b><small>신조어·방언·전문어까지 · 단어가 아주 많아요</small></span></label>
       </div>
       <div class="field"><span class="wc-field-label">어떤 컴퓨터랑 할까요?</span>
-        <div class="wc-dict-choice wc-first-choice" role="radiogroup" aria-label="컴퓨터 종류">
+        <div class="wc-dict-choice wc-first-choice wc-mode-choice" role="radiogroup" aria-label="컴퓨터 종류">
           <label><input type="radio" name="mode" value="basic" checked><span><b>🎲 기본 컴퓨터</b><small>단어를 무작위로 골라요</small></span></label>
           <label><input type="radio" name="mode" value="growth"><span><b>🌱 성장하는 컴퓨터</b><small>진 한방단어를 기억해서 점점 강해져요</small></span></label>
+          <label><input type="radio" name="mode" value="master"><span><b>🏆 고수 컴퓨터</b><small id="masterNote">사전을 통째로 외우고 끝까지 수를 읽어요 · 표준국어대사전만</small></span></label>
         </div>
         <p id="brainInfo" class="wc-brain-info hidden" aria-live="polite"></p>
       </div>
+      <div id="thinkField" class="field hidden"><label for="think">🏆 고수 컴퓨터 생각 시간 <small>(1~60초 · 짧으면 쉽고 길면 어려워요)</small></label>
+        <div class="wc-think-input"><input id="think" type="number" min="1" max="60" step="1" value="5" inputmode="numeric"><span>초</span></div></div>
       <div class="field"><span class="wc-field-label">누가 먼저 할까요?</span>
         <div class="wc-dict-choice wc-first-choice" role="radiogroup" aria-label="먼저 할 사람">
           <label><input type="radio" name="first" value="me" checked><span><b>🙋 내가 먼저</b><small>아무 단어로 시작해요</small></span></label>

@@ -930,3 +930,30 @@ test('끝말잇기: 특수문자·띄어쓰기는 자동으로 지우고 낸다'
   const reply = await post(`${url}/api/word-chain/solo/${id}/word`, { word: '사과!!' });
   assert.equal(reply.player.word, '사과'); assert.equal(reply.computer.word, '과자');
 });
+
+test('끝말잇기 🏆 고수 모드: 단어 지도로 필승 수를 내고, 사전에서 빠진 낱말은 지우고, 지도에 없는 새 낱말은 배운다', async (t) => {
+  const { createMaster } = require('../src/word-chain/master');
+  // 지도에는 사전에서 빠진 '사과일'이 있고, 사전에 새로 생긴 '보나'·'나비'는 없다.
+  const master = createMaster({ loadWords: async () => ['보사', '사과일', '사륨'], inline: true, random: () => 0 });
+  await master.start();
+  const { url } = await startServer(t, { master }, ['보사', '사륨', '보나', '나비', '비누']);
+  const status = await (await fetch(`${url}/api/word-chain/status`)).json();
+  assert.deepEqual(status.dictionaries.map((d) => [d.code, d.master]), [['stdict', 'ready'], ['opendict', 'off']]);
+  assert.match((await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'master' })).message, /표준국어대사전에서만/);
+
+  const game = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'master', think: 999 });
+  assert.equal(game.mode, 'master'); assert.equal(game.think, 60); // 생각 시간은 1~60초로 맞춘다
+  const reply = await post(`${url}/api/word-chain/solo/${game.id}/word`, { word: '보사' });
+  // 사과일(지도에서 먼저 고름)은 사전에 없어서 지우고, 사륨(륨 = 이어 갈 낱말 없음)을 필승 수로 낸다.
+  assert.deepEqual([reply.computer.word, reply.computer.how, reply.computer.definition], ['사륨', 'master-win', '사륨의 뜻']);
+  assert.equal(await master.learn('stdict', '사과일'), true); // 지워졌으니 다시 더할 수 있다
+  await master.forget('stdict', '사과일');
+
+  // 지도에 없는 '보나'를 사람이 내면 배우고, 지도가 '나'에서 낼 게 없다고 해도 사전 후보(나비)로 이어 간 뒤 배운다.
+  const second = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'master' });
+  assert.equal(second.think, 5); // 안 주면 기본 5초
+  const next = await post(`${url}/api/word-chain/solo/${second.id}/word`, { word: '보나' });
+  assert.equal(next.computer.word, '나비');
+  assert.equal(await master.learn('stdict', '보나'), false);
+  assert.equal(await master.learn('stdict', '나비'), false);
+});

@@ -4,6 +4,7 @@ const express = require('express');
 const { precheck, typedWord, lastSyllable, firstSyllable, allowedStarts } = require('./rules');
 const { DictionaryError, DICTIONARIES } = require('./dictionary');
 const { createBrain, strengthOf } = require('./brain');
+const { thinkSeconds } = require('./master');
 
 const MAX_PLAYERS = 8;
 const TURN_TIMES = [0, 10, 15, 20, 30]; // 0 = 제한 없음
@@ -71,8 +72,8 @@ function rankPlayers(players, eliminated) {
 }
 
 // secondMs는 테스트에서 차례 시간을 짧게 돌리려고 둔 값이다(운영은 항상 1000).
-// brain·strength·random은 성장 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
-function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, lookaheadMs = LOOKAHEAD_MS, study = null, brain = createBrain(null), strength = strengthOf, random = Math.random }) {
+// brain·strength·random은 성장 모드용, master는 🏆 고수 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
+function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, lookaheadMs = LOOKAHEAD_MS, study = null, brain = createBrain(null), strength = strengthOf, random = Math.random, master = null }) {
   const page = (name) => (_req, res) => res.sendFile(path.join(rootDir, 'public', name));
   app.get('/word-chain', page('word-chain.html'));
   app.get('/word-chain/solo', page('word-chain-solo.html'));
@@ -81,7 +82,8 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   const json = express.json({ limit: '2kb' });
 
   app.get('/api/word-chain/status', (_req, res) => {
-    res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code) })) });
+    // master: 🏆 고수 컴퓨터 단어 지도 상태('ready' | 'loading' | 'missing' | 'off')
+    res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code), master: master?.status(code) ?? 'off' })) });
   });
 
   // 끝 글자의 한방 여부를 묻는다. 사전 문제로 실패하면 3초 뒤 다시 묻고(최대 3번), stillNeeded()가 거짓이 되면 그만둔다.
@@ -278,6 +280,32 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     return pickFrom(sample.filter((c) => counts.get(c.word) === fewest));
   }
 
+  // ── 🏆 고수 모드: 사전 전체 단어 지도로 수를 읽는다(master.js → 일꾼 → master-engine.js) ──
+  // 고른 낱말은 내기 전에 사전에 한 번 확인한다: 화면에 보여 줄 뜻을 받고, 사전에서 빠진 낱말이면 지도에서 지우고 다시 고른다(최대 3번).
+  // 지도가 "낼 게 없다"고 하거나 일꾼에 문제가 생기면 원래 사전 후보에서 고른다(지도에 없는 새 낱말이 있을 수 있어서 억울한 패배를 막는다).
+  // how: master-win(🏆 필승 수) · master-think(🧠 끝까지 따라가 본 수) · master-hold(🪨 버티기 수)
+  async function masterMove(dict, ask, fallback) {
+    for (let tries = 0; tries < 3; tries += 1) {
+      let move = null;
+      try { move = await ask(); } catch (error) { console.error('[word-chain] 고수 컴퓨터 오류:', error.message); break; }
+      if (!move?.word) break;
+      const found = await dictionary.lookup(dict, move.word);
+      if (found.found) return { word: move.word, definition: found.definition, how: `master-${move.how}`, proven: move.proven };
+      await master.forget(dict, move.word).catch(() => {});
+    }
+    const pick = await fallback();
+    if (pick) master.learn(dict, pick.word).catch(() => {});
+    return pick;
+  }
+  const masterPick = (game, playerWord) => masterMove(game.dictionary,
+    () => master.pick(game.dictionary, playerWord, game.used, game.think),
+    () => dictionary.pickWord(game.dictionary, lastSyllable(playerWord), game.used));
+  const masterOpener = (game) => masterMove(game.dictionary,
+    () => master.opener(game.dictionary, game.used, game.think),
+    () => takeOpener(game.dictionary, game.used));
+  // 사전 확인을 통과한 낱말이 단어 지도에 없으면 더한다(사전에 새로 생긴 낱말). 모든 모드·여럿이 방에서 배운다.
+  const teachMaster = (dict, word) => { master?.learn(dict, word).catch(() => {}); };
+
   app.get('/api/word-chain/solo/brain', (req, res) => res.json({ ok: true, ...brainInfo(dictionaryCode(req.query.dictionary)) }));
 
   // 컴퓨터가 먼저 할 때: 흔한 글자로 시작하는, 한방단어가 아닌 첫 단어를 고른다.
@@ -336,12 +364,18 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     study?.gameActive(); // 게임이 사전을 쓰는 동안 미리 공부하기는 쉰다
     const dict = dictionaryCode(req.body?.dictionary);
     if (!dictionary.isConfigured(dict)) return res.status(503).json({ ok: false, message: `${DICTIONARIES[dict].name} API 키가 아직 설정되지 않았어요.` });
-    const mode = req.body?.mode === 'growth' ? 'growth' : 'basic'; // basic = 원래의 무작위 컴퓨터
-    const game = { mode, dictionary: dict, used: new Set(), defs: new Map(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
+    const mode = ['growth', 'master'].includes(req.body?.mode) ? req.body.mode : 'basic'; // basic = 원래의 무작위 컴퓨터
+    if (mode === 'master') {
+      const state = master?.status(dict) ?? 'off';
+      if (state === 'off') return res.status(400).json({ ok: false, message: '🏆 고수 컴퓨터는 아직 표준국어대사전에서만 할 수 있어요.' });
+      if (state !== 'ready') return res.status(503).json({ ok: false, message: state === 'loading' ? '🏆 고수 컴퓨터가 단어 지도를 준비하는 중이에요. 잠시 후 다시 해 주세요.' : '🏆 고수 컴퓨터의 단어 지도가 아직 없어요.' });
+    }
+    // think: 고수 컴퓨터가 생각하는 시간(초, 1~60, 기본 5) — 짧으면 쉽고 길면 어렵다
+    const game = { mode, think: thinkSeconds(req.body?.think), dictionary: dict, used: new Set(), defs: new Map(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
     let computer = null;
     if (req.body?.first === 'computer') {
       try {
-        computer = await takeOpener(dict, game.used);
+        computer = mode === 'master' ? await masterOpener(game) : await takeOpener(dict, game.used);
         // 성장 컴퓨터는 첫 단어도 위험한 단어(예: 가돌리늄을 알면 '…가'로 끝나는 단어)는 피한다. 안전한 걸 못 찾으면 그대로 쓴다.
         if (mode === 'growth' && computer && !safeFor(dict, game.used)(computer.word)) computer = (await growthOpener(dict, game.used)) || computer;
       }
@@ -352,7 +386,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     if (soloGames.size >= SOLO_MAX) soloGames.delete(soloGames.keys().next().value);
     const id = crypto.randomUUID();
     soloGames.set(id, game);
-    res.json({ ok: true, id, dictionary: dict, mode, brain: mode === 'growth' ? brainInfo(dict) : null, computer, nextStarts: computer ? allowedStarts(lastSyllable(computer.word)) : null });
+    res.json({ ok: true, id, dictionary: dict, mode, think: game.think, brain: mode === 'growth' ? brainInfo(dict) : null, computer, nextStarts: computer ? allowedStarts(lastSyllable(computer.word)) : null });
   });
 
   app.post('/api/word-chain/solo/:id/word', json, async (req, res) => {
@@ -373,12 +407,18 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
         const { oneShotWord, ...reply } = result;
         return res.json({ ...reply, took: took() });
       }
-      game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game.dictionary, result);
+      game.used.add(result.word); game.defs.set(result.word, result.definition); noteHard(game.dictionary, result); teachMaster(game.dictionary, result.word);
       const playerSyllable = lastSyllable(result.word);
       // 내 단어가 이미 단어장에 한방으로 있으면 컴퓨터에게 물어볼 것도 없이 바로 승리.
       const playerOneShot = dictionary.knownContinuation(game.dictionary, playerSyllable, game.used) === false;
       let computer = null;
-      try { if (!playerOneShot) computer = game.mode === 'growth' ? await growthPick(game.dictionary, playerSyllable, game.used) : await dictionary.pickWord(game.dictionary, playerSyllable, game.used); }
+      try {
+        if (!playerOneShot) {
+          computer = game.mode === 'growth' ? await growthPick(game.dictionary, playerSyllable, game.used)
+            : game.mode === 'master' ? await masterPick(game, result.word)
+              : await dictionary.pickWord(game.dictionary, playerSyllable, game.used);
+        }
+      }
       catch (error) {
         game.used.delete(result.word); // 컴퓨터가 대답을 못 한 건 사전 연결 문제이니 내 단어를 없던 일로 한다
         return res.json({ ok: false, dictionaryError: true, message: error instanceof DictionaryError ? error.message : '사전을 확인하다 문제가 생겼어요.' });
@@ -719,7 +759,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
       // fresh: 새 끝말 줄기의 첫 단어(게임 시작·탈락 직후). 한방 탈락 때 이 줄기 단어만 배우려고 표시한다.
       const entry = { word: result.word, definition: result.definition, userId: player.userId, nickname: player.nickname, color: player.color, fresh: !game.lastWord };
       game.words.push(entry);
-      noteHard(room.dictionary, result);
+      noteHard(room.dictionary, result); teachMaster(room.dictionary, result.word);
       game.used.add(result.word); game.lastWord = result.word; player.score += 1;
       io.to(channel(room)).emit('wc:word:accepted', { word: result.word, userId: player.userId });
       ack({ ok: true, word: result.word });

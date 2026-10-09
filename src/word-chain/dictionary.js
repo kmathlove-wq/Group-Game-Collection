@@ -318,4 +318,4 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
   return { isConfigured, warmCandidates, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
 }
 
-module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse };
+module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse, playable, WORD_TYPES };

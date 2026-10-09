@@ -13,7 +13,8 @@
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
     if (saved.dictionary) document.querySelector(`input[name=dictionary][value="${saved.dictionary === 'opendict' ? 'opendict' : 'stdict'}"]`).checked = true;
     if (saved.first === 'computer') document.querySelector('input[name=first][value="computer"]').checked = true;
-    if (saved.mode === 'growth') document.querySelector('input[name=mode][value="growth"]').checked = true;
+    if (['growth', 'master'].includes(saved.mode)) document.querySelector(`input[name=mode][value="${saved.mode}"]`).checked = true;
+    if (saved.think) $('#think').value = String(saved.think);
     if (saved.turnTime !== undefined) $('#turnTime').value = String(saved.turnTime);
   } catch { /* 저장된 설정이 없어도 기본값으로 시작 */ }
 
@@ -59,6 +60,31 @@
     } catch { el.classList.add('hidden'); }
   }
 
+  // 🏆 고수 컴퓨터: 단어 지도가 준비됐는지 서버에 묻고, 고르면 생각 시간 칸을 보이고 사전을 표준국어대사전으로 고정한다.
+  let masterState = 'loading';
+  const modeNow = () => document.querySelector('input[name=mode]:checked').value;
+  const thinkNow = () => Math.min(60, Math.max(1, Math.round(Number($('#think').value) || 5)));
+  function updateMaster() {
+    const masterInput = document.querySelector('input[name=mode][value="master"]');
+    masterInput.disabled = masterState !== 'ready';
+    $('#masterNote').textContent = masterState === 'ready' ? '사전을 통째로 외우고 끝까지 수를 읽어요 · 표준국어대사전만'
+      : masterState === 'loading' ? '⏳ 단어 지도를 준비하는 중이에요…' : '아직 준비 중이에요';
+    if (masterInput.disabled && masterInput.checked) document.querySelector('input[name=mode][value="basic"]').checked = true;
+    const isMaster = modeNow() === 'master';
+    $('#thinkField').classList.toggle('hidden', !isMaster);
+    const opendict = document.querySelector('input[name=dictionary][value="opendict"]');
+    if (isMaster) document.querySelector('input[name=dictionary][value="stdict"]').checked = true;
+    opendict.disabled = isMaster;
+  }
+  async function loadMaster() {
+    try {
+      const status = await (await fetch('/api/word-chain/status')).json();
+      masterState = status.dictionaries?.find((d) => d.code === 'stdict')?.master ?? 'off';
+    } catch { masterState = 'off'; }
+    updateMaster();
+    if (masterState === 'loading') setTimeout(loadMaster, 5_000); // 서버가 막 켜졌으면 지도가 준비될 때까지 가끔 다시 묻는다
+  }
+
   async function finish(win, title, detail = '') {
     if (over) return; over = true; deadline = null;
     $('#word').disabled = true; $('#send').disabled = true; $('#giveup').disabled = true;
@@ -75,16 +101,18 @@
     const dictionary = document.querySelector('input[name=dictionary]:checked').value;
     const turnTime = Number($('#turnTime').value);
     const first = document.querySelector('input[name=first]:checked').value;
-    const mode = document.querySelector('input[name=mode]:checked').value;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime, first, mode })); } catch { /* 저장 못 해도 진행 */ }
+    const mode = modeNow();
+    const think = thinkNow(); $('#think').value = String(think);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ dictionary, turnTime, first, mode, think })); } catch { /* 저장 못 해도 진행 */ }
     $('#start').disabled = true;
     $('#setupNotice').classList.add('hidden');
-    if (first === 'computer') $('#start').textContent = '🤖 컴퓨터가 첫 단어를 고르는 중…';
+    if (first === 'computer') $('#start').textContent = mode === 'master' ? `🏆 고수 컴퓨터가 첫 단어를 생각하는 중… (최대 ${think}초)` : '🤖 컴퓨터가 첫 단어를 고르는 중…';
     try {
-      const data = await post('/api/word-chain/solo', { dictionary, first, mode });
+      const data = await post('/api/word-chain/solo', { dictionary, first, mode, think });
       if (!data.ok) throw new Error(data.message);
-      game = { id: data.id, turnTime, mode };
-      $('#brainBadge').textContent = data.brain ? `🌱 레벨 ${data.brain.level} · ${data.brain.learned}개` : ''; $('#brainBadge').classList.toggle('hidden', !data.brain); over = false; busy = false;
+      game = { id: data.id, turnTime, mode, think: data.think };
+      const badge = data.brain ? `🌱 레벨 ${data.brain.level} · ${data.brain.learned}개` : mode === 'master' ? `🏆 고수 · 생각 ${data.think}초` : '';
+      $('#brainBadge').textContent = badge; $('#brainBadge').classList.toggle('hidden', !badge); over = false; busy = false;
       $('#dictBadge').textContent = `📖 ${dictionary === 'opendict' ? '우리말샘' : '표준국어대사전'}`; $('#dictBadge').classList.remove('hidden');
       $('#setup').classList.add('hidden'); $('#game').classList.remove('hidden');
       $('#chain').replaceChildren(); $('#score').textContent = '0'; message('');
@@ -102,7 +130,7 @@
     const word = $('#word').value.replace(/\s/g, '');
     if (!word || busy || over) return;
     busy = true; pausedMs = deadline ? Math.max(0, deadline - Date.now()) : null; deadline = null; // 확인하는 동안 시계 멈춤
-    $('#send').disabled = true; message('📖 사전에서 확인하는 중…');
+    $('#send').disabled = true; message(game.mode === 'master' ? `📖 사전에서 확인하고 🏆 고수 컴퓨터가 생각하는 중… (최대 ${game.think}초)` : '📖 사전에서 확인하는 중…');
     try {
       const data = await post(`/api/word-chain/solo/${game.id}/word`, { word });
       if (over) return;
@@ -121,7 +149,10 @@
       beep([660, 880], 0.08);
       addWord(data.computer.word, data.computer.definition, false);
       if (data.finished) { oneShotLose(data.computer.word, data.score, data.computer.how); return; }
-      const hint = { attack: '🌱 컴퓨터가 노리고 낸 단어 같아요… 조심!', trap: '🪤 컴퓨터가 함정을 판 것 같아요… 다음 단어를 잘 골라요!', hard: '🧩 컴퓨터가 대답하기 어려운 단어를 냈어요!' }[data.computer.how];
+      const hint = { attack: '🌱 컴퓨터가 노리고 낸 단어 같아요… 조심!', trap: '🪤 컴퓨터가 함정을 판 것 같아요… 다음 단어를 잘 골라요!', hard: '🧩 컴퓨터가 대답하기 어려운 단어를 냈어요!',
+        'master-win': '🏆 고수 컴퓨터가 이기는 길을 찾았대요… 정신 바짝!',
+        'master-think': data.computer.proven ? '🧠 고수 컴퓨터가 끝까지 따라가 보고 이기는 수를 찾았어요!' : '🧠 고수 컴퓨터가 깊이 생각해서 낸 단어예요.',
+        'master-hold': '🪨 고수 컴퓨터가 버티는 중이에요. 이어 갈 단어가 아주 적을 거예요!' }[data.computer.how];
       if (hint) message(hint);
       if (data.checkOneShot) watchOneShot(game.id, data.computer.word);
       if (!hint) message('');
@@ -139,7 +170,7 @@
   // how: 성장 모드에서 컴퓨터가 단어를 고른 방법('memory' = 기억 노트, 'attack' = 노리고 낸 단어)
   function oneShotLose(word, score, how) {
     $('#chain').lastElementChild?.classList.add('one-shot');
-    const title = how === 'memory' ? '😎 지난번에 배운 단어야!' : how === 'attack' ? '🌱 컴퓨터의 공격 성공!' : '💥 컴퓨터의 한방단어!';
+    const title = how === 'memory' ? '😎 지난번에 배운 단어야!' : how === 'attack' ? '🌱 컴퓨터의 공격 성공!' : how?.startsWith('master') ? '🏆 고수 컴퓨터의 한방!' : '💥 컴퓨터의 한방단어!';
     const remember = learnNote();
     finish(false, title, `'${word}'(으)로 이어 말할 단어가 사전에 없어요. 단어 ${score}개를 이었어요.${remember}`);
   }
@@ -159,7 +190,8 @@
   }
   for (const input of document.querySelectorAll('input[name=first], input[name=dictionary]')) input.addEventListener('change', warmOpener);
   for (const input of document.querySelectorAll('input[name=mode], input[name=dictionary]')) input.addEventListener('change', showBrain);
-  warmOpener(); showBrain();
+  for (const input of document.querySelectorAll('input[name=mode]')) input.addEventListener('change', updateMaster);
+  warmOpener(); showBrain(); updateMaster(); loadMaster();
 
   $('#start').onclick = start;
   $('#wordForm').addEventListener('submit', submit);
