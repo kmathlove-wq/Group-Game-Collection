@@ -72,8 +72,8 @@ function rankPlayers(players, eliminated) {
 }
 
 // secondMs는 테스트에서 차례 시간을 짧게 돌리려고 둔 값이다(운영은 항상 1000).
-// brain·strength·random은 성장 모드용, master는 🏆 고수 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
-function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, lookaheadMs = LOOKAHEAD_MS, study = null, brain = createBrain(null), strength = strengthOf, random = Math.random, master = null }) {
+// brain·strength·random은 성장 모드용, master·patrol은 🏆 고수 모드용이다(테스트에서 바꿔 끼울 수 있게 밖에서 받는다).
+function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, oneShotRetryMs = ONE_SHOT_RETRY_MS, lookaheadMs = LOOKAHEAD_MS, study = null, brain = createBrain(null), strength = strengthOf, random = Math.random, master = null, patrol = null }) {
   const page = (name) => (_req, res) => res.sendFile(path.join(rootDir, 'public', name));
   app.get('/word-chain', page('word-chain.html'));
   app.get('/word-chain/solo', page('word-chain-solo.html'));
@@ -83,7 +83,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
 
   app.get('/api/word-chain/status', (_req, res) => {
     // master: 🏆 고수 컴퓨터 단어 지도 상태('ready' | 'loading' | 'missing' | 'off')
-    res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code), master: master?.status(code) ?? 'off' })) });
+    res.json({ dictionaries: Object.entries(DICTIONARIES).map(([code, d]) => ({ code, name: d.name, ready: dictionary.isConfigured(code), master: master?.status(code) ?? 'off', patrol: patrol?.info(code) ?? null })) });
   });
 
   // 끝 글자의 한방 여부를 묻는다. 사전 문제로 실패하면 3초 뒤 다시 묻고(최대 3번), stillNeeded()가 거짓이 되면 그만둔다.
@@ -361,14 +361,14 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   });
 
   app.post('/api/word-chain/solo', json, async (req, res) => {
-    study?.gameActive(); // 게임이 사전을 쓰는 동안 미리 공부하기는 쉰다
+    study?.gameActive(); patrol?.gameActive(); // 게임이 사전을 쓰는 동안 미리 공부하기는 쉰다
     const dict = dictionaryCode(req.body?.dictionary);
     if (!dictionary.isConfigured(dict)) return res.status(503).json({ ok: false, message: `${DICTIONARIES[dict].name} API 키가 아직 설정되지 않았어요.` });
     const mode = ['growth', 'master'].includes(req.body?.mode) ? req.body.mode : 'basic'; // basic = 원래의 무작위 컴퓨터
     if (mode === 'master') {
       const state = master?.status(dict) ?? 'off';
-      if (state === 'off') return res.status(400).json({ ok: false, message: '🏆 고수 컴퓨터는 아직 표준국어대사전에서만 할 수 있어요.' });
-      if (state !== 'ready') return res.status(503).json({ ok: false, message: state === 'loading' ? '🏆 고수 컴퓨터가 단어 지도를 준비하는 중이에요. 잠시 후 다시 해 주세요.' : '🏆 고수 컴퓨터의 단어 지도가 아직 없어요.' });
+      if (state === 'off') return res.status(400).json({ ok: false, message: `🏆 고수 컴퓨터는 아직 ${DICTIONARIES[dict].name}에서 할 수 없어요.` });
+      if (state !== 'ready') return res.status(503).json({ ok: false, message: state === 'loading' ? '🏆 고수 컴퓨터가 단어 지도를 준비하는 중이에요. 잠시 후 다시 해 주세요.' : `🏆 고수 컴퓨터의 ${DICTIONARIES[dict].name} 단어 지도가 아직 없어요.` });
     }
     // think: 고수 컴퓨터가 생각하는 시간(초, 1~60, 기본 5) — 짧으면 쉽고 길면 어렵다
     const game = { mode, think: thinkSeconds(req.body?.think), dictionary: dict, used: new Set(), defs: new Map(), lastWord: null, score: 0, busy: false, finished: false, pending: null, lastActive: Date.now() };
@@ -390,7 +390,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
   });
 
   app.post('/api/word-chain/solo/:id/word', json, async (req, res) => {
-    study?.gameActive();
+    study?.gameActive(); patrol?.gameActive();
     const game = soloGames.get(req.params.id);
     if (!game) return res.status(404).json({ ok: false, message: '게임이 오래되어 끝났어요. 새 게임을 시작해 주세요.' });
     if (game.finished) return res.status(400).json({ ok: false, message: '이미 끝난 게임이에요.' });
@@ -732,7 +732,7 @@ function setupWordChainGame({ app, io, rootDir, dictionary, secondMs = 1000, one
     });
 
     socket.on('wc:word', async (raw, ack = () => {}) => {
-      study?.gameActive();
+      study?.gameActive(); patrol?.gameActive();
       if (typeof ack !== 'function') return;
       const { room, player } = membership(socket);
       if (!room || room.state !== 'playing') return ack({ ok: false, message: '게임 중이 아닙니다.' });

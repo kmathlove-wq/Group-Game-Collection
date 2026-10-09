@@ -939,7 +939,7 @@ test('끝말잇기 🏆 고수 모드: 단어 지도로 필승 수를 내고, �
   const { url } = await startServer(t, { master }, ['보사', '사륨', '보나', '나비', '비누']);
   const status = await (await fetch(`${url}/api/word-chain/status`)).json();
   assert.deepEqual(status.dictionaries.map((d) => [d.code, d.master]), [['stdict', 'ready'], ['opendict', 'off']]);
-  assert.match((await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'master' })).message, /표준국어대사전에서만/);
+  assert.match((await post(`${url}/api/word-chain/solo`, { dictionary: 'opendict', mode: 'master' })).message, /우리말샘에서 할 수 없어요/);
 
   const game = await post(`${url}/api/word-chain/solo`, { dictionary: 'stdict', mode: 'master', think: 999 });
   assert.equal(game.mode, 'master'); assert.equal(game.think, 60); // 생각 시간은 1~60초로 맞춘다

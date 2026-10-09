@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Worker } = require('worker_threads');
-const { createMasterEngine } = require('./master-engine');
+const { engineFromText } = require('./master-engine');
 
 const REMOTE_NAME = 'word-chain-words-extra.json';
 const WRITE_DELAY_MS = 2_000;
@@ -22,7 +22,8 @@ function thinkSeconds(value) {
   return Math.min(MAX_THINK_SECONDS, Math.max(MIN_THINK_SECONDS, Math.round(n)));
 }
 
-// 단어 지도 파일을 읽는다: 내 컴퓨터의 data 폴더 → 없으면 Gist. 둘 다 없으면 null(고수 컴퓨터는 "준비 중").
+// 단어 지도 파일 글(한 줄에 한 낱말)을 읽는다: 내 컴퓨터의 data 폴더 → 없으면 Gist. 둘 다 없으면 null(고수 컴퓨터는 "준비 중").
+// 낱말 배열로 자르지 않고 글 그대로 일꾼에게 넘긴다(불러오는 순간 메모리를 두 배로 쓰지 않게).
 async function loadWordList(dict, { dir, token, gistId, fetchImpl = globalThis.fetch } = {}) {
   const local = path.join(dir, wordsFileName(dict));
   let text = null;
@@ -33,8 +34,7 @@ async function loadWordList(dict, { dir, token, gistId, fetchImpl = globalThis.f
     const file = gist.files?.[wordsFileName(dict)];
     if (file) text = await (await fetchImpl(file.raw_url, { headers, signal: AbortSignal.timeout(60_000) })).text();
   }
-  if (text === null) return null;
-  return text.split('\n').map((line) => line.trim()).filter(Boolean);
+  return text;
 }
 
 // 지도에 더한 낱말·지운 낱말 기록(사전별). 저장 방식은 brain.js와 같다(모아서 파일 쓰기 + Gist).
@@ -81,13 +81,14 @@ function createExtras(filePath, { remote = null } = {}) {
 }
 
 // 두뇌 하나(사전 하나)를 일꾼에서, 또는 inline(테스트)이면 지금 스레드에서 돌린다. 메서드는 모두 Promise를 돌려준다.
-function spawnBrain(words, { inline = false, random } = {}) {
+// data = { text, added, removed } (master-engine.js engineFromText 참고)
+function spawnBrain(data, { inline = false, random } = {}) {
   if (inline) {
-    const engine = createMasterEngine(words, { random });
+    const engine = engineFromText(data, { random });
     const call = (op, ...args) => Promise.resolve().then(() => (op === 'size' ? engine.size : engine[op](...args)));
     return { call, close: () => {} };
   }
-  const worker = new Worker(path.join(__dirname, 'master-worker.js'), { workerData: { words } });
+  const worker = new Worker(path.join(__dirname, 'master-worker.js'), { workerData: data });
   worker.unref();
   const waiting = new Map(); let nextId = 1;
   const failAll = (error) => { for (const { reject } of waiting.values()) reject(error); waiting.clear(); };
@@ -105,7 +106,7 @@ function spawnBrain(words, { inline = false, random } = {}) {
   return { call, close: () => worker.terminate() };
 }
 
-// loadWords(사전) → Promise<낱말 배열|null>. dictionaries: 고수 컴퓨터를 켤 사전들.
+// loadWords(사전) → Promise<지도 글(한 줄에 한 낱말)|낱말 배열|null>. dictionaries: 고수 컴퓨터를 켤 사전들.
 function createMaster({ loadWords, dictionaries = ['stdict'], extras = createExtras(null), inline = false, random = Math.random } = {}) {
   const brains = new Map(); // 사전 → { state: 'loading'|'ready'|'missing', brain, promise }
   function load(dict) {
@@ -114,14 +115,13 @@ function createMaster({ loadWords, dictionaries = ['stdict'], extras = createExt
     const entry = { state: 'loading', brain: null };
     entry.promise = (async () => {
       try {
-        const [words] = await Promise.all([loadWords(dict), extras.ready]);
-        if (!words?.length) { entry.state = 'missing'; return null; }
-        const removed = new Set(extras.removed(dict));
-        const list = [...words.filter((w) => !removed.has(w)), ...extras.added(dict)];
-        entry.brain = spawnBrain(list, { inline, random });
-        await entry.brain.call('size'); // 일꾼이 지도를 다 만들 때까지 기다린다
+        const [loaded] = await Promise.all([loadWords(dict), extras.ready]);
+        const text = Array.isArray(loaded) ? loaded.join('\n') : loaded;
+        if (!text?.trim()) { entry.state = 'missing'; return null; }
+        entry.brain = spawnBrain({ text, added: extras.added(dict), removed: extras.removed(dict) }, { inline, random });
+        const size = await entry.brain.call('size'); // 일꾼이 지도를 다 만들 때까지 기다린다
         entry.state = 'ready';
-        console.log(`[word-chain] 🏆 고수 컴퓨터 ${dict} 단어 지도 준비 완료(${list.length.toLocaleString()}개)`);
+        console.log(`[word-chain] 🏆 고수 컴퓨터 ${dict} 단어 지도 준비 완료(${size.toLocaleString()}개)`);
         return entry.brain;
       } catch (error) {
         console.error(`[word-chain] 고수 컴퓨터 ${dict} 단어 지도를 불러오지 못했어요:`, error.message);
@@ -133,12 +133,16 @@ function createMaster({ loadWords, dictionaries = ['stdict'], extras = createExt
   }
   const readyBrain = (dict) => (brains.get(dict)?.state === 'ready' ? brains.get(dict).brain : null);
   return {
-    start: () => Promise.all(dictionaries.map(load)),
+    // 사전 지도를 차례로 불러온다(동시에 불러오면 잠깐 메모리를 많이 쓴다)
+    async start() { for (const dict of dictionaries) await load(dict); },
     // 'ready' | 'loading' | 'missing' | 'off'(이 사전은 고수 컴퓨터가 없음)
     status: (dict) => (!dictionaries.includes(dict) ? 'off' : brains.get(dict)?.state ?? 'loading'),
     async pick(dict, lastWord, used, seconds) { return readyBrain(dict)?.call('pick', lastWord, [...used], thinkSeconds(seconds) * 1000) ?? null; },
     async opener(dict, used, seconds) { return readyBrain(dict)?.call('opener', [...used], thinkSeconds(seconds) * 1000) ?? null; },
     // 사전 확인을 통과한 낱말이 지도에 없으면 더한다(사전에 새로 생긴 낱말).
+    // 🔍 단어 순찰용(patrol.js): 확인할 시작 글자 목록, 그 글자로 시작하는 지도 낱말들. 지도가 준비 안 됐으면 null.
+    async patrolTargets(dict) { return readyBrain(dict)?.call('patrolTargets') ?? null; },
+    async wordsStarting(dict, syllable) { return readyBrain(dict)?.call('wordsStarting', syllable) ?? null; },
     async learn(dict, word) {
       const brain = readyBrain(dict); if (!brain) return false;
       const added = await brain.call('add', word);

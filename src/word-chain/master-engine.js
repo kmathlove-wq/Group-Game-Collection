@@ -18,43 +18,64 @@ const OPENER_SAMPLES = 24;      // 첫 단어를 깊이 생각할 때 살펴볼 
 class OutOfTime extends Error {}
 
 function createMasterEngine(words = [], { random = Math.random, now = () => performance.now() } = {}) {
-  const pairs = new Map();  // 첫 글자 → Map(끝 글자 → Set(낱말))
+  // 메모리 아끼기(우리말샘은 낱말이 100만 개 가까이 된다): 낱말마다 따로 담지 않고, 같은 길(첫 글자→끝 글자)의 낱말을
+  // 줄바꿈으로 이어 붙인 문자열 하나와 개수로 담는다. 칸 = [개수, '낱말1↵낱말2…']. 더하기·지우기는 드물어서 그때만 다시 이어 붙인다.
+  const pairs = new Map();  // 첫 글자 → Map(끝 글자 → 칸)
   const ends = new Map();   // 끝 글자 → 그 글자로 끝나는 낱말 수(위치가 될 수 있는 글자들)
-  const all = new Set();
+  let count = 0;
   const startsCache = new Map();
   const startsOf = (x) => { let s = startsCache.get(x); if (!s) { s = allowedStarts(x); startsCache.set(x, s); } return s; };
   // 길 s→e로 e에 들어가면 상대가 받는 자리: 그 낱말이 e의 돌아오는 길(s가 e에서 시작할 수 있는 글자)이기도 하면 e⁻.
   const minusOne = (e) => `${e}${LOOPED}`;
   const landing = (s, e) => (startsOf(e).includes(s) ? minusOne(e) : e);
+  const key = (s, e) => `${s}\u0000${e}`; // 길 이름(첫 글자 + 끝 글자)
+  const cellOf = (word) => pairs.get(firstSyllable(word))?.get(lastSyllable(word));
+  const wordsIn = (cell) => (cell ? cell[1].split('\n') : []);
+  const has = (word) => wordsIn(cellOf(word)).includes(word);
 
   function add(word) {
+    if (!isHangulWord(word) || syllables(word).length < WORD_MIN || has(word)) return false;
     const s = firstSyllable(word); const e = lastSyllable(word);
-    if (all.has(word) || !isHangulWord(word) || syllables(word).length < WORD_MIN) return false;
-    all.add(word);
     if (!pairs.has(s)) pairs.set(s, new Map());
-    const row = pairs.get(s);
-    if (!row.has(e)) row.set(e, new Set());
-    row.get(e).add(word);
+    const row = pairs.get(s); const cell = row.get(e);
+    if (cell) { cell[0] += 1; cell[1] += `\n${word}`; } else row.set(e, [1, word]);
     ends.set(e, (ends.get(e) || 0) + 1);
+    count += 1;
     return true;
   }
   function remove(word) {
-    if (!all.delete(word)) return false;
+    if (!has(word)) return false;
     const s = firstSyllable(word); const e = lastSyllable(word);
-    const row = pairs.get(s); row.get(e).delete(word);
-    if (!row.get(e).size) row.delete(e);
+    const row = pairs.get(s); const cell = row.get(e);
+    const rest = wordsIn(cell).filter((w) => w !== word);
+    if (rest.length) { cell[0] = rest.length; cell[1] = rest.join('\n'); } else row.delete(e);
     if (!row.size) pairs.delete(s);
     if (ends.get(e) === 1) ends.delete(e); else ends.set(e, ends.get(e) - 1);
+    count -= 1;
     return true;
   }
-  for (const word of words) add(word);
+  // 처음 지도는 길마다 낱말을 모았다가 한 번에 이어 붙인다(하나씩 add하면 문자열 조각이 쌓여 메모리를 더 쓰고 느리다).
+  const groups = new Map(); // "첫\0끝" → Set(낱말)
+  for (const word of words) {
+    if (!isHangulWord(word) || syllables(word).length < WORD_MIN) continue;
+    const k = key(firstSyllable(word), lastSyllable(word));
+    if (!groups.has(k)) groups.set(k, new Set());
+    groups.get(k).add(word);
+  }
+  for (const [k, set] of groups) {
+    const [s, e] = k.split('\u0000');
+    if (!pairs.has(s)) pairs.set(s, new Map());
+    pairs.get(s).set(e, [set.size, [...set].join('\n')]);
+    ends.set(e, (ends.get(e) || 0) + set.size);
+    count += set.size;
+  }
+  groups.clear();
 
   // 이번 판에 나온 단어 수를 길(첫 글자→끝 글자)마다 센다.
-  const key = (s, e) => `${s}\u0000${e}`;
   function usedCounts(used) {
     const counts = new Map();
     for (const word of used) {
-      if (!all.has(word)) continue;
+      if (!has(word)) continue;
       const k = key(firstSyllable(word), lastSyllable(word));
       counts.set(k, (counts.get(k) || 0) + 1);
     }
@@ -65,15 +86,15 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   //    자리는 글자 x와 "돌아오는 길이 하나 줄어든 x"(x⁻) 두 가지다. x⁻은 x와 다른 길이 같아서 x가 정해질 때 함께 정해진다.
   function analyze(used, extra = []) {
     const spent = usedCounts(used);
-    const left = (s, e, set) => set.size - (spent.get(key(s, e)) || 0);
+    const left = (s, e, cell) => cell[0] - (spent.get(key(s, e)) || 0);
     const positions = new Set([...ends.keys(), ...extra]);
     const targets = new Map();  // 위치 → Map(상대가 받는 자리(e 또는 e⁻) → 낱말 수)
     const remaining = new Map(); const loops = new Map(); const preds = new Map();
     for (const x of positions) {
       const out = new Map();
       for (const s of startsOf(x)) {
-        for (const [e, set] of pairs.get(s) || []) {
-          const n = left(s, e, set);
+        for (const [e, cell] of pairs.get(s) || []) {
+          const n = left(s, e, cell);
           if (n > 0) { const t = landing(s, e); out.set(t, (out.get(t) || 0) + n); }
         }
       }
@@ -109,7 +130,7 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     }
     const total = (x, minus = null) => { // 위치 x에서 낼 수 있는 낱말 수(아직 안 나온 minus 낱말은 이미 썼다고 본다)
       let n = 0; for (const c of (targets.get(x) || new Map()).values()) n += c;
-      if (minus && all.has(minus) && !used.has(minus) && startsOf(x).includes(firstSyllable(minus))) n -= 1;
+      if (minus && !used.has(minus) && has(minus) && startsOf(x).includes(firstSyllable(minus))) n -= 1;
       return n;
     };
     return { status, depth, targets, spent, total, typeOf: (t) => status.get(t) ?? 0 };
@@ -118,15 +139,15 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   // 위치 x에서 낼 수 있는 길 목록 [{ s, e, n, t }]. t = 상대가 받는 자리(e 또는 e⁻) — 승패는 항상 t로 본다.
   function movesFrom(x, spent) {
     const list = [];
-    for (const s of startsOf(x)) for (const [e, set] of pairs.get(s) || []) {
-      const n = set.size - (spent.get(key(s, e)) || 0);
+    for (const s of startsOf(x)) for (const [e, cell] of pairs.get(s) || []) {
+      const n = cell[0] - (spent.get(key(s, e)) || 0);
       if (n > 0) list.push({ s, e, n, t: landing(s, e) });
     }
     return list;
   }
   // 길 s→e에서 아직 안 나온 낱말 하나를 무작위로 고른다.
   function wordOf(s, e, used) {
-    const pool = [...(pairs.get(s)?.get(e) || [])].filter((w) => !used.has(w));
+    const pool = wordsIn(pairs.get(s)?.get(e)).filter((w) => !used.has(w));
     return pool.length ? pool[Math.floor(random() * pool.length)] : null;
   }
 
@@ -224,8 +245,8 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     const used = new Set(usedList);
     const a = analyze(used);
     const paths = [];
-    for (const [s, row] of pairs) for (const [e, set] of row) {
-      const n = set.size - (a.spent.get(key(s, e)) || 0);
+    for (const [s, row] of pairs) for (const [e, cell] of row) {
+      const n = cell[0] - (a.spent.get(key(s, e)) || 0);
       if (n > 0) paths.push({ s, e, n, t: landing(s, e) });
     }
     const traps = paths.filter((m) => a.typeOf(m.t) === LOSE && (a.depth.get(m.t) ?? 0) >= 1);
@@ -242,7 +263,31 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     return { word: wordOf(m.s, m.e, used), how: 'think', type: 'root', proven: Boolean(win) };
   }
 
-  return { add, remove, has: (word) => all.has(word), get size() { return all.size; }, analyze, pick, opener, WIN, LOSE };
+  // 🔍 단어 순찰용: 끝말잇기에서 실제로 받게 되는 시작 글자들(어떤 낱말의 끝 글자에서 두음법칙으로 시작할 수 있는 글자),
+  // 그 글자로 시작하는 낱말이 적은 순서. 낱말이 0~몇 개뿐인 글자에 새 낱말이 생기면 승패가 뒤집히므로 먼저 본다.
+  function patrolTargets() {
+    const counts = new Map();
+    for (const e of ends.keys()) for (const s of startsOf(e)) {
+      if (counts.has(s)) continue;
+      let n = 0; for (const cell of (pairs.get(s) || new Map()).values()) n += cell[0];
+      counts.set(s, n);
+    }
+    return [...counts].sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1)).map(([s]) => s);
+  }
+  // 이 글자로 시작하는 지도 낱말 전부.
+  const wordsStarting = (s) => [...(pairs.get(s) || new Map()).values()].flatMap(wordsIn);
+
+  return { add, remove, has, get size() { return count; }, analyze, pick, opener, patrolTargets, wordsStarting, WIN, LOSE };
 }
 
-module.exports = { createMasterEngine };
+// 단어 지도 파일 글(한 줄에 한 낱말)로 두뇌를 만든다. removed는 빼고 added는 더한다(지도 밖 변화 기록).
+// 일꾼에게는 낱말 배열 대신 글 한 덩어리를 넘겨, 불러오는 순간 메모리를 두 배로 쓰지 않게 한다.
+function engineFromText({ text = '', added = [], removed = [] }, options) {
+  const gone = new Set(removed);
+  const words = [];
+  for (const line of text.split('\n')) { const word = line.trim(); if (word && !gone.has(word)) words.push(word); }
+  for (const word of added) words.push(word);
+  return createMasterEngine(words, options);
+}
+
+module.exports = { createMasterEngine, engineFromText };

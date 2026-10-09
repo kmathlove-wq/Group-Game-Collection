@@ -60,29 +60,33 @@
     } catch { el.classList.add('hidden'); }
   }
 
-  // 🏆 고수 컴퓨터: 단어 지도가 준비됐는지 서버에 묻고, 고르면 생각 시간 칸을 보이고 사전을 표준국어대사전으로 고정한다.
-  let masterState = 'loading';
+  // 🏆 고수 컴퓨터: 사전마다 단어 지도가 준비됐는지 서버에 묻는다. 고수를 고르면 생각 시간 칸을 보이고, 지도가 준비된 사전만 고를 수 있다.
+  const DICT_NAMES = { stdict: '표준국어대사전', opendict: '우리말샘' };
+  let masterStates = {}; // 사전 → 'ready' | 'loading' | 'missing' | 'off'
   const modeNow = () => document.querySelector('input[name=mode]:checked').value;
   const thinkNow = () => Math.min(60, Math.max(1, Math.round(Number($('#think').value) || 5)));
   function updateMaster() {
+    const readyDicts = Object.keys(DICT_NAMES).filter((d) => masterStates[d] === 'ready');
+    const loading = Object.values(masterStates).includes('loading') || !Object.keys(masterStates).length;
     const masterInput = document.querySelector('input[name=mode][value="master"]');
-    masterInput.disabled = masterState !== 'ready';
-    $('#masterNote').textContent = masterState === 'ready' ? '사전을 통째로 외우고 끝까지 수를 읽어요 · 표준국어대사전만'
-      : masterState === 'loading' ? '⏳ 단어 지도를 준비하는 중이에요…' : '아직 준비 중이에요';
-    if (masterInput.disabled && masterInput.checked) document.querySelector('input[name=mode][value="basic"]').checked = true;
+    masterInput.disabled = !readyDicts.length;
+    $('#masterNote').textContent = readyDicts.length
+      ? `사전을 통째로 외우고 끝까지 수를 읽어요${readyDicts.length === 1 ? ` · ${DICT_NAMES[readyDicts[0]]}만` : ''}`
+      : loading ? '⏳ 단어 지도를 준비하는 중이에요…' : '아직 준비 중이에요';
+    if (masterInput.disabled && masterInput.checked && !loading) document.querySelector('input[name=mode][value="basic"]').checked = true;
     const isMaster = modeNow() === 'master';
     $('#thinkField').classList.toggle('hidden', !isMaster);
-    const opendict = document.querySelector('input[name=dictionary][value="opendict"]');
-    if (isMaster) document.querySelector('input[name=dictionary][value="stdict"]').checked = true;
-    opendict.disabled = isMaster;
+    for (const input of document.querySelectorAll('input[name=dictionary]')) input.disabled = isMaster && !readyDicts.includes(input.value);
+    const chosen = document.querySelector('input[name=dictionary]:checked');
+    if (isMaster && chosen.disabled && readyDicts.length) document.querySelector(`input[name=dictionary][value="${readyDicts[0]}"]`).checked = true;
   }
   async function loadMaster() {
     try {
       const status = await (await fetch('/api/word-chain/status')).json();
-      masterState = status.dictionaries?.find((d) => d.code === 'stdict')?.master ?? 'off';
-    } catch { masterState = 'off'; }
+      masterStates = Object.fromEntries((status.dictionaries || []).map((d) => [d.code, d.master ?? 'off']));
+    } catch { masterStates = { stdict: 'off', opendict: 'off' }; }
     updateMaster();
-    if (masterState === 'loading') setTimeout(loadMaster, 5_000); // 서버가 막 켜졌으면 지도가 준비될 때까지 가끔 다시 묻는다
+    if (Object.values(masterStates).includes('loading')) setTimeout(loadMaster, 5_000); // 서버가 막 켜졌으면 지도가 준비될 때까지 가끔 다시 묻는다
   }
 
   async function finish(win, title, detail = '') {

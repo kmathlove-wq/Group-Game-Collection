@@ -10,6 +10,7 @@ data/word-chain-one-shot.json*
 data/word-chain-brain.json*
 data/word-chain-study.json*
 data/word-chain-words-*
+data/word-chain-patrol.json*
 uploads/audio/*
 uploads/images/*
 !uploads/audio/.gitkeep

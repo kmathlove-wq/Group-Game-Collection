@@ -70,3 +70,36 @@ test('고수 컴퓨터: 새 단어는 더하고 사전에서 빠진 단어는 �
   assert.equal(m.has('나트륨'), false); assert.equal(m.pick('사나', ['사나']), null);
   assert.equal(m.add('가'), false); // 한 글자 낱말은 쓰지 않는다
 });
+
+test('고수 컴퓨터 🔍 단어 순찰: 낱말이 적은 시작 글자부터 사전에 다시 물어 새 낱말은 더하고, 사라진 낱말은 확인 후 지운다', async () => {
+  const { createMaster } = require('../src/word-chain/master');
+  const { createPatrol } = require('../src/word-chain/patrol');
+  const R = require('../src/word-chain/rules');
+  // 지도: '늡이'는 사전에서 사라졌고, 사전엔 새 낱말 '릅새'가 생겼다.
+  const truth = ['집주릅', '늡늡', '릅새', '사륨'];
+  const master = createMaster({ loadWords: async () => ['집주릅', '늡늡', '늡이', '사륨'], inline: true });
+  await master.start();
+  // 볼 글자: 낱말 끝 글자(릅·늡·이·륨)에서 두음으로 시작할 수 있는 글자들, 낱말이 적은 순서('늡'만 1개라 마지막)
+  const targets = await master.patrolTargets('stdict');
+  assert.deepEqual([...targets].sort(), ['니', '늡', '륨', '릅', '리', '윰', '이'].sort());
+  assert.equal(targets.at(-1), '늡');
+  const asked = [];
+  const dictionary = {
+    requests: 0, isConfigured: () => true,
+    async wordsStartingWith(_dict, s) { this.requests += 1; asked.push(s); return { words: truth.filter((w) => R.firstSyllable(w) === s), complete: true }; },
+    async lookup(_dict, word) { this.requests += 1; return { found: truth.includes(word) }; }
+  };
+  let clock = 1_000_000;
+  const patrol = createPatrol({ dictionary, master, dictionaries: ['stdict'], budget: 100, now: () => clock });
+  patrol.gameActive();
+  await patrol.step();
+  assert.equal(asked.length, 0); // 게임 중(30초 안)엔 쉰다
+  clock += 60_000;
+  for (let i = 0; i < targets.length; i += 1) await patrol.step();
+  assert.deepEqual(asked, targets); // 목록 순서대로 한 글자씩
+  assert.deepEqual(await master.wordsStarting('stdict', '릅'), ['릅새']);
+  assert.deepEqual(await master.wordsStarting('stdict', '늡'), ['늡늡']);
+  const info = patrol.info('stdict');
+  assert.equal(info.round, 1); assert.equal(info.addedToday, 1); assert.equal(info.removedToday, 1);
+  assert.equal(info.usedToday, targets.length + 1); // 시작 글자마다 1번 + 사라진 낱말 확인 1번
+});

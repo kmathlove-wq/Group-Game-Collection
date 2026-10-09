@@ -270,6 +270,14 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return count;
   }
 
+  // 🔍 단어 순찰: 이 글자로 "시작하는" 쓸 수 있는 낱말(첫 묶음 100개, 캐시를 쓰지 않고 새로 묻는다).
+  // complete = 사전이 가진 낱말을 전부 받았는지(100개 이하). 전부일 때만 "지도에만 있는 낱말"을 사라진 후보로 볼 수 있다.
+  async function wordsStartingWith(dictionary, syllable) {
+    const { items, total } = await request(dictionary, syllable, 'start', 1, END_PAGE_SIZE);
+    const words = [...new Set(items.filter((item) => firstSyllable(item.word) === syllable && playable(item)).map((item) => item.word))];
+    return { words, complete: items.length < END_PAGE_SIZE && total <= END_PAGE_SIZE };
+  }
+
   // 이 글자로 "끝나는" 낱말들(미리 공부하기: 한방 글자를 찾으면 그 글자로 끝나는 단어가 곧 한방단어다). 최대 pages 묶음.
   async function wordsEndingWith(dictionary, syllable, pages = 3) {
     const found = new Map();
@@ -315,7 +323,7 @@ function createDictionary({ env = process.env, fetchImpl = globalThis.fetch, ran
     return [...candidates].map(([word, definition]) => ({ word, definition }));
   }
 
-  return { isConfigured, warmCandidates, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, get requests() { return requests; } };
+  return { isConfigured, warmCandidates, lookup, hasContinuation, knownContinuation, fewContinuations, countContinuation, pickWord, candidates, wordsEndingWith, wordsStartingWith, get requests() { return requests; } };
 }
 
 module.exports = { createDictionary, DictionaryError, DICTIONARIES, normalizeItem, parseResponse, playable, WORD_TYPES };
