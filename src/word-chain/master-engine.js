@@ -2,6 +2,8 @@
 //   위치 = 방금 나온 단어의 끝 글자 X. 갈 수 있는 길 = 시작 글자가 allowedStarts(X)(두음법칙 포함)인 아직 안 나온 낱말.
 //   ① 승패 도미노(역행 분석): 길이 없는 글자는 필패 → 필패로 보낼 수 있는 글자는 필승 → 모든 길이 필승으로 가는 글자는 필패 …
 //      길이 자기 자신으로 돌아오는 단어(몫몫)뿐이면 그 수가 홀수면 필승, 짝수면 필패.
+//      두음법칙 때문에 한 낱말이 다른 글자의 "돌아오는 길"이기도 하다: 릅에서 늡늡을 내면 늡늡은 늡의 돌아오는 길이라
+//      상대는 "돌아오는 길이 하나 줄어든 늡"(늡⁻)을 받는다. 늡⁻은 길이 0개라 필패 → 릅은 필승(집주릅을 내면 진다).
 //   ② 끝까지 안 정해진 글자(루트)는 정해진 시간 동안 끝까지 따라가 본다(이기는 수를 찾으면 바로 낸다).
 //   ③ 질 수밖에 없으면 상대가 이어 갈 단어가 가장 적은 수(사람은 사전 없이 찾기 어렵다).
 // 같은 첫 글자·끝 글자 낱말(각가속도·각도 = 각→도)은 결과가 같아서 "길 하나에 낱말 n개"로 묶어 계산한다.
@@ -10,6 +12,7 @@
 const { allowedStarts, firstSyllable, lastSyllable, isHangulWord, syllables, WORD_MIN } = require('./rules');
 
 const WIN = 1; const LOSE = 2; // 정해지지 않은 글자(루트)는 0
+const LOOPED = '\u0001';       // 글자 뒤에 붙여 "돌아오는 길이 하나 줄어든 글자"(e⁻)를 나타낸다
 const MAX_SEARCH_DEPTH = 2_000; // 너무 깊으면 "모름"으로 본다(호출 스택 보호)
 const OPENER_SAMPLES = 24;      // 첫 단어를 깊이 생각할 때 살펴볼 후보 수
 class OutOfTime extends Error {}
@@ -20,6 +23,9 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   const all = new Set();
   const startsCache = new Map();
   const startsOf = (x) => { let s = startsCache.get(x); if (!s) { s = allowedStarts(x); startsCache.set(x, s); } return s; };
+  // 길 s→e로 e에 들어가면 상대가 받는 자리: 그 낱말이 e의 돌아오는 길(s가 e에서 시작할 수 있는 글자)이기도 하면 e⁻.
+  const minusOne = (e) => `${e}${LOOPED}`;
+  const landing = (s, e) => (startsOf(e).includes(s) ? minusOne(e) : e);
 
   function add(word) {
     const s = firstSyllable(word); const e = lastSyllable(word);
@@ -56,56 +62,65 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   }
 
   // ① 승패 도미노. 돌려주는 값으로 각 글자의 승패·깊이(몇 수 만에 끝나는지)와 남은 길을 알 수 있다.
+  //    자리는 글자 x와 "돌아오는 길이 하나 줄어든 x"(x⁻) 두 가지다. x⁻은 x와 다른 길이 같아서 x가 정해질 때 함께 정해진다.
   function analyze(used, extra = []) {
     const spent = usedCounts(used);
     const left = (s, e, set) => set.size - (spent.get(key(s, e)) || 0);
     const positions = new Set([...ends.keys(), ...extra]);
-    const targets = new Map();  // 위치 → Map(다음 위치 → 낱말 수)
+    const targets = new Map();  // 위치 → Map(상대가 받는 자리(e 또는 e⁻) → 낱말 수)
     const remaining = new Map(); const loops = new Map(); const preds = new Map();
     for (const x of positions) {
       const out = new Map();
       for (const s of startsOf(x)) {
         for (const [e, set] of pairs.get(s) || []) {
           const n = left(s, e, set);
-          if (n > 0) out.set(e, (out.get(e) || 0) + n);
+          if (n > 0) { const t = landing(s, e); out.set(t, (out.get(t) || 0) + n); }
         }
       }
+      const own = minusOne(x); // x의 돌아오는 길(몫몫)로 가면 상대는 x⁻을 받는다
       targets.set(x, out);
-      loops.set(x, out.get(x) || 0);
-      remaining.set(x, out.size - (out.has(x) ? 1 : 0));
-      for (const e of out.keys()) {
-        if (e === x) continue;
-        if (!preds.has(e)) preds.set(e, []);
-        preds.get(e).push(x);
+      loops.set(x, out.get(own) || 0);
+      remaining.set(x, out.size - (out.has(own) ? 1 : 0));
+      for (const t of out.keys()) {
+        if (t === own) continue;
+        if (!preds.has(t)) preds.set(t, []);
+        preds.get(t).push(x);
       }
     }
     const status = new Map(); const depth = new Map(); const queue = [];
-    const settle = (x, st, d) => { status.set(x, st); depth.set(x, d); queue.push(x); };
-    // 다른 길이 다 막혔을 때(남은 길 0): 돌아오는 길(몫몫)이 없으면 필패, 홀수 개면 필승, 짝수 개면 필패
-    const closed = (x, d) => { const k = loops.get(x); settle(x, k % 2 ? WIN : LOSE, k ? Math.max(d, k) : d); };
+    const settle = (t, st, d) => { status.set(t, st); depth.set(t, d); queue.push(t); };
+    // 필패로 보낼 길이 있어 필승: x⁻도 같은 길이 있으니 필승
+    const won = (x, d) => { settle(x, WIN, d); if (loops.get(x)) settle(minusOne(x), WIN, d); };
+    // 다른 길이 다 막혔을 때(남은 길 0): 돌아오는 길(몫몫)이 없으면 필패, 홀수 개면 필승, 짝수 개면 필패. x⁻은 하나 적게 센다.
+    const parity = (k) => (k % 2 ? WIN : LOSE);
+    const closed = (x, d) => {
+      const k = loops.get(x);
+      settle(x, parity(k), Math.max(d, k));
+      if (k) settle(minusOne(x), parity(k - 1), Math.max(d, k - 1));
+    };
     for (const x of positions) if (remaining.get(x) === 0) closed(x, 0);
     for (let i = 0; i < queue.length; i += 1) {
       const y = queue[i]; const st = status.get(y); const d = depth.get(y) + 1;
       for (const x of preds.get(y) || []) {
         if (status.has(x)) continue;
-        if (st === LOSE) settle(x, WIN, d);
+        if (st === LOSE) won(x, d);
         else { const r = remaining.get(x) - 1; remaining.set(x, r); if (r === 0) closed(x, d); }
       }
     }
-    const total = (x, minus = null) => { // 위치 x에서 낼 수 있는 낱말 수(minus 낱말은 이미 썼다고 본다)
+    const total = (x, minus = null) => { // 위치 x에서 낼 수 있는 낱말 수(아직 안 나온 minus 낱말은 이미 썼다고 본다)
       let n = 0; for (const c of (targets.get(x) || new Map()).values()) n += c;
-      if (minus && startsOf(x).includes(firstSyllable(minus)) && targets.get(x)?.has(lastSyllable(minus))) n -= 1;
+      if (minus && all.has(minus) && !used.has(minus) && startsOf(x).includes(firstSyllable(minus))) n -= 1;
       return n;
     };
-    return { status, depth, targets, spent, total, typeOf: (x) => status.get(x) ?? 0 };
+    return { status, depth, targets, spent, total, typeOf: (t) => status.get(t) ?? 0 };
   }
 
-  // 위치 x에서 낼 수 있는 길 목록 [{ s, e, n }].
+  // 위치 x에서 낼 수 있는 길 목록 [{ s, e, n, t }]. t = 상대가 받는 자리(e 또는 e⁻) — 승패는 항상 t로 본다.
   function movesFrom(x, spent) {
     const list = [];
     for (const s of startsOf(x)) for (const [e, set] of pairs.get(s) || []) {
       const n = set.size - (spent.get(key(s, e)) || 0);
-      if (n > 0) list.push({ s, e, n });
+      if (n > 0) list.push({ s, e, n, t: landing(s, e) });
     }
     return list;
   }
@@ -121,7 +136,7 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     for (const m of moves) {
       const word = wordOf(m.s, m.e, used); if (!word) continue;
       const replies = a.total(m.e, word);
-      const d = a.depth.get(m.e) ?? 0;
+      const d = a.depth.get(m.t) ?? 0;
       if (!best || replies < best.replies || (replies === best.replies && d > best.d)) best = { word, replies, d };
     }
     return best?.word ?? null;
@@ -133,7 +148,7 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     const spent = new Map(a.spent);
     let deadline = 0; let visited = 0;
     const replies = (e) => { let n = 0; for (const [t, c] of a.targets.get(e) || []) if (a.typeOf(t) === 0) n += c; return n; };
-    const rootMoves = (x) => movesFrom(x, spent).filter((m) => a.typeOf(m.e) === 0).sort((p, q) => replies(p.e) - replies(q.e));
+    const rootMoves = (x) => movesFrom(x, spent).filter((m) => a.typeOf(m.t) === 0).sort((p, q) => replies(p.e) - replies(q.e));
     // x 차례인 사람이 이기는가?
     function wins(x, level) {
       if ((++visited & 255) === 0 && now() > deadline) throw new OutOfTime();
@@ -188,14 +203,14 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     const type = a.typeOf(x);
     if (type === WIN) {
       // 필패 글자로 보내는 길 중 가장 빨리 끝나는 것. 그런 길이 없으면 몫몫 홀짝으로 이긴 경우라 돌아오는 길을 낸다.
-      const toLose = moves.filter((m) => a.typeOf(m.e) === LOSE);
-      const fastest = Math.min(...toLose.map((m) => a.depth.get(m.e) ?? 0));
-      const good = toLose.length ? toLose.filter((m) => (a.depth.get(m.e) ?? 0) === fastest) : moves.filter((m) => m.e === x);
+      const toLose = moves.filter((m) => a.typeOf(m.t) === LOSE);
+      const fastest = Math.min(...toLose.map((m) => a.depth.get(m.t) ?? 0));
+      const good = toLose.length ? toLose.filter((m) => (a.depth.get(m.t) ?? 0) === fastest) : moves.filter((m) => m.e === x);
       const word = fewestReplies(good, a, used);
       if (word) return { word, how: 'win', type: 'win' };
     }
     if (type === 0) {
-      const roots = moves.filter((m) => a.typeOf(m.e) === 0);
+      const roots = moves.filter((m) => a.typeOf(m.t) === 0);
       const { win, unknown = [] } = think(roots, a, thinkMs);
       if (win) return { word: wordOf(win.s, win.e, used), how: 'think', type: 'root', proven: true };
       if (unknown.length) return { word: fewestReplies(unknown, a, used), how: 'think', type: 'root', proven: false };
@@ -211,15 +226,15 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     const paths = [];
     for (const [s, row] of pairs) for (const [e, set] of row) {
       const n = set.size - (a.spent.get(key(s, e)) || 0);
-      if (n > 0) paths.push({ s, e, n });
+      if (n > 0) paths.push({ s, e, n, t: landing(s, e) });
     }
-    const traps = paths.filter((m) => a.typeOf(m.e) === LOSE && (a.depth.get(m.e) ?? 0) >= 1);
+    const traps = paths.filter((m) => a.typeOf(m.t) === LOSE && (a.depth.get(m.t) ?? 0) >= 1);
     if (traps.length) {
       const m = traps[Math.floor(random() * traps.length)];
       const word = wordOf(m.s, m.e, used);
       if (word && a.total(m.e, word) > 0) return { word, how: 'win', type: 'win' };
     }
-    const roots = paths.filter((m) => a.typeOf(m.e) === 0);
+    const roots = paths.filter((m) => a.typeOf(m.t) === 0);
     if (!roots.length) return null;
     const sample = roots.sort(() => random() - 0.5).slice(0, OPENER_SAMPLES);
     const { win, unknown = [] } = think(sample, a, thinkMs);
