@@ -13,6 +13,7 @@ const WRITE_DELAY_MS = 2_000;
 const MIN_THINK_SECONDS = 1;
 const MAX_THINK_SECONDS = 60;
 const DEFAULT_THINK_SECONDS = 5;
+const WORKER_HEAP_MB = 192;
 const wordsFileName = (dict) => `word-chain-words-${dict}.txt`;
 
 // 화면에서 받은 생각 시간(초)을 1~60초로 맞춘다. 숫자가 아니면 기본 5초.
@@ -88,7 +89,9 @@ function spawnBrain(data, { inline = false, random } = {}) {
     const call = (op, ...args) => Promise.resolve().then(() => (op === 'size' ? engine.size : engine[op](...args)));
     return { call, close: () => {} };
   }
-  const worker = new Worker(path.join(__dirname, 'master-worker.js'), { workerData: data });
+  // 일꾼 메모리 한도: 넉넉하면 V8이 쓰레기를 늦게 치워 지도를 만드는 순간 Render 무료 서버(512MB)를 넘을 수 있다.
+  // 한도 안에서는 자주 치운다(우리말샘 지도는 다 만든 뒤 약 70MB, 만드는 동안 잠깐 더 쓴다).
+  const worker = new Worker(path.join(__dirname, 'master-worker.js'), { workerData: data, resourceLimits: { maxOldGenerationSizeMb: WORKER_HEAP_MB } });
   worker.unref();
   const waiting = new Map(); let nextId = 1;
   const failAll = (error) => { for (const { reject } of waiting.values()) reject(error); waiting.clear(); };

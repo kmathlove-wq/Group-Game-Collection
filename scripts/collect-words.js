@@ -5,13 +5,15 @@
 //   node scripts/collect-words.js [stdict|opendict]
 //
 // - 끝낸 글자는 data/word-chain-words-<사전>.partial.tsv에 한 줄씩 적어서, 중간에 끊겨도 다시 켜면 이어서 한다.
+// - 가~힣을 다 묻고 나면, 모은 낱말의 옛한글 끝 글자로 시작하는 낱말도 묻는다(옛말 ᄉᆞ견).
 // - 모두 끝나면 data/word-chain-words-<사전>.txt(한 줄에 한 낱말, 가나다순)를 만든다. 두 파일 모두 Git 제외.
 // - 키는 .env(또는 환경 변수)의 STDICT_API_KEY / OPENDICT_API_KEY만 쓰고 화면에 찍지 않는다.
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { DICTIONARIES, parseResponse, playable, WORD_TYPES } = require('../src/word-chain/dictionary');
-const { firstSyllable } = require('../src/word-chain/rules');
+const { firstSyllable, lastSyllable } = require('../src/word-chain/rules');
+const { toPua } = require('../src/word-chain/old-hangul');
 
 const PAGE_SIZE = 100;        // 한 번에 받을 낱말 수(사전이 허용하는 최대)
 const WORKERS = 3;            // 동시에 물어볼 글자 수
@@ -32,7 +34,7 @@ const outPath = path.join(dataDir, `word-chain-words-${dict}.txt`);
 class StopError extends Error {} // 키 오류·하루 한도처럼 다시 물어도 소용없는 문제
 
 async function page(syllable, start) {
-  const params = new URLSearchParams({ key, q: syllable, req_type: 'json', type_search: 'search', method: 'start', start: String(start), num: String(PAGE_SIZE), advanced: 'y', type1: WORD_TYPES });
+  const params = new URLSearchParams({ key, q: toPua(syllable), req_type: 'json', type_search: 'search', method: 'start', start: String(start), num: String(PAGE_SIZE), advanced: 'y', type1: WORD_TYPES });
   for (let attempt = 1; ; attempt += 1) {
     try {
       const response = await fetch(`${config.endpoint}?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -93,6 +95,17 @@ async function main() {
     }
   }
   await Promise.all(Array.from({ length: WORKERS }, worker));
+  // 2단계 — 옛한글: 가~힣 밖의 글자로 시작하는 낱말(우리말샘 옛말 'ᄉᆞ견')도 모은다. 어떤 옛 글자가 있는지 미리 알 수 없어서,
+  // 모은 낱말의 끝 글자 중 옛한글을 찾아 그 글자로 시작하는 낱말을 묻고, 거기서 새 옛 끝 글자가 나오면 또 묻는다.
+  // (이걸 빼먹으면 지도는 'ᄉᆞ' 뒤에 낼 낱말이 없다고 보고 '과ᄉᆞ'를 한방 단어로 착각한다.)
+  const isModern = (g) => g.length === 1 && g >= '가' && g <= '힣';
+  while (!stopped) {
+    const oldStarts = [...new Set([...done.values()].flat().map(lastSyllable))].filter((g) => g && !isModern(g) && !done.has(g));
+    if (!oldStarts.length) break;
+    console.log(`옛한글 끝 글자 ${oldStarts.length}개로 시작하는 낱말도 모아요`);
+    todo.push(...oldStarts);
+    await Promise.all(Array.from({ length: WORKERS }, worker));
+  }
   if (stopped) {
     console.error(`'${stopped.syllable}'에서 멈췄어요: ${stopped.error.message}`);
     console.error('다시 실행하면 끝낸 글자는 건너뛰고 이어서 해요(하루 한도라면 내일 다시).');

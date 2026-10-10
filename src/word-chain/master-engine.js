@@ -16,6 +16,14 @@ const LOOPED = '\u0001';       // 글자 뒤에 붙여 "돌아오는 길이 하�
 const MAX_SEARCH_DEPTH = 2_000; // 너무 깊으면 "모름"으로 본다(호출 스택 보호)
 const OPENER_SAMPLES = 24;      // 첫 단어를 깊이 생각할 때 살펴볼 후보 수
 class OutOfTime extends Error {}
+const MODERN = /^[가-힣]+$/;
+// 낱말의 [첫 글자, 끝 글자](쓸 수 없는 낱말이면 null). 보통 낱말(가~힣만)은 글자 쪼개기(Intl.Segmenter) 없이 바로 꺼낸다:
+// 우리말샘 85만 개를 하나하나 쪼개면 임시 쓰레기가 쌓여 지도를 불러오는 순간 메모리가 1GB까지 치솟았다(옛한글 낱말만 쪼갠다).
+function sidesOf(word) {
+  if (MODERN.test(word)) return word.length >= WORD_MIN ? [word[0], word[word.length - 1]] : null;
+  if (!isHangulWord(word) || syllables(word).length < WORD_MIN) return null;
+  return [firstSyllable(word), lastSyllable(word)];
+}
 
 function createMasterEngine(words = [], { random = Math.random, now = () => performance.now() } = {}) {
   // 메모리 아끼기(우리말샘은 낱말이 100만 개 가까이 된다): 낱말마다 따로 담지 않고, 같은 길(첫 글자→끝 글자)의 낱말을
@@ -29,13 +37,14 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   const minusOne = (e) => `${e}${LOOPED}`;
   const landing = (s, e) => (startsOf(e).includes(s) ? minusOne(e) : e);
   const key = (s, e) => `${s}\u0000${e}`; // 길 이름(첫 글자 + 끝 글자)
-  const cellOf = (word) => pairs.get(firstSyllable(word))?.get(lastSyllable(word));
+  const cellOf = (word) => { const sides = sidesOf(word); return sides && pairs.get(sides[0])?.get(sides[1]); };
   const wordsIn = (cell) => (cell ? cell[1].split('\n') : []);
   const has = (word) => wordsIn(cellOf(word)).includes(word);
 
   function add(word) {
-    if (!isHangulWord(word) || syllables(word).length < WORD_MIN || has(word)) return false;
-    const s = firstSyllable(word); const e = lastSyllable(word);
+    const sides = sidesOf(word);
+    if (!sides || has(word)) return false;
+    const [s, e] = sides;
     if (!pairs.has(s)) pairs.set(s, new Map());
     const row = pairs.get(s); const cell = row.get(e);
     if (cell) { cell[0] += 1; cell[1] += `\n${word}`; } else row.set(e, [1, word]);
@@ -45,7 +54,7 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
   }
   function remove(word) {
     if (!has(word)) return false;
-    const s = firstSyllable(word); const e = lastSyllable(word);
+    const [s, e] = sidesOf(word);
     const row = pairs.get(s); const cell = row.get(e);
     const rest = wordsIn(cell).filter((w) => w !== word);
     if (rest.length) { cell[0] = rest.length; cell[1] = rest.join('\n'); } else row.delete(e);
@@ -54,29 +63,39 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     count -= 1;
     return true;
   }
-  // 처음 지도는 길마다 낱말을 모았다가 한 번에 이어 붙인다(하나씩 add하면 문자열 조각이 쌓여 메모리를 더 쓰고 느리다).
-  const groups = new Map(); // "첫\0끝" → Set(낱말)
+  // 처음 지도는 첫 글자가 같은 낱말끼리 모았다가, 첫 글자가 바뀌면 길마다 한 번에 이어 붙인다(하나씩 add하면 문자열 조각이 쌓인다).
+  // 단어 지도 파일은 가나다순이라 같은 첫 글자가 붙어 있어서, 85만 개를 한꺼번에 펼쳐 두지 않고 한 글자 분량씩만 들고 있는다
+  // (우리말샘 지도를 만드는 순간의 메모리를 줄이려고). 순서가 섞인 목록이 와도 같은 첫 글자가 다시 나오면 합쳐서 맞게 만든다.
+  let current = null; let group = null; let previous = null;
+  const flush = () => {
+    if (!group) return;
+    let out = pairs.get(current); if (!out) pairs.set(current, out = new Map());
+    for (const [e, list] of group) {
+      const old = out.get(e);
+      const merged = [...new Set(old ? [...wordsIn(old), ...list] : list)];
+      const added = merged.length - (old ? old[0] : 0);
+      out.set(e, [merged.length, merged.join('\n')]);
+      ends.set(e, (ends.get(e) || 0) + added);
+      count += added;
+    }
+    group = null;
+  };
   for (const word of words) {
-    if (!isHangulWord(word) || syllables(word).length < WORD_MIN) continue;
-    const k = key(firstSyllable(word), lastSyllable(word));
-    if (!groups.has(k)) groups.set(k, new Set());
-    groups.get(k).add(word);
+    if (word === previous) continue; // 가나다순 파일에서 같은 낱말은 붙어 있다
+    previous = word;
+    const sides = sidesOf(word); if (!sides) continue;
+    if (sides[0] !== current) { flush(); current = sides[0]; group = new Map(); }
+    let list = group.get(sides[1]); if (!list) group.set(sides[1], list = []);
+    list.push(word);
   }
-  for (const [k, set] of groups) {
-    const [s, e] = k.split('\u0000');
-    if (!pairs.has(s)) pairs.set(s, new Map());
-    pairs.get(s).set(e, [set.size, [...set].join('\n')]);
-    ends.set(e, (ends.get(e) || 0) + set.size);
-    count += set.size;
-  }
-  groups.clear();
+  flush();
 
   // 이번 판에 나온 단어 수를 길(첫 글자→끝 글자)마다 센다.
   function usedCounts(used) {
     const counts = new Map();
     for (const word of used) {
       if (!has(word)) continue;
-      const k = key(firstSyllable(word), lastSyllable(word));
+      const k = key(...sidesOf(word));
       counts.set(k, (counts.get(k) || 0) + 1);
     }
     return counts;
@@ -282,12 +301,20 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
 
 // 단어 지도 파일 글(한 줄에 한 낱말)로 두뇌를 만든다. removed는 빼고 added는 더한다(지도 밖 변화 기록).
 // 일꾼에게는 낱말 배열 대신 글 한 덩어리를 넘겨, 불러오는 순간 메모리를 두 배로 쓰지 않게 한다.
+// 글을 한 줄씩 꺼내 주므로(split으로 85만 개짜리 배열을 만들지 않음) 지도를 만드는 동안 메모리를 적게 쓴다.
 function engineFromText({ text = '', added = [], removed = [] }, options) {
   const gone = new Set(removed);
-  const words = [];
-  for (const line of text.split('\n')) { const word = line.trim(); if (word && !gone.has(word)) words.push(word); }
-  for (const word of added) words.push(word);
-  return createMasterEngine(words, options);
+  function* lines() {
+    for (let i = 0; i < text.length;) {
+      let j = text.indexOf('\n', i); if (j < 0) j = text.length;
+      const word = text.slice(i, j).trim();
+      if (word && !gone.has(word)) yield word;
+      i = j + 1;
+    }
+  }
+  const engine = createMasterEngine(lines(), options);
+  for (const word of added) engine.add(word);
+  return engine;
 }
 
 module.exports = { createMasterEngine, engineFromText };
