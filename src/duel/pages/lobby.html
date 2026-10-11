@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3d2f1f">
+  <meta name="description" content="그룹 게임 컬렉션의 1:1 {{TITLE}}. {{INTRO}} 로비에서 상대에게 대결을 신청하고, 다른 사람의 대결도 관전할 수 있어요.">
+  <title>그룹 게임 컬렉션-{{TITLE}}</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-lobby.css">
+  <link rel="stylesheet" href="/duel/duel.css">
+</head>
+<body class="songcatch-lobby-page duel-lobby-page duel-{{KIND}}">
+  <header class="music-header songcatch-lobby-header"><a href="/" class="mini-brand">← 그룹 게임 컬렉션</a></header>
+
+  <main class="songcatch-lobby-shell duel-lobby-shell">
+    <section id="enterCard" class="songcatch-lobby-card">
+      <div class="duel-logo" aria-hidden="true">{{EMOJI}}</div>
+      <p class="eyebrow">그룹 게임 컬렉션 · 1:1 대결</p>
+      <h1>{{TITLE}}</h1>
+      <p class="songcatch-lobby-copy">{{INTRO}}</p>
+
+      <label class="songcatch-nickname-label" for="nickname">게임에서 사용할 닉네임</label>
+      <div class="songcatch-nickname-row">
+        <input id="nickname" maxlength="30" autocomplete="nickname" placeholder="자유롭게 닉네임 입력">
+        <span id="nicknameCount">0/30</span>
+      </div>
+      <p class="songcatch-field-help">로비에 들어가면 접속한 사람에게 대결을 신청할 수 있어요.</p>
+      <div class="songcatch-main-actions duel-enter-actions">
+        <button id="enter" class="primary">로비 입장 →</button>
+      </div>
+      <p id="connectionStatus" class="songcatch-connection" role="status">● 서버에 연결하는 중…</p>
+    </section>
+
+    <section id="lobby" class="duel-lobby hidden" aria-label="{{TITLE}} 로비">
+      <div class="duel-lobby-top">
+        <div><span class="duel-logo small" aria-hidden="true">{{EMOJI}}</span><h1>{{TITLE}} 로비</h1></div>
+        <p>내 닉네임 <b id="myName"></b> <button id="rename" class="secondary music-compact">바꾸기</button></p>
+      </div>
+      <div class="duel-lobby-grid">
+        <section class="panel duel-lobby-panel">
+          <h2>접속 중인 사람 <span id="userCount">0</span></h2>
+          <p class="duel-help">이름 옆 <b>대결 신청</b>을 누르면 흑백·시간·규칙을 정해서 보낼 수 있어요.</p>
+          <div id="users" class="duel-user-list" aria-live="polite"></div>
+        </section>
+        <section class="panel duel-lobby-panel">
+          <h2>진행 중인 대결 <span id="matchCount">0</span></h2>
+          <p class="duel-help">누구나 들어가서 구경하고 채팅할 수 있어요.</p>
+          <div id="matches" class="duel-match-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+
+    <aside class="songcatch-lobby-features" aria-label="게임 특징">{{FEATURES}}</aside>
+  </main>
+
+  <dialog id="termsDialog" class="music-lobby-modal duel-terms-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow" id="termsEyebrow">대결 신청</p><h2 id="termsTitle">대결 조건 정하기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><span class="duel-field-label">내 돌(말) 색</span><div id="colorChoices" class="duel-segment" role="radiogroup"></div></div>
+    <div class="field"><label for="timeMode">시간</label><select id="timeMode"></select></div>
+    <div id="moveFields" class="field hidden"><label for="moveSeconds">한 수에 쓸 수 있는 시간</label><select id="moveSeconds"></select></div>
+    <div id="fischerFields" class="field hidden"><label for="fischerPreset">피셔 시간 (각자 시간 + 한 수마다 추가)</label><select id="fischerPreset"></select></div>
+    <div id="byoyomiFields" class="duel-field-row3 hidden">
+      <div class="field"><label for="byoMain">처음 시간</label><select id="byoMain"></select></div>
+      <div class="field"><label for="byoPeriod">초읽기</label><select id="byoPeriod"></select></div>
+      <div class="field"><label for="byoPeriods">횟수</label><select id="byoPeriods"></select></div>
+    </div>
+    <p id="timeHelp" class="duel-help"></p>
+    <div id="ruleFields"></div>
+    <button id="termsSubmit" class="primary wide">신청 보내기</button>
+  </dialog>
+
+  <dialog id="offerDialog" class="music-lobby-modal duel-offer-modal">
+    <p class="eyebrow" id="offerEyebrow">대결 신청</p>
+    <h2 id="offerTitle"></h2>
+    <dl id="offerTerms" class="duel-terms-list"></dl>
+    <p id="offerTimer" class="duel-offer-timer"></p>
+    <div class="duel-offer-actions">
+      <button id="offerAccept" class="primary">수락</button>
+      <button id="offerModify" class="secondary">수정 요청</button>
+      <button id="offerDecline" class="danger">거절</button>
+      <button id="offerCancel" class="danger">신청 취소</button>
+    </div>
+  </dialog>
+
+  <div id="notice" class="notice songcatch-lobby-notice hidden" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/duel-rules/clock.js"></script>
+  <script src="/duel-rules/{{KIND}}.js"></script>
+  <script src="/duel/common.js"></script>
+  <script src="/duel/lobby.js"></script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+/* 오목·바둑·체스(1:1 대결) 공통 스타일. 공통 버튼·입력은 music.css, 입장 카드·모달은 music-lobby.css를 빌려 쓴다. */
+:root { --duel: #8a5a2b; --duel-dark: #3d2f1f; --duel-soft: #fbf3e6; --music: #c9772f; --music2: #8a5a2b; }
+.duel-chess { --duel: #2f6f5e; --duel-dark: #1e3d35; --duel-soft: #eef7f3; --music: #3f9b7f; --music2: #2f6f5e; }
+
+/* ── 로비 ── */
+.duel-lobby-page {
+  background: radial-gradient(circle at 12% 18%, #f5dfbd 0 16%, transparent 17%),
+    radial-gradient(circle at 88% 80%, #efe3d0 0 20%, transparent 21%), linear-gradient(135deg, #fffaf2, #f7efe2);
+}
+.duel-lobby-page.duel-chess { background: radial-gradient(circle at 12% 18%, #d6efe5 0 16%, transparent 17%), linear-gradient(135deg, #f6fbf9, #eaf4ef); }
+.duel-logo {
+  width: 92px; height: 92px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 28px;
+  background: linear-gradient(135deg, #dcb06b, var(--duel)); color: #fff; font-size: 48px; box-shadow: 0 14px 32px #8a5a2b44;
+  animation: duel-bob 3s ease-in-out infinite;
+}
+.duel-chess .duel-logo { background: linear-gradient(135deg, #6cc3a6, var(--duel)); }
+.duel-logo.small { width: 48px; height: 48px; margin: 0; border-radius: 14px; font-size: 26px; animation: none; }
+@keyframes duel-bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
+.duel-enter-actions { grid-template-columns: 1fr; }
+
+.duel-lobby { width: min(1100px, 100%); display: grid; gap: 16px; }
+.duel-lobby-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.duel-lobby-top > div { display: flex; align-items: center; gap: 12px; }
+.duel-lobby-top h1 { margin: 0; font-size: 28px; }
+.duel-lobby-top p { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.duel-lobby-top p b { color: var(--ink); }
+.duel-lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.duel-lobby-panel { padding: 20px; text-align: left; }
+.duel-lobby-panel h2 { margin: 0; font-size: 19px; }
+.duel-lobby-panel h2 span { color: var(--duel); }
+.duel-help { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 12px; text-align: left; }
+.duel-user-list, .duel-match-list { display: grid; gap: 8px; max-height: 440px; overflow: auto; }
+.duel-user, .duel-match-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px;
+  border-radius: 14px; background: #f8f6f2; border: 1px solid var(--line);
+}
+.duel-user > div, .duel-match-card > div { display: grid; gap: 2px; min-width: 0; }
+.duel-user b, .duel-match-card b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-user small, .duel-match-card small { color: var(--muted); font-weight: 700; font-size: 12px; }
+.duel-user small.idle { color: var(--good); }
+.duel-user small.busy { color: #c47a00; }
+.duel-user button:disabled { opacity: .45; cursor: not-allowed; }
+.duel-watch { display: inline-block; text-decoration: none; white-space: nowrap; }
+.duel-empty { color: var(--muted); text-align: center; padding: 18px 6px; margin: 0; }
+
+/* 신청 창 */
+.duel-field-label { font-weight: 750; }
+.duel-segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.duel-segment label { position: relative; }
+.duel-segment input { position: absolute; opacity: 0; }
+.duel-segment span {
+  display: block; text-align: center; padding: 11px 6px; border: 1.5px solid #d9dbe8; border-radius: 12px;
+  font-weight: 800; cursor: pointer; background: #fff;
+}
+.duel-segment input:checked + span { border-color: var(--duel); background: var(--duel-soft); color: var(--duel-dark); }
+.duel-segment input:focus-visible + span { outline: 3px solid var(--duel); outline-offset: 2px; }
+.duel-field-row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.duel-rule-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 14px; }
+.duel-rule-table th, .duel-rule-table td { padding: 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.duel-rule-table tbody th { text-align: left; font-weight: 700; }
+.duel-rule-table input { width: 20px; height: 20px; }
+.duel-rule-table select { padding: 6px; border-radius: 8px; border: 1px solid #d9dbe8; }
+.duel-terms-modal { max-height: 92vh; overflow: auto; }
+.duel-offer-modal h2 { margin: 4px 0 14px; }
+.duel-terms-list { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0 0 12px; padding: 14px; border-radius: 14px; background: var(--duel-soft); text-align: left; }
+.duel-terms-list dt { font-weight: 800; color: var(--duel-dark); }
+.duel-terms-list dd { margin: 0; }
+.duel-offer-timer { color: var(--muted); font-size: 14px; }
+.duel-offer-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.duel-offer-actions #offerCancel { grid-column: 1 / -1; }
+
+/* ── 대결 화면 ── */
+.duel-match-page { min-height: 100vh; background: linear-gradient(135deg, #fffaf2, #f3e9da); }
+.duel-match-page.duel-chess { background: linear-gradient(135deg, #f6fbf9, #e4f1eb); }
+.duel-shell { width: min(1400px, 100%); margin: auto; padding: 14px; display: grid; gap: 12px; }
+.duel-shell > *, .duel-layout > * { min-width: 0; }
+.duel-header { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+.duel-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; white-space: nowrap; }
+.duel-brand span { font-size: 22px; }
+.duel-header h1 { flex: 1; margin: 0; font-size: 19px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-role { padding: 6px 10px; border-radius: 999px; background: var(--duel-soft); color: var(--duel-dark); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.duel-header .danger { padding: 9px 14px; }
+
+.duel-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+.duel-side, .duel-chat-panel { padding: 16px; }
+.duel-seats { display: grid; gap: 10px; }
+.duel-seat {
+  display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto auto; column-gap: 10px; align-items: center;
+  padding: 12px; border-radius: 16px; background: #f8f6f2; border: 2px solid transparent; transition: border-color .2s, background .2s;
+}
+.duel-seat.turn { border-color: var(--duel); background: var(--duel-soft); }
+.duel-seat.offline { opacity: .55; }
+.duel-seat b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-seat small { grid-column: 2; color: var(--muted); font-weight: 700; font-size: 12px; }
+.duel-seat .duel-clock { grid-column: 1 / -1; margin-top: 8px; font: 800 24px/1 ui-monospace, Menlo, Consolas, monospace; text-align: center; padding: 8px; border-radius: 10px; background: #fff; }
+.duel-seat.turn .duel-clock { background: var(--duel-dark); color: #fff; }
+.duel-clock.urgent { background: var(--bad) !important; color: #fff; animation: duel-pulse .5s ease-in-out infinite alternate; }
+@keyframes duel-pulse { to { transform: scale(1.04); } }
+.duel-stone { grid-row: span 2; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 24px; }
+.duel-stone.black { background: radial-gradient(circle at 35% 35%, #666, #0d0d0d); }
+.duel-stone.white { background: radial-gradient(circle at 35% 35%, #fff, #cfcac0); box-shadow: inset 0 0 0 1px #b9b3a6; }
+.duel-chess .duel-stone { background: none; box-shadow: none; }
+.duel-chess .duel-stone.white { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000; }
+.duel-chess .duel-stone.black { color: #1d1d1d; }
+.duel-actions { display: grid; gap: 8px; margin-top: 14px; }
+.duel-actions button:disabled { opacity: .6; cursor: default; }
+.duel-draw-offer { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: #fff6d9; }
+.duel-draw-offer p { margin: 0; font-weight: 800; text-align: center; }
+.duel-summary { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.duel-spectators { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.duel-spectators h3 { margin: 0 0 4px; font-size: 14px; }
+.duel-spectators p { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+
+.duel-board-panel { padding: 14px; display: grid; gap: 10px; justify-items: center; }
+.duel-status { width: 100%; padding: 10px 14px; border-radius: 12px; background: #f5f2ec; text-align: center; font-weight: 800; }
+.duel-status.mine { background: var(--duel); color: #fff; }
+.duel-board { width: min(100%, calc(100vh - 190px)); min-width: 260px; }
+.duel-board-help { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+.duel-board-panel .notice { width: 100%; margin: 0; }
+.duel-grid-canvas { display: block; width: 100%; border-radius: 10px; box-shadow: 0 10px 30px #3d2f1f33; touch-action: manipulation; cursor: pointer; }
+
+.duel-chat-panel { display: grid; grid-template-rows: auto 1fr auto; height: min(640px, calc(100vh - 110px)); }
+.duel-chat-panel h2 { margin: 0; font-size: 17px; }
+.duel-chat-panel .chat { min-height: 0; }
+.duel-chat-panel .chat p.system { background: transparent; color: var(--muted); font-size: 13px; padding: 4px 6px; }
+.duel-chat-mark { margin-right: 4px; }
+.duel-chat-mark.black { color: #111; }
+.duel-chat-mark.white { color: #fff; text-shadow: 0 0 2px #000; }
+.duel-chat-form { margin: 0; }
+.duel-chat-form input { flex: 1; }
+
+.duel-result-dialog { width: min(420px, calc(100% - 32px)); border: 0; border-radius: 26px; padding: 28px; text-align: center; box-shadow: 0 24px 60px #2023314d; }
+.duel-result-dialog::backdrop { background: #1f1b3480; }
+.duel-result-dialog h2 { margin: 4px 0 8px; font-size: 28px; }
+.duel-result-dialog p:not(.eyebrow) { color: var(--muted); line-height: 1.5; }
+.duel-result-actions { display: grid; gap: 8px; }
+
+/* ── 체스판 ── */
+.duel-chess-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; width: 100%;
+  border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px #1e3d3533;
+}
+.duel-square {
+  position: relative; display: grid; place-items: center; border: 0; padding: 0; margin: 0; width: 100%; height: 100%;
+  aspect-ratio: 1; font-size: clamp(24px, 8vw, 56px); line-height: 1; cursor: default; color: inherit;
+  font-family: "Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", sans-serif;
+}
+.duel-square.light { background: #eeeed2; }
+.duel-square.dark { background: #769656; }
+.duel-square.white-piece { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 2px #0008; }
+.duel-square.black-piece { color: #161616; text-shadow: 0 1px 1px #fff6; }
+.duel-square.last { box-shadow: inset 0 0 0 999px #f6f66966; }
+.duel-square.selected { box-shadow: inset 0 0 0 999px #f7ec5e99; }
+.duel-square.check { box-shadow: inset 0 0 18px 6px #e3263b; }
+.duel-square.movable, .duel-square.target, .duel-square.capture { cursor: pointer; }
+.duel-square.target::before { content: ''; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: #0000002e; }
+.duel-square.capture::before { content: ''; position: absolute; inset: 5%; border-radius: 50%; border: 5px solid #0000002e; }
+.duel-square::after { position: absolute; font: 800 11px/1 Pretendard, sans-serif; opacity: .7; color: #3c4a2a; text-shadow: none; }
+.duel-square[data-file]:not([data-file=""])::after { content: attr(data-file); right: 4px; bottom: 3px; }
+.duel-square[data-rank]:not([data-rank=""])::after { content: attr(data-rank); left: 4px; top: 4px; }
+.duel-square[data-file]:not([data-file=""])[data-rank]:not([data-rank=""])::after { content: attr(data-rank) ' ' attr(data-file); }
+.duel-promo { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin-top: 10px; padding: 12px; border-radius: 14px; background: #fff6d9; }
+.duel-promo b { width: 100%; text-align: center; }
+.duel-promo button { padding: 10px 14px; font-size: 18px; }
+.duel-chess-history { width: 100%; max-height: 110px; overflow: auto; margin: 10px 0 0; padding: 8px 8px 8px 36px; border-radius: 12px; background: #f5f2ec; font: 600 14px/1.6 ui-monospace, Menlo, Consolas, monospace; columns: 3; }
+.duel-chess-history:empty { display: none; }
+
+@media (max-width: 1100px) {
+  .duel-layout { grid-template-columns: 230px minmax(0, 1fr); }
+  .duel-chat-panel { grid-column: 1 / -1; height: 320px; }
+}
+@media (max-width: 760px) {
+  .duel-shell { padding: 8px; gap: 8px; }
+  .duel-header { gap: 8px; padding: 8px 10px; }
+  .duel-brand b, .duel-role { display: none; }
+  .duel-header h1 { font-size: 15px; text-align: left; }
+  .duel-layout { grid-template-columns: 1fr; }
+  .duel-board-panel { order: -1; padding: 8px; }
+  .duel-board { width: 100%; min-width: 0; }
+  .duel-seats { grid-template-columns: 1fr 1fr; }
+  .duel-seat { grid-template-columns: 26px 1fr; padding: 8px; }
+  .duel-stone { width: 24px; height: 24px; font-size: 20px; }
+  .duel-seat .duel-clock { font-size: 18px; }
+  .duel-lobby-grid { grid-template-columns: 1fr; }
+  .duel-field-row3 { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .duel-chess-history { columns: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .duel-logo, .duel-clock.urgent { animation: none; }
+}

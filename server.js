@@ -8,6 +8,7 @@ const { MemoryRoomStore } = require('./lib/memory-room-store');
 const { setupMusicGame } = require('./src/music');
 const { setupTriangleGame } = require('./src/triangle');
 const { setupWordChainGame } = require('./src/word-chain');
+const { setupDuelGames } = require('./src/duel');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createPatrol } = require('./src/word-chain/patrol');
@@ -49,6 +50,7 @@ const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 
 const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
 const triangleGame = setupTriangleGame({ app, io, rootDir: __dirname });
+const duelGames = setupDuelGames({ app, io });
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
 const gistSync = createGistSync({ token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID });
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
@@ -107,7 +109,8 @@ function registerScoreboard(slug, scoreMax) {
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, wordChainRooms: wordChainGame.rooms.size }));
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, wordChainRooms: wordChainGame.rooms.size,
+  duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
 
 function cleanText(value, maxLength) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, maxLength);
@@ -964,5 +967,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame, triangleGame, wordChainGame
+  hintRevealCount, isOneEditApart, musicGame, triangleGame, wordChainGame, duelGames
 };

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#3d2f1f">
+  <title>그룹 게임 컬렉션-{{TITLE}}</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/duel/duel.css">
+</head>
+<body class="duel-match-page duel-{{KIND}}">
+  <main class="duel-shell">
+    <header class="duel-header">
+      <a class="duel-brand" href="/{{KIND}}" aria-label="{{TITLE}} 로비"><span aria-hidden="true">{{EMOJI}}</span><b>{{TITLE}}</b></a>
+      <h1 id="matchTitle">대결에 들어가는 중…</h1>
+      <span id="role" class="duel-role"></span>
+      <button id="leave" class="danger">나가기</button>
+    </header>
+
+    <section class="duel-layout">
+      <aside class="panel duel-side">
+        <div id="seats" class="duel-seats"></div>
+        <div id="actions" class="duel-actions"></div>
+        <p id="summary" class="duel-summary"></p>
+        <div class="duel-spectators"><h3>👀 관전 <span id="spectatorCount">0</span></h3><p id="spectators">아직 없어요</p></div>
+      </aside>
+
+      <section class="panel duel-board-panel">
+        <div id="status" class="duel-status" role="status">대결 정보를 받는 중…</div>
+        <div id="board" class="duel-board"></div>
+        <p id="boardHelp" class="duel-board-help"></p>
+        <div id="notice" class="notice hidden" role="alert"></div>
+      </section>
+
+      <aside class="panel duel-chat-panel">
+        <h2>채팅</h2>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="answer-row duel-chat-form">
+          <input id="chatInput" maxlength="200" autocomplete="off" placeholder="메시지 입력…">
+          <button id="chatSend" class="secondary" aria-label="채팅 전송">➤</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="resultDialog" class="duel-result-dialog">
+    <p class="eyebrow">대결 끝!</p>
+    <h2 id="resultTitle"></h2>
+    <p id="resultReason"></p>
+    <div class="duel-result-actions">
+      <button id="rematch" class="primary">↻ 한 판 더 (색 바꾸기)</button>
+      <button id="toLobby" class="secondary">로비로</button>
+      <button id="closeResult" class="secondary">판 보기</button>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/duel-rules/clock.js"></script>
+  <script src="/duel-rules/{{KIND}}.js"></script>
+  <script src="/duel/common.js"></script>
+  <script src="/duel/{{BOARD}}-board.js"></script>
+  <script src="/duel/match.js"></script>
+</body>
+</html>
