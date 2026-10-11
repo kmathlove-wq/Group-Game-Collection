@@ -252,6 +252,16 @@ test('오목 대결: 신청·수정 요청·수락, 관전, 승리, 색 바꿔 �
   assert.equal(second.terms.fromColor, 'white'); // 신청한 철수 기준으로 저장
   assert.equal(second.terms.time.mode, 'none');
 
+  // 로비를 떠나면(lobby:leave) 바로 목록에서 빠지고 주고받던 신청도 취소된다.
+  const d = await connect(url);
+  t.after(() => d.close());
+  await emitAck(d, 'omok:lobby:enter', { userId: 'ud', nickname: '잠깐온사람' });
+  await emitAck(d, 'omok:offer:send', { toId: 'uc-none', terms: {} }).catch(() => {});
+  const gone = nextEvent(b, 'omok:lobby:state', (s) => !s.users.some((u) => u.userId === 'ud'));
+  assert.equal((await emitAck(d, 'omok:lobby:leave')).ok, true);
+  await gone;
+  assert.equal((await emitAck(d, 'omok:lobby:here')).ok, false); // 나간 뒤 신호는 거절 → 화면이 다시 들어간다
+
   const acceptedB = nextEvent(b, 'omok:offer:accepted');
   const accepted = await emitAck(a, 'omok:offer:reply', { id: offer.id, action: 'accept' });
   const { matchId } = await acceptedB;

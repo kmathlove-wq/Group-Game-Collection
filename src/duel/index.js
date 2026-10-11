@@ -10,6 +10,8 @@ const DISCONNECT_GRACE_MS = 3_000; // 새로고침·화면 이동은 3초 안에
 const FORFEIT_MS = 60_000;        // 대국 중 나간 선수가 이 시간 안에 안 돌아오면 기권
 const FINISHED_KEEP_MS = 10 * 60_000;
 const CHAT_LIMIT = 100;
+const LOBBY_PING_MS = 5_000;      // 로비 화면은 보고 있는 동안 5초마다 "아직 있어요"를 보낸다
+const LOBBY_TIMEOUT_MS = 15_000;  // 15초 동안 소식이 없으면 로비 목록에서 뺀다(휴대폰 앱 전환·전원 꺼짐 대비)
 
 const GAMES = {
   omok: {
@@ -88,6 +90,21 @@ function setupDuelGame({ app, io, kind }) {
     const user = users.get(socket.data[`${kind}User`]);
     return user && user.socketId === socket.id ? user : null;
   }
+  // 로비 목록에서 빼고, 주고받던 신청도 취소한다.
+  function removeUser(user) {
+    if (users.get(user.userId) !== user) return;
+    clearTimeout(user.leaveTimer);
+    users.delete(user.userId);
+    io.sockets.sockets.get(user.socketId)?.leave(lobbyChannel);
+    const offer = offers.get(user.offerId);
+    if (offer) closeOffer(offer, `${user.nickname}님이 로비를 떠나서 신청이 취소됐어요.`);
+    emitLobby();
+  }
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const user of [...users.values()]) if (now - user.seenAt > LOBBY_TIMEOUT_MS) removeUser(user);
+  }, LOBBY_PING_MS);
+  sweep.unref?.();
 
   // ── 대결 신청 ──
   function publicOffer(offer) {
@@ -223,18 +240,35 @@ function setupDuelGame({ app, io, kind }) {
       clearTimeout(user.leaveTimer);
       if (!offers.has(user.offerId)) user.offerId = null;
       if (user.socketId && user.socketId !== socket.id) io.sockets.sockets.get(user.socketId)?.leave(lobbyChannel);
-      Object.assign(user, { nickname, socketId: socket.id });
+      Object.assign(user, { nickname, socketId: socket.id, seenAt: Date.now() });
       users.set(userId, user);
       socket.data[`${kind}User`] = userId; socket.join(lobbyChannel);
-      ack({ ok: true, lobby: lobbyState() });
+      ack({ ok: true, lobby: lobbyState(), pingMs: LOBBY_PING_MS });
       if (user.offerId && offers.has(user.offerId)) socket.emit(ev('offer'), publicOffer(offers.get(user.offerId)));
       emitLobby();
+    });
+
+    handle('lobby:here', (_raw, ack) => {
+      const user = lobbyMember(socket);
+      if (!user) return ack({ ok: false });
+      user.seenAt = Date.now(); ack({ ok: true });
+    });
+
+    // 로비 화면을 떠나거나(다른 화면·탭·앱으로) 닫을 때 바로 목록에서 뺀다.
+    handle('lobby:leave', (_raw, ack) => {
+      const user = lobbyMember(socket);
+      if (user) removeUser(user);
+      socket.leave(lobbyChannel);
+      ack({ ok: true });
     });
 
     handle('offer:send', (raw, ack) => {
       const me = lobbyMember(socket); if (!me) return ack({ ok: false, message: '먼저 로비에 들어와 주세요.' });
       const target = users.get(text(raw?.toId, 80));
       if (!target || target.userId === me.userId) return ack({ ok: false, message: '대결할 상대를 찾을 수 없어요.' });
+      if (Date.now() - target.seenAt > LOBBY_TIMEOUT_MS) {
+        removeUser(target); return ack({ ok: false, message: `${target.nickname}님은 로비를 떠났어요.` });
+      }
       if (me.offerId) return ack({ ok: false, message: '이미 주고받는 중인 신청이 있어요.' });
       if (target.offerId) return ack({ ok: false, message: `${target.nickname}님은 다른 사람과 신청을 주고받는 중이에요.` });
       const offer = { id: newId(offers), fromId: me.userId, toId: target.userId, round: 1, waitingFor: target.userId };
@@ -369,13 +403,7 @@ function setupDuelGame({ app, io, kind }) {
     socket.on('disconnect', () => {
       const user = lobbyMember(socket);
       if (user) {
-        user.leaveTimer = setTimeout(() => {
-          if (users.get(user.userId) !== user || user.socketId !== socket.id) return;
-          users.delete(user.userId);
-          const offer = offers.get(user.offerId);
-          if (offer) closeOffer(offer, `${user.nickname}님이 로비를 떠나서 신청이 취소됐어요.`);
-          emitLobby();
-        }, DISCONNECT_GRACE_MS);
+        user.leaveTimer = setTimeout(() => { if (user.socketId === socket.id) removeUser(user); }, DISCONNECT_GRACE_MS);
       }
       const { match, color } = seatOf(socket);
       if (!match) return;
@@ -401,6 +429,7 @@ function setupDuelGame({ app, io, kind }) {
   return {
     users, offers, matches, lobbyState,
     close() {
+      clearInterval(sweep);
       for (const offer of offers.values()) clearTimeout(offer.timer);
       for (const match of matches.values()) clearTimeout(match.clockTimer);
       users.clear(); offers.clear(); matches.clear();

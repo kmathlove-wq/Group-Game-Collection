@@ -18,6 +18,7 @@
   if (exitNotice) show(exitNotice, 'success');
 
   async function enter() {
+    if (me) $('#nickname').value = me.nickname;
     const nickname = $('#nickname').value.trim();
     if (!nickname) { show('닉네임을 입력해 주세요.', 'error'); $('#nickname').focus(); return; }
     try {
@@ -27,15 +28,22 @@
       $('#myName').textContent = nickname;
       $('#enterCard').classList.add('hidden'); $('#lobby').classList.remove('hidden');
       document.querySelector('.songcatch-lobby-features').classList.add('hidden');
+      away = false;
       renderLobby(result.lobby);
-    } catch (error) { show(error.message, 'error'); }
+    } catch (error) {
+      show(error.message, 'error');
+      if (me) showEnterCard(); // 다시 들어가기에 실패하면 닉네임 화면으로 돌아간다
+    }
+  }
+  function showEnterCard() {
+    me = null; sessionStorage.removeItem(`duel:${kind}:inLobby`);
+    $('#lobby').classList.add('hidden'); $('#enterCard').classList.remove('hidden');
+    document.querySelector('.songcatch-lobby-features').classList.remove('hidden');
   }
   $('#enter').onclick = enter;
   $('#nickname').onkeydown = (event) => { if (event.key === 'Enter' && !event.isComposing) enter(); };
   $('#rename').onclick = () => {
-    me = null; sessionStorage.removeItem(`duel:${kind}:inLobby`);
-    $('#lobby').classList.add('hidden'); $('#enterCard').classList.remove('hidden');
-    document.querySelector('.songcatch-lobby-features').classList.remove('hidden');
+    leaveLobby(); showEnterCard(); away = false;
     $('#nickname').focus();
   };
 
@@ -44,6 +52,23 @@
     // 새로고침·대결 뒤 돌아왔을 때나 연결이 다시 붙었을 때 자동으로 로비에 다시 들어간다.
     if (me || (sessionStorage.getItem(`duel:${kind}:inLobby`) && window.Duel.nickname())) enter();
   });
+  // 로비 화면을 보고 있는 사람만 목록에 남는다.
+  // 다른 화면·탭·앱으로 가거나 닫으면 바로 나가고, 돌아오면 다시 들어간다.
+  // 보고 있는 동안은 5초마다 "아직 있어요"를 보내서, 휴대폰이 갑자기 꺼져도 15초 안에 목록에서 빠진다.
+  let away = false;
+  function leaveLobby() {
+    if (!me || away) return;
+    away = true; socket.emit(`${kind}:lobby:leave`, {}, () => {});
+  }
+  function comeBack() { if (me && away && document.visibilityState === 'visible') enter(); }
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? leaveLobby() : comeBack()));
+  window.addEventListener('pagehide', leaveLobby);
+  window.addEventListener('pageshow', comeBack);
+  setInterval(() => {
+    if (!me || away || document.visibilityState !== 'visible' || !socket.connected) return;
+    socket.emit(`${kind}:lobby:here`, {}, (result) => { if (!result?.ok && me && !away) enter(); });
+  }, 5_000);
+
   socket.on('disconnect', () => { $('#connectionStatus').textContent = '● 서버 연결 끊김'; $('#connectionStatus').classList.remove('connected'); });
 
   // ── 로비 목록 ──
