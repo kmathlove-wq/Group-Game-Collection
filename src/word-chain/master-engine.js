@@ -15,6 +15,8 @@ const WIN = 1; const LOSE = 2; // 정해지지 않은 글자(루트)는 0
 const LOOPED = '\u0001';       // 글자 뒤에 붙여 "돌아오는 길이 하나 줄어든 글자"(e⁻)를 나타낸다
 const MAX_SEARCH_DEPTH = 2_000; // 너무 깊으면 "모름"으로 본다(호출 스택 보호)
 const OPENER_SAMPLES = 24;      // 첫 단어를 깊이 생각할 때 살펴볼 후보 수
+const FIRST_SLICE_MS = 20;      // 첫 바퀴에 후보 하나를 따져 보는 시간(바퀴마다 2배)
+const IDLE_LAPS = 2;            // 이만큼 연속으로 새 결론이 없으면 생각을 멈춘다
 class OutOfTime extends Error {}
 const MODERN = /^[가-힣]+$/;
 // 낱말의 [첫 글자, 끝 글자](쓸 수 없는 낱말이면 null). 보통 낱말(가~힣만)은 글자 쪼개기(Intl.Segmenter) 없이 바로 꺼낸다:
@@ -212,15 +214,14 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
       finally { spent.set(k, spent.get(k) - 1); }
     };
   }
-  // 후보 길들을 thinkMs 안에 나눠 따져 본다. 처음엔 짧게 한 바퀴, 남은 시간은 결론 안 난 길에 다시 나눠 준다.
+  // 후보 길들을 점점 길게 따져 본다: 한 바퀴마다 결론 안 난 길에 시간을 2배로 준다(쉬운 수는 금방 찾는다).
+  // 결론이 나는 판은 거의 2초 안에 나고 안 나는 판은 60초를 줘도 안 나서(2026-10 실측), 몇 바퀴 연속 새 결론이 없으면
+  // 그만 생각한다. thinkMs는 "최대" 시간이다 — 예전엔 결론이 안 나면 언제나 끝까지 채웠다.
   function think(candidates, a, thinkMs) {
     const tryMove = searcher(a);
     const end = now() + thinkMs; const lost = [];
-    let unknown = candidates; let firstLap = true;
-    while (unknown.length) {
-      const left = end - now(); if (left < 5) break;
-      const slice = firstLap ? Math.max(10, left / (2 * unknown.length)) : left / unknown.length;
-      firstLap = false;
+    let unknown = candidates; let slice = FIRST_SLICE_MS; let idle = 0;
+    while (unknown.length && idle < IDLE_LAPS && end - now() >= 5) {
       const next = [];
       for (const [i, m] of unknown.entries()) {
         if (now() >= end) { next.push(...unknown.slice(i)); break; }
@@ -228,7 +229,8 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
         if (result === 'win') return { win: m };
         (result === 'lose' ? lost : next).push(m);
       }
-      unknown = next;
+      idle = next.length === unknown.length ? idle + 1 : 0;
+      unknown = next; slice *= 2;
     }
     return { unknown, lost };
   }
