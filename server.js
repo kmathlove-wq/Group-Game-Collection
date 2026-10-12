@@ -17,6 +17,8 @@ const { createOneShotStore } = require('./src/word-chain/one-shot-store');
 const { createBrain } = require('./src/word-chain/brain');
 const { createGistSync } = require('./lib/gist-sync');
 const { createStudy } = require('./src/word-chain/study');
+const { createBoardStore } = require('./lib/board-store');
+const { setupBoard } = require('./src/board');
 const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -110,6 +112,8 @@ function registerScoreboard(slug, scoreMax) {
 }
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
+// 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음).
+setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }) });
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
@@ -962,7 +966,7 @@ if (require.main === module) {
     process.once(signal, () => {
       const done = () => process.exit(0);
       setTimeout(done, 8_000).unref();
-      Promise.all([oneShotStore.flush(), wordChainBrain.flush(), wordChainStudy.flush(), wordChainMaster.flush(), wordChainPatrol.flush()]).finally(done);
+      Promise.all([oneShotStore.flush(), wordChainBrain.flush(), wordChainStudy.flush(), wordChainMaster.flush(), wordChainPatrol.flush(), gistSync?.flush()]).finally(done);
     });
   }
 }
