@@ -161,6 +161,24 @@ test('색칠 땅따먹기: 접속하면 판을 받고, 시작하면 봇과 함�
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(landGame.arena.players.get(played.you).target, 1.5);
 
+  // 한 바퀴 돌아 땅을 얻으면 그 사람에게만 효과음용 land:gain이 온다.
+  const me = landGame.arena.players.get(played.you);
+  landGame.arena.spawnAt(me, 60, 300, 0);
+  me.invUntil = landGame.arena.tickNo + 1000; // 봇에게 잡히지 않게
+  let otherGain = false; two.on('land:gain', () => { otherGain = true; });
+  const gained = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('land:gain이 오지 않음')), 6_000);
+    let n = 0;
+    one.on('land:tick', () => {
+      n += 1;
+      const angle = n < 8 ? 0 : n < 14 ? Math.PI / 2 : n < 22 ? Math.PI : -Math.PI / 2;
+      one.emit('land:steer', angle);
+    });
+    one.once('land:gain', (data) => { clearTimeout(timer); one.off('land:tick'); resolve(data); });
+  });
+  assert.ok(gained.gained > 20);
+  assert.equal(otherGain, false);
+
   await emitAck(two, 'land:leave');
   assert.equal(landGame.humans.has('land-two'), false);
   assert.equal(landGame.bots.size, 5);

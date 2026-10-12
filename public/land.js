@@ -36,6 +36,67 @@
   const fallback = { nickname: '', ...paint('hsl(0') };
   const look = (id) => roster.get(id) || fallback;
 
+  // ── 효과음: 소리 파일 없이 웹오디오로 직접 만든다. 🔊 단추로 끄고 켜며 다음에 와도 기억한다. ──
+  let audio = null;
+  let muted = store.get('land:sound') === 'off';
+  function showSound() {
+    const button = $('#sound');
+    button.textContent = muted ? '🔇' : '🔊';
+    button.setAttribute('aria-label', muted ? '소리 켜기' : '소리 끄기');
+  }
+  showSound();
+  $('#sound').addEventListener('click', () => {
+    muted = !muted; store.set('land:sound', muted ? 'off' : 'on'); showSound();
+    if (!muted) { wakeAudio(); sfx.spawn(); }
+  });
+  // 브라우저는 사용자가 누르기 전엔 소리를 막으므로, 시작 단추를 누를 때 소리 장치를 켠다.
+  function wakeAudio() {
+    try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch { audio = null; }
+  }
+  // 음 하나: type(소리 모양), 시작·끝 높이(Hz), 길이(초), 몇 초 뒤에, 크기
+  function tone(type, from, to, length, delay = 0, volume = 0.12) {
+    if (muted || !audio) return;
+    try {
+      const at = audio.currentTime + delay;
+      const osc = audio.createOscillator(); const gain = audio.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(from, at);
+      if (to !== from) osc.frequency.exponentialRampToValueAtTime(to, at + length);
+      gain.gain.setValueAtTime(volume, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + length);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(at); osc.stop(at + length + 0.02);
+    } catch { /* 소리가 안 나도 게임은 계속 */ }
+  }
+  // 짧은 "칙" 소리(잡음)
+  function noise(length, delay = 0, volume = 0.18) {
+    if (muted || !audio) return;
+    try {
+      const at = audio.currentTime + delay;
+      const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * length), audio.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      const source = audio.createBufferSource(); const gain = audio.createGain();
+      source.buffer = buffer; gain.gain.value = volume;
+      source.connect(gain).connect(audio.destination); source.start(at);
+    } catch { /* 소리가 안 나도 게임은 계속 */ }
+  }
+  const sfx = {
+    spawn() { tone('sine', 440, 880, 0.12); tone('sine', 660, 1320, 0.14, 0.09); },          // 뾰롱
+    gain(cells) {                                                                         // 띠리링: 많이 얻을수록 높게
+      const up = Math.min(12, Math.max(0, Math.round(Math.log2(Math.max(1, cells) / 30) * 3)));
+      [0, 4, 7].forEach((step, i) => { const f = 523.25 * 2 ** ((step + up) / 12); tone('triangle', f, f, 0.16, i * 0.07, 0.11); });
+    },
+    kill() { noise(0.09, 0, 0.22); tone('square', 1200, 600, 0.1, 0, 0.06); },             // 착!
+    death() { tone('sawtooth', 600, 110, 0.65, 0, 0.09); noise(0.25, 0.05, 0.08); },        // 뿌우웅
+    conquer() {                                                                            // 빠바밤~
+      [[523.25, 0], [659.25, 0.14], [783.99, 0.28], [1046.5, 0.42]].forEach(([f, d]) => tone('triangle', f, f, d === 0.42 ? 0.7 : 0.18, d, 0.13));
+      tone('sine', 523.25, 523.25, 0.9, 0.42, 0.06);
+    }
+  };
+  socket.on('land:gain', ({ gained }) => sfx.gain(gained));
+  socket.on('land:kill', () => sfx.kill());
+
   // ── 서버에서 받은 판 ──
   function loadSnapshot(snap) {
     size = snap.size; brush = snap.brush;
@@ -114,7 +175,7 @@
     setTimeout(() => li.remove(), 4500);
   });
 
-  socket.on('land:conquered', ({ nickname }) => banner([`🎉 ${nickname}님이 판을 정복했어요!`, '새 판이 시작돼요'], 4000));
+  socket.on('land:conquered', ({ nickname }) => { sfx.conquer(); banner([`🎉 ${nickname}님이 판을 정복했어요!`, '새 판이 시작돼요'], 4000); });
   function banner(lines, ms) {
     const el = $('#banner'); el.replaceChildren();
     lines.forEach((line, i) => { if (i) el.append(document.createElement('br')); el.append(line); });
@@ -131,6 +192,7 @@
 
   socket.on('land:died', (info) => {
     you = 0;
+    if (!info.conquered) sfx.death();
     $('#deadTitle').textContent = info.conquered ? '🎉 판 정복!' : '탈락!';
     $('#deadReason').textContent = info.by ? `${info.by}님에게 ${info.reason}` : info.reason;
     $('#deadPercent').textContent = `${info.percent}%`;
@@ -144,10 +206,11 @@
     const nickname = $('#nickname').value.trim();
     if (!nickname) { showOverlay('start'); status('닉네임을 입력해 주세요.', true); $('#nickname').focus(); return; }
     store.set('land:nickname', nickname);
+    wakeAudio();
     status('들어가는 중…');
     socket.emit('land:play', { nickname }, (result) => {
       if (!result?.ok) { status(result?.message || '들어가지 못했어요.', true); return; }
-      you = result.you; status(''); showOverlay(null); sentAngle = null; renderRanking();
+      you = result.you; status(''); showOverlay(null); sentAngle = null; renderRanking(); sfx.spawn();
     });
   }
   $('#play').addEventListener('click', play);

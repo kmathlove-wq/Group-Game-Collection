@@ -70,9 +70,17 @@ function setupLandGame({ app, io, rootDir, tickMs = TICK_MS, botCount = BOT_TARG
 
     let rosterChanged = false;
     for (const event of result.events) {
+      // 효과음용 개인 알림: 땅을 얻은 사람·남을 잡은 사람에게만 보낸다.
+      if (event.type === 'capture') {
+        const owner = humanOf(event.id);
+        if (owner && event.gained > 0) io.to(owner.socketId).emit('land:gain', { gained: event.gained });
+        continue;
+      }
       if (event.type !== 'death') continue;
       const victim = arena.players.get(event.id); const killer = arena.players.get(event.by);
       io.to(CHANNEL).emit('land:feed', { victim: victim.nickname, victimColor: victim.color, killer: killer?.nickname || '', killerColor: killer?.color || '', reason: event.reason });
+      const hunter = killer && humanOf(killer.id);
+      if (hunter) io.to(hunter.socketId).emit('land:kill', { victim: victim.nickname, reason: event.reason });
       if (bots.has(event.id)) { bots.get(event.id).respawnAt = arena.tickNo + BOT_RESPAWN_TICKS; continue; }
       const human = humanOf(event.id);
       if (human) {
