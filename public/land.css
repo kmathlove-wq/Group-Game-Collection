@@ -1,0 +1,66 @@
+/* 색칠 땅따먹기 전용 스타일. 공통 버튼(.primary)·라벨은 music.css를 빌려 쓴다. */
+.land-page { margin: 0; overflow: hidden; background: #eef3ef; height: 100vh; height: 100dvh; touch-action: none; user-select: none; }
+#board { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; }
+.hidden { display: none !important; }
+
+.land-top { position: fixed; top: 10px; left: 10px; display: flex; gap: 10px; align-items: center; z-index: 5; }
+.land-back, .land-mystat, .land-board, .land-feed li {
+  background: #ffffffe6; border: 1px solid #00000014; border-radius: 14px; box-shadow: 0 6px 18px #0000001a;
+}
+.land-back { padding: 8px 12px; font-weight: 900; color: var(--ink, #222); text-decoration: none; font-size: 14px; }
+.land-mystat { padding: 6px 12px; display: flex; gap: 8px; align-items: baseline; }
+.land-mystat strong { font-size: 20px; color: #059669; }
+.land-mystat small { color: #666; font-weight: 800; }
+
+.land-board { position: fixed; top: 10px; right: 10px; width: 200px; padding: 10px 12px; z-index: 5; }
+.land-board h2 { margin: 0 0 6px; font-size: 15px; }
+.land-board h2 small { color: #777; font-weight: 700; }
+.land-board ol { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.land-board li { display: grid; grid-template-columns: 22px 12px 1fr auto; gap: 5px; align-items: center; padding: 2px 0; }
+.land-board li b { color: #888; }
+.land-board li i { width: 12px; height: 12px; border-radius: 4px; }
+.land-board li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.land-board li.me { font-weight: 900; color: #047857; }
+
+.land-minimap { position: fixed; right: 10px; bottom: 10px; width: 140px; height: 140px; border-radius: 12px;
+  background: #fff; border: 2px solid #fff; box-shadow: 0 6px 18px #0000002a; image-rendering: pixelated; z-index: 5; }
+.land-feed { position: fixed; left: 10px; bottom: 10px; margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; z-index: 5; max-width: 60vw; }
+.land-feed li { padding: 6px 10px; font-size: 13px; font-weight: 700; animation: land-in .25s ease-out; }
+@keyframes land-in { from { opacity: 0; transform: translateX(-12px); } }
+
+.land-overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: #0f172a55; z-index: 10; overflow: auto; }
+.land-card { width: min(420px, 100%); background: #fff; border-radius: 26px; padding: 26px 24px; text-align: center; box-shadow: 0 24px 60px #0000004a; }
+.land-card h1 { margin: 4px 0 8px; font-size: 30px; }
+.land-logo { width: 84px; height: 84px; margin: 0 auto 8px; display: grid; place-items: center; font-size: 44px; border-radius: 26px;
+  background: linear-gradient(135deg, #34d399, #3b82f6); box-shadow: 0 14px 30px #10b98144; animation: land-bob 3s ease-in-out infinite; }
+.land-logo.dead { background: linear-gradient(135deg, #fb7185, #f59e0b); }
+@keyframes land-bob { 50% { transform: translateY(-6px) rotate(-5deg); } }
+.land-copy { color: #555; line-height: 1.55; margin: 0 0 14px; }
+.land-input { width: 100%; box-sizing: border-box; padding: 13px 14px; margin: 6px 0 12px; font: inherit; font-size: 16px;
+  border: 1.5px solid var(--line, #ddd); border-radius: 12px; background: #fff; outline: none; }
+.land-input:focus { border-color: #10b981; box-shadow: 0 0 0 4px #10b98126; }
+.land-card .wide { width: 100%; }
+.land-rules { list-style: none; padding: 0; margin: 16px 0 0; text-align: left; display: grid; gap: 6px; font-size: 13px; color: #555; }
+.land-rules span { display: inline-block; width: 22px; }
+.land-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 16px; }
+.land-stats div { background: #f3f6f4; border-radius: 14px; padding: 10px 4px; }
+.land-stats strong { display: block; font-size: 22px; color: #047857; }
+.land-stats small { color: #777; font-weight: 800; }
+.land-status { margin: 12px 0 0; font-size: 13px; color: #777; }
+.land-status.error { color: #e11d48; }
+
+.land-banner { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); z-index: 20; padding: 18px 26px; border-radius: 22px;
+  background: #fff; font-size: 22px; font-weight: 900; text-align: center; box-shadow: 0 20px 50px #0000004a; animation: land-pop .4s ease-out; }
+@keyframes land-pop { from { transform: translateX(-50%) scale(.6); opacity: 0; } }
+
+@media (max-width: 640px) {
+  .land-top { flex-direction: column; align-items: flex-start; gap: 6px; } /* 내 기록이 순위표에 가리지 않게 아래로 */
+  .land-mystat strong { font-size: 17px; }
+  .land-board { width: 150px; padding: 8px; }
+  .land-board li { font-size: 12px; }
+  .land-board li:nth-child(n+6) { display: none; } /* 휴대폰은 상위 5명만 */
+  .land-minimap { width: 96px; height: 96px; }
+  .land-back { font-size: 12px; padding: 7px 10px; }
+  .land-feed { max-width: calc(100vw - 130px); }
+}
+@media (prefers-reduced-motion: reduce) { .land-logo, .land-feed li, .land-banner { animation: none; } }

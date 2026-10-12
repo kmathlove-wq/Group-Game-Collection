@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10b981">
+  <title>그룹 게임 컬렉션-색칠 땅따먹기</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/land.css">
+</head>
+<body class="land-page">
+  <canvas id="board" aria-label="색칠 땅따먹기 판"></canvas>
+
+  <header class="land-top">
+    <a href="/" class="land-back">← 그룹 게임 컬렉션</a>
+    <div id="myStat" class="land-mystat hidden"><strong id="myPercent">0%</strong><small id="myKills">잡은 수 0</small></div>
+  </header>
+
+  <aside class="land-board" aria-label="순위">
+    <h2>🏆 순위 <small id="peopleCount"></small></h2>
+    <ol id="ranking"></ol>
+  </aside>
+  <canvas id="minimap" class="land-minimap" width="120" height="120" aria-label="작은 지도"></canvas>
+  <ul id="feed" class="land-feed" aria-live="polite"></ul>
+
+  <section id="overlay" class="land-overlay">
+    <div class="land-card">
+      <div id="startView">
+        <div class="land-logo" aria-hidden="true">🖌️</div>
+        <p class="eyebrow">그룹 게임 컬렉션</p>
+        <h1>색칠 땅따먹기</h1>
+        <p class="land-copy">내 땅 밖으로 나가 한 바퀴 돌고 돌아오면, 둘러싼 곳이 모두 내 땅!<br>누구나 같은 판에서 바로 함께해요.</p>
+        <label class="songcatch-nickname-label" for="nickname">닉네임</label>
+        <input id="nickname" class="land-input" maxlength="20" autocomplete="nickname" placeholder="자유롭게 닉네임 입력">
+        <button id="play" class="primary wide">▶ 시작하기</button>
+        <ul class="land-rules">
+          <li><span>🎮</span> PC는 마우스가 있는 쪽으로(방향키·WASD도 돼요), 휴대폰은 손가락을 끄는 쪽으로</li>
+          <li><span>✂️</span> 남의 꼬리를 밟으면 그 사람이 탈락!</li>
+          <li><span>⚠️</span> 내 꼬리를 밟거나 꼬리를 밟히면 탈락</li>
+          <li><span>🧱</span> 판 끝에 닿아도 괜찮아요. 벽을 따라 미끄러져요</li>
+        </ul>
+      </div>
+      <div id="deadView" class="hidden">
+        <div class="land-logo dead" aria-hidden="true">💥</div>
+        <h1 id="deadTitle">탈락!</h1>
+        <p id="deadReason" class="land-copy"></p>
+        <div class="land-stats">
+          <div><strong id="deadPercent">0%</strong><small>최고 땅</small></div>
+          <div><strong id="deadKills">0</strong><small>잡은 수</small></div>
+          <div><strong id="deadTime">0초</strong><small>버틴 시간</small></div>
+        </div>
+        <button id="again" class="primary wide">↻ 다시 시작</button>
+      </div>
+      <p id="status" class="land-status" role="status">● 서버에 연결하는 중…</p>
+    </div>
+  </section>
+
+  <div id="banner" class="land-banner hidden" role="status"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/land.js"></script>
+</body>
+</html>
