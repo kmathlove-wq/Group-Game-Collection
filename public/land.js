@@ -290,34 +290,47 @@
     return a + d * t;
   }
 
-  // 땅을 둥글게: 칸 가운데 4점을 한 묶음으로 보고(마칭 스퀘어), 내 땅인 꼭짓점과 경계 중간점을 이어 비스듬한 모양을 만든다.
+  // 땅을 매끈하게: 칸마다 "둘레 9칸 중 그 주인 땅이 얼마나 되나"(가운데 4·옆 2·대각선 1 무게, 0~1)를 재고,
+  // 칸 가운데 4점을 한 묶음으로 보아(마칭 스퀘어) 그 값이 0.5가 되는 자리를 비율로 찾아 잇는다.
+  // 45°로만 깎던 예전 방식은 완만한 비탈이 계단처럼 울퉁불퉁했다.
+  const SMOOTH = [1, 2, 1, 2, 4, 2, 1, 2, 1];
   function landPaths(x0, y0, x1, y1, ox, oy, cell) {
     const paths = new Map();
     const at = (x, y) => (x < 0 || y < 0 || x >= size || y >= size ? 0 : owner[y * size + x]);
     const pathOf = (id) => { let p = paths.get(id); if (!p) { p = new Path2D(); paths.set(id, p); } return p; };
+    const share = (id, x, y) => {
+      let sum = 0;
+      for (let k = 0; k < 9; k += 1) if (at(x + (k % 3) - 1, y + Math.floor(k / 3) - 1) === id) sum += SMOOTH[k];
+      return sum / 16;
+    };
     for (let y = y0 - 1; y <= y1; y += 1) {
       const sy = oy + (y + 0.5) * cell;
       let runId = 0; let runStart = 0;
       const flush = (x) => { if (runId) pathOf(runId).rect(ox + (runStart + 0.5) * cell, sy, (x - runStart) * cell + 0.6, cell + 0.6); runId = 0; };
       for (let x = x0 - 1; x <= x1; x += 1) {
-        const a = at(x, y); const b = at(x + 1, y); const c = at(x + 1, y + 1); const d = at(x, y + 1);
-        if (a === b && b === c && c === d) {
+        // 둘레까지 4×4칸이 모두 같은 주인이면 경계가 없으니 한 줄 직사각형으로 묶는다
+        const a = at(x, y); let same = true;
+        for (let k = 0; k < 16 && same; k += 1) same = at(x - 1 + (k % 4), y - 1 + (k >> 2)) === a;
+        if (same) {
           if (a !== runId) { flush(x); if (a) { runId = a; runStart = x; } }
           continue;
         }
         flush(x);
-        const sx = ox + (x + 0.5) * cell; const h = cell / 2;
-        // 시계 방향 8점: 왼위, 위가운데, 오른위, 오른가운데, 오른아래, 아래가운데, 왼아래, 왼가운데
-        const corners = [a, b, c, d];
+        const ids = new Set();
+        for (let k = 0; k < 16; k += 1) { const id = at(x - 1 + (k % 4), y - 1 + (k >> 2)); if (id) ids.add(id); }
+        // 시계 방향 꼭짓점: 왼위, 오른위, 오른아래, 왼아래
+        const sx = ox + (x + 0.5) * cell;
         const cx = [sx, sx + cell, sx + cell, sx]; const cy = [sy, sy, sy + cell, sy + cell];
-        const mx = [sx + h, sx + cell, sx + h, sx]; const my = [sy, sy + h, sy + cell, sy + h];
-        for (const id of new Set(corners)) {
-          if (!id) continue;
+        for (const id of ids) {
+          const v = [share(id, x, y), share(id, x + 1, y), share(id, x + 1, y + 1), share(id, x, y + 1)];
+          const inside = v.map((n) => n >= 0.5);
+          if (!inside.some(Boolean)) continue;
           const p = pathOf(id); let started = false;
+          const to = (px, py) => { started ? p.lineTo(px, py) : p.moveTo(px, py); started = true; };
           for (let k = 0; k < 4; k += 1) {
-            const inside = corners[k] === id; const next = corners[(k + 1) % 4] === id;
-            if (inside) { started ? p.lineTo(cx[k], cy[k]) : p.moveTo(cx[k], cy[k]); started = true; }
-            if (inside !== next) { started ? p.lineTo(mx[k], my[k]) : p.moveTo(mx[k], my[k]); started = true; }
+            const n = (k + 1) % 4;
+            if (inside[k]) to(cx[k], cy[k]);
+            if (inside[k] !== inside[n]) { const t = (0.5 - v[k]) / (v[n] - v[k]); to(cx[k] + (cx[n] - cx[k]) * t, cy[k] + (cy[n] - cy[k]) * t); }
           }
           p.closePath();
         }
