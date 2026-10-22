@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="description" content="드릴 차로 땅을 파 내려가 광석을 캐고, 팔아서 업그레이드하며 300m 아래 전설의 보물을 찾는 광질 타이쿤 게임이에요.">
+  <meta name="description" content="드릴 차로 땅을 파 내려가 광석을 캐고, 팔아서 업그레이드하며 300m 아래 전설의 보물을 찾고, 그 밑의 맨틀·외핵·내핵까지 내려가는 광질 타이쿤 게임이에요.">
   <title>그룹 게임 컬렉션-광질 타이쿤</title>
   <link rel="icon" type="image/png" href="/assets/group-game-logo.png">
   <link rel="stylesheet" href="css/style.css">
@@ -31,6 +31,8 @@
       <div class="mt-stat" title="걸린 시간"><span aria-hidden="true">⏱️</span><b id="mtTimeText">0:00</b></div>
       <div class="mt-stat" title="파는 범위 (Q로 바꾸기)"><span aria-hidden="true">💥</span><b id="mtWideText">1칸</b></div>
       <div class="mt-stat" title="귀환석 (R로 쓰기)"><span aria-hidden="true">🌀</span><b id="mtRecallText">0</b></div>
+      <div class="mt-stat" title="즉시 팔기 (F로 쓰기)"><span aria-hidden="true">💸</span><b id="mtInstantText">0</b></div>
+      <div class="mt-stat hidden" id="mtAuto" title="자동 드릴 · 지금까지 번 돈"><span aria-hidden="true">🤖</span><b id="mtAutoText">0대</b></div>
     </section>
 
     <div class="mt-stage" id="mtStage">
@@ -52,11 +54,12 @@
         <div class="mt-touch-right">
           <button type="button" data-action="wide">💥</button>
           <button type="button" data-action="recall">🌀</button>
+          <button type="button" data-action="instant">💸</button>
         </div>
       </div>
     </div>
 
-    <p class="mt-help" id="mtHelp">← → 이동·옆으로 파기 · ↓ 아래로 파기 · ↑ 날기 · Q 넓게/1칸 파기 · R 귀환석 · Esc 멈춤 (WASD도 돼요)</p>
+    <p class="mt-help" id="mtHelp">← → 이동·옆으로 파기 · ↓ 아래로 파기 · ↑ 날기 · Q 넓게/1칸 파기 · R 귀환석 · F 즉시 팔기 · Esc 멈춤 (WASD도 돼요)</p>
     <p class="mt-rotate-hint">📱 휴대폰을 가로로 돌리면 더 크게 볼 수 있어요</p>
   </main>
 
@@ -66,6 +69,7 @@
       <div class="mt-card-emoji" aria-hidden="true">⛏️</div>
       <h2>광질 타이쿤</h2>
       <p>드릴 차로 땅을 파 내려가 광석을 모으고, 연료가 떨어지기 전에 올라와 팔아요.<br>번 돈으로 차를 업그레이드해서 <b>300m 아래 전설의 보물</b>을 찾아보세요!</p>
+      <p class="mt-badge hidden" id="mtDestroyedBadge"></p>
       <p class="mt-notice hidden" id="mtBrokenNotice">저장이 망가졌어요. 새로 시작할게요.</p>
       <div id="mtContinueBox" class="hidden">
         <p class="mt-save-info" id="mtSaveInfo"></p>
@@ -107,10 +111,33 @@
       <h2>전설의 보물을 찾았어요!</h2>
       <p>걸린 시간 <b id="mtEndingTime">0:00</b> · 보상 <b id="mtEndingReward">50,000원</b></p>
       <p id="mtEndingRank">순위를 등록하는 중이에요…</p>
-      <p>보물을 찾은 뒤에도 계속 광석을 캐서 💰 번 돈 순위를 올릴 수 있어요.</p>
+      <p class="mt-open-news">⬇️ 쿠궁! 300m 바닥이 부서져서 <b>아래로 가는 길이 열렸어요!</b><br>지각 밑은 아주 뜨거워요. 🔥 상점에서 열보호를 사야 버틸 수 있어요.</p>
+      <p>상점에 새 업그레이드와 🤖 자동 드릴도 생겼어요.</p>
       <div class="mt-row">
         <button class="mt-secondary" id="mtEndingRankButton" type="button">🏆 순위 보기</button>
         <button class="mt-primary" id="mtEndingContinue" type="button">계속 캐기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 지구 파괴 엔딩 -->
+  <div class="mt-modal hidden" id="mtDestroyModal">
+    <div class="mt-card mt-destroy">
+      <div class="mt-card-emoji" aria-hidden="true">🌍💥</div>
+      <h2>두 번째 엔딩 — 지구 파괴</h2>
+      <p>버튼을 누르자… 지구가 산산조각 났어요!</p>
+      <ul class="mt-destroy-stats">
+        <li><span>총 걸린 시간</span><b id="mtDestroyTime">0:00</b></li>
+        <li><span>지금까지 번 돈</span><b id="mtDestroyEarned">0원</b></li>
+        <li><span>보물을 찾은 시간</span><b id="mtDestroyTreasure">-</b></li>
+        <li><span>자동 드릴 산 수</span><b id="mtDestroyAutos">0대</b></li>
+      </ul>
+      <p class="mt-badge" id="mtDestroyCount"></p>
+      <p id="mtDestroyRank">순위를 등록하는 중이에요…</p>
+      <p>게임이 완전히 끝났어요. 처음부터 새 지구에서 다시 할 수 있어요.</p>
+      <div class="mt-row">
+        <button class="mt-secondary" id="mtDestroyRankButton" type="button">🏆 순위 보기</button>
+        <button class="mt-primary" id="mtDestroyRestart" type="button">처음부터 다시</button>
       </div>
     </div>
   </div>
@@ -122,6 +149,7 @@
       <div class="mt-tabs" role="tablist">
         <button type="button" role="tab" data-rank-tab="money">💰 번 돈</button>
         <button type="button" role="tab" data-rank-tab="time">⏱️ 보물 시간</button>
+        <button type="button" role="tab" data-rank-tab="destroy">🌍 지구 파괴</button>
       </div>
       <p class="mt-rank-note" id="mtRankNote"></p>
       <ol class="mt-rank-list" id="mtRankList"></ol>

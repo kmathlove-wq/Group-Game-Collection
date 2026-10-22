@@ -110,6 +110,8 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   assert.ok(moneyBody.scores.every((entry) => !('id' in entry)), '공개 순위에 playerId를 넣지 않는다');
   const timeFast = await (await post('mining-tycoon-time', { name: uniqueName, score: 5, playerId: 'test-time-1' })).json();
   assert.equal(timeFast.rank, 1, '보물 시간은 짧을수록 1등이어야 한다');
+  const destroyFast = await (await post('mining-tycoon-destroy', { name: uniqueName, score: 7, playerId: 'test-destroy-1' })).json();
+  assert.equal(destroyFast.rank, 1, '지구 파괴 시간도 짧을수록 1등이어야 한다');
   const scoreList = await fetch(`${url}/api/geometry-dash/scores`);
   assert.equal(scoreList.status, 200);
   const scoreListBody = await scoreList.json();

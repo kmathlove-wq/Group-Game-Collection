@@ -71,7 +71,11 @@
   function showStart(broken) {
     var saved = broken ? null : Save.load();
     if (saved && saved.broken) { broken = true; saved = null; Save.clear(); }
+    if (saved && saved.state.destroyedTime != null) { saved = null; Save.clear(); } // 지구가 부서진 판은 끝
     $('mtBrokenNotice').classList.toggle('hidden', !broken);
+    var destroyed = Save.destroyedCount();
+    $('mtDestroyedBadge').classList.toggle('hidden', !destroyed);
+    $('mtDestroyedBadge').textContent = '🌍 지구를 부순 횟수: ' + destroyed + '번';
     $('mtNameInput').value = Save.getName();
     if (saved) {
       var s = saved.state;
@@ -115,7 +119,7 @@
     if (state.treasureTime == null) toast('⛏️ 오른쪽 광산으로 가서 ↓ 를 눌러 파 보세요!', 4000);
   }
 
-  function saveNow() { if (state) Save.save(state); saveTimer = 0; }
+  function saveNow() { if (state && state.destroyedTime == null) Save.save(state); saveTimer = 0; } // 지구가 부서진 판은 다시 저장하지 않는다
 
   // ---------- 상단 막대 ----------
   var hudCache = {};
@@ -135,11 +139,17 @@
     setText('mtMoneyText', fmt.money(state.money));
     $('mtDebt').classList.toggle('hidden', state.debt <= 0);
     setText('mtDebtText', '빚 ' + fmt.money(state.debt));
-    setText('mtDepthText', Game.depthOf(state) + 'm');
+    var depth = Game.depthOf(state);
+    setText('mtDepthText', state.inCore ? '⭐ 지구 중심' : depth + 'm' + (depth ? ' ' + Rules.LAYERS[Rules.layerOf(depth)].name : ''));
+    $('mtDepthText').classList.toggle('hot', Game.heatDps(state) > 0);
     setText('mtTimeText', fmt.time(state.time));
     var size = Rules.UPGRADES.range.values[state.levels.range];
     setText('mtWideText', state.wide && state.levels.range > 0 ? size[0] + '×' + size[1] : '1칸');
     setText('mtRecallText', String(state.recall));
+    setText('mtInstantText', String(state.instant));
+    var showAuto = Game.unlocked(state) && (state.autos.length > 0 || state.autoEarned > 0);
+    $('mtAuto').classList.toggle('hidden', !showAuto);
+    setText('mtAutoText', state.autos.length + '대 · +' + fmt.money(state.autoEarned));
   }
 
   // ---------- 가게 창 ----------
@@ -224,28 +234,56 @@
     }, full));
   }
 
+  function shopRow(body, title, desc, label, onClick, disabled, extraClass) {
+    var row = el('div', 'mt-shop-row' + (extraClass ? ' ' + extraClass : ''));
+    var info = el('div', 'mt-shop-info');
+    info.append(el('b', null, title), el('small', null, desc));
+    row.append(info, button(label, 'mt-buy', onClick, disabled));
+    body.append(row);
+  }
+
   function renderShop(body) {
     if (state.debt > 0) body.append(el('p', 'mt-warn', '💳 빚(' + fmt.money(state.debt) + ')이 있어서 지금은 살 수 없어요. 광석을 팔면 자동으로 갚아요.'));
+    var open = Game.unlocked(state);
+    body.append(el('h3', 'mt-shop-head', '⬆️ 업그레이드'));
     Rules.UPGRADE_ORDER.forEach(function (key) {
       var up = Rules.UPGRADES[key];
       var level = state.levels[key];
-      var price = Game.upgradePrice(state, key);
-      var row = el('div', 'mt-shop-row');
-      var info = el('div', 'mt-shop-info');
-      info.append(el('b', null, up.icon + ' ' + up.name + ' ' + (level + 1) + '/' + up.values.length + '단계'), el('small', null, up.desc + ' · ' + describe(key, level) + (price != null ? ' → ' + describe(key, level + 1) : '')));
-      row.append(info);
-      row.append(button(price == null ? '최고 단계' : fmt.money(price), 'mt-buy', function () { buy(key); }, price == null || state.debt > 0 || state.money < price));
-      body.append(row);
+      var info = Game.upgradeInfo(state, key);
+      var title = up.icon + ' ' + up.name + ' ' + (key === 'autoHeat' ? (level ? '✅' : '') : (level + 1) + '/' + up.values.length + '단계');
+      if (info.locked) {
+        shopRow(body, title, '🔒 보물을 찾으면 열려요 · ' + up.desc, '🔒', function () {}, true, 'mt-locked');
+        return;
+      }
+      var desc = up.desc + ' · ' + describe(key, level) + (info.price != null ? ' → ' + describe(key, level + 1) : '');
+      shopRow(body, title, desc, info.price == null ? '최고 단계' : fmt.money(info.price), function () { buy(key); }, info.price == null || state.debt > 0 || state.money < info.price);
     });
-    var recall = el('div', 'mt-shop-row');
-    var info = el('div', 'mt-shop-info');
-    info.append(el('b', null, '🌀 귀환석 (가진 것 ' + state.recall + '개)'), el('small', null, '땅속에서 R을 누르면 바로 지상으로 순간이동해요'));
-    recall.append(info, button(fmt.money(Rules.RECALL_PRICE), 'mt-buy', function () {
-      var result = Game.buyRecall(state);
-      if (!result.ok) { failBuy(result.reason); return; }
-      sound.buy(); saveNow(); renderPanel();
-    }, state.debt > 0 || state.money < Rules.RECALL_PRICE));
-    body.append(recall);
+
+    body.append(el('h3', 'mt-shop-head', '🎒 아이템'));
+    shopRow(body, '🌀 귀환석 (가진 것 ' + state.recall + '개)', '땅속에서 R을 누르면 바로 지상으로 순간이동해요', fmt.money(Rules.RECALL_PRICE), function () {
+      buyItem(Game.buyRecall(state));
+    }, state.debt > 0 || state.money < Rules.RECALL_PRICE);
+    shopRow(body, '💸 즉시 팔기 (' + state.instant + '/' + Rules.INSTANT_MAX + '개)', '땅속에서 F(휴대폰 💸)를 누르면 가방 속 광석이 바로 돈이 돼요. 한 번 쓰면 없어져요', fmt.money(Rules.INSTANT_PRICE), function () {
+      buyItem(Game.buyInstant(state));
+    }, state.debt > 0 || state.money < Rules.INSTANT_PRICE || state.instant >= Rules.INSTANT_MAX);
+    if (!open) {
+      shopRow(body, '🤖 자동 드릴', '🔒 보물을 찾으면 열려요 · 혼자 땅을 파서 광석을 바로 돈으로 바꿔 줘요', '🔒', function () {}, true, 'mt-locked');
+    } else {
+      shopRow(body, '🤖 자동 드릴 (' + state.autos.length + '/' + Rules.AUTO_MAX + '대)', '혼자 땅을 파서 광석을 바로 돈으로 바꿔요 · ' + Rules.UPGRADES.autoLife.values[state.levels.autoLife] + '초 동안 일해요' + (state.levels.autoHeat ? '' : ' · 지각(300m) 밑으로는 못 가요'), fmt.money(Rules.AUTO_PRICE), function () {
+        buyItem(Game.buyAuto(state), '🤖 자동 드릴이 광산으로 출발했어요!');
+      }, state.debt > 0 || state.money < Rules.AUTO_PRICE || state.autos.length >= Rules.AUTO_MAX);
+      // 🎫 입장권: 엔딩 전에는 아예 안 보인다(비밀). 엔딩 뒤에도 열보호 끝 단계 전에는 살 수 없다.
+      var block = Game.ticketBlock(state);
+      if (state.ticket > 0) {
+        shopRow(body, '🎫 지구 핵 입장권 (가지고 있어요)', '쓰면 바로 지구의 중심으로 가요. 한 번 나가면 다시 사야 해요', '지금 가기', function () {
+          if (Game.useTicket(state).ok) { closePanel(); sound.recall(); renderer.cam = null; toast('⭐ 지구의 중심에 왔어요… 저 빨간 버튼은 뭘까요?', 4000); saveNow(); }
+        }, false);
+      } else {
+        shopRow(body, '🎫 지구 핵 입장권', block === 'heat' ? '🔥 열보호 5단계가 있어야 살 수 있어요 · 지구의 중심으로 가는 표예요' : '지구의 중심으로 바로 가는 표예요', fmt.money(Rules.TICKET_PRICE), function () {
+          buyItem(Game.buyTicket(state), '🎫 입장권을 샀어요! "지금 가기"를 누르면 지구의 중심으로 가요.');
+        }, !!block || state.debt > 0 || state.money < Rules.TICKET_PRICE);
+      }
+    }
     body.append(button('🔄 처음부터 다시', 'mt-reset', function () {
       askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.', function () {
         askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
@@ -255,19 +293,38 @@
     }));
   }
 
+  function buyItem(result, message) {
+    if (!result.ok) { failBuy(result.reason); return; }
+    sound.buy();
+    if (message) toast(message);
+    saveNow();
+    renderPanel();
+  }
+
   function describe(key, level) {
     var v = Rules.UPGRADES[key].values[level];
     if (key === 'drill') return '속도 ×' + v + (level >= Rules.ROCK_DRILL_LEVEL ? ' · 바위 OK' : '');
     if (key === 'fuel') return '연료 ' + v;
+    if (key === 'minigas') return '1초에 +' + v;
     if (key === 'bag') return v + '칸';
     if (key === 'hull') return '체력 ' + v;
     if (key === 'engine') return '날기 ' + v;
+    if (key === 'heat') return '열 피해 ' + Math.round(v * 100) + '%';
+    if (key === 'autoLife') return v + '초';
+    if (key === 'autoHeat') return v ? '지각 밑까지' : '지각까지';
     return v[0] + '×' + v[1];
   }
 
   function failBuy(reason) {
     sound.blocked();
-    toast(reason === 'debt' ? '💳 빚을 먼저 갚아야 살 수 있어요.' : reason === 'money' ? '💸 돈이 모자라요.' : '이미 최고 단계예요.');
+    toast({
+      debt: '💳 빚을 먼저 갚아야 살 수 있어요.',
+      money: '💸 돈이 모자라요.',
+      locked: '🔒 보물을 찾으면 열려요.',
+      full: '이미 가득 가지고 있어요.',
+      heat: '🔥 열보호 5단계가 있어야 살 수 있어요.',
+      have: '🎫 이미 입장권을 가지고 있어요.'
+    }[reason] || '이미 최고 단계예요.');
   }
 
   function buy(key) {
@@ -275,13 +332,13 @@
     if (!result.ok) { failBuy(result.reason); return; }
     sound.buy();
     var up = Rules.UPGRADES[key];
-    toast(up.icon + ' ' + up.name + ' ' + (result.level + 1) + '단계가 됐어요!');
+    toast(up.icon + ' ' + up.name + (key === 'autoHeat' ? '를 달았어요!' : ' ' + (result.level + 1) + '단계가 됐어요!'));
     if (key === 'range' && result.level === 1) toast('💥 넓게 파기! Q(휴대폰은 💥)로 1칸 파기와 바꿀 수 있어요.', 3500);
     saveNow();
     renderPanel();
   }
 
-  // ---------- 귀환석·넓게 파기 ----------
+  // ---------- 귀환석·넓게 파기·즉시 팔기 ----------
   function askRecall() {
     if (!state || modal) return;
     if (!Game.isUnderground(state)) { toast('🌀 귀환석은 땅속에서만 쓸 수 있어요.'); return; }
@@ -296,20 +353,33 @@
     state.wide = !state.wide;
     toast(state.wide ? '💥 넓게 파기 켜짐' : '⛏️ 1칸만 파기');
   }
+  function instantSell() {
+    if (!state || modal) return;
+    if (!Game.isUnderground(state)) { toast('💸 즉시 팔기는 땅속에서 써요. 지상에서는 판매소에서 팔아요!'); return; }
+    var result = Game.useInstant(state);
+    if (!result.ok) { sound.blocked(); toast(result.reason === 'empty' ? '🎒 가방이 비어 있어요.' : '💸 즉시 팔기가 없어요. 상점에서 살 수 있어요.'); return; }
+    sound.sell();
+    renderer.floatText('+' + fmt.money(result.total), state.car.x, state.car.y - 1, '#ffe066');
+    toast('💸 즉시 팔기! 광석 ' + result.count + '개를 ' + fmt.money(result.total) + '에 팔았어요. (남은 즉시 팔기 ' + state.instant + '개)' + (result.debtPaid ? ' 빚 ' + fmt.money(result.debtPaid) + ' 갚음' : ''));
+    ranking.queueMoney(state);
+    saveNow();
+  }
 
   // ---------- 사건 처리 ----------
+  var HARD_TILE = [0, Rules.TILE.DIRT, Rules.TILE.STONE, Rules.TILE.ROCK, Rules.TILE.MANTLE, Rules.TILE.OUTER, Rules.TILE.INNER];
   function oreNames(ores) {
     var counts = {};
     ores.forEach(function (o) { counts[o] = (counts[o] || 0) + 1; });
     return Object.keys(counts).map(function (o) { return '+' + Rules.ORES[o].name + (counts[o] > 1 ? '×' + counts[o] : ''); }).join(' ');
   }
+  var lastHeatToast = 0;
 
   function handle(events) {
     var now = performance.now();
     events.forEach(function (e) {
       switch (e.type) {
         case 'dig-done':
-          renderer.debris(e.x + 0.5, e.y + 0.5, renderer.tileColor(e.hard === 1 ? Rules.TILE.DIRT : e.hard === 2 ? Rules.TILE.STONE : Rules.TILE.ROCK), 6 + e.cells);
+          renderer.debris(e.x + 0.5, e.y + 0.5, renderer.tileColor(HARD_TILE[e.hard] || Rules.TILE.ROCK), 6 + e.cells);
           if (e.ores.length) {
             sound.pickup(Math.max.apply(null, e.ores));
             renderer.floatText(oreNames(e.ores), state.car.x, state.car.y - 0.8, Rules.ORES[Math.max.apply(null, e.ores)].shine);
@@ -324,7 +394,8 @@
           if (now - lastBlocked < 1500) break;
           lastBlocked = now;
           sound.blocked();
-          if (e.reason === 'too-hard') toast('⛏️ 드릴이 약해서 단단한 바위를 못 파요! 상점에서 드릴을 3단계로 올려요.', 3200);
+          if (e.reason === 'too-hard') toast('⛏️ 드릴이 약해서 못 파요! 상점에서 드릴을 ' + e.need + '단계로 올려요.', 3200);
+          else if (e.reason === 'seal') toast('🪨 아주아주 단단한 바닥이에요… 전설의 보물을 찾으면 무슨 일이 생길지도?', 3500);
           else if (e.reason === 'lava') toast('🌋 용암은 팔 수 없어요. 닿으면 뜨거우니 돌아가세요!');
           else if (e.reason === 'no-fuel') toast('⛽ 연료가 없어요. 주유소에서 채워요.');
           break;
@@ -335,10 +406,17 @@
           sound.burn();
           toast('🔥 용암에 닿았어요! 뜨거워요!', 1500);
           break;
+        case 'heat':
+          sound.burn();
+          if (now - lastHeatToast > 6000) {
+            lastHeatToast = now;
+            toast('🔥 너무 뜨거워요! 1초에 체력 -' + (Math.round(e.dps * 10) / 10) + ' · 상점에서 열보호를 올리면 덜 닳아요.', 3500);
+          }
+          break;
         case 'dead':
           sound.dead();
           renderer.cam = null;
-          toast('💥 차가 망가져서 지상으로 실려 왔어요… ' + (e.lost ? '가방 속 광석 ' + e.lost + '개를 잃었어요.' : ''), 4000);
+          toast((e.cause === 'heat' ? '🔥 열을 못 견디고 차가 망가졌어요… ' : '💥 차가 망가져서 지상으로 실려 왔어요… ') + (e.lost ? '가방 속 광석 ' + e.lost + '개를 잃었어요.' : ''), 4000);
           saveNow();
           break;
         case 'rescue':
@@ -356,8 +434,25 @@
           break;
         case 'treasure':
           sound.treasure();
-          renderer.shake = 0.6;
-          showEnding();
+          renderer.shake = 0.8;
+          if (e.first) showEnding();
+          break;
+        case 'auto-ore':
+          renderer.floatText('+' + fmt.money(e.value), e.x + 0.5, e.y, Rules.ORES[e.ore].shine);
+          ranking.queueMoney(state);
+          break;
+        case 'auto-end':
+          renderer.debris(e.x + 0.5, e.y + 0.5, '#9fc2ff', 10);
+          break;
+        case 'core-door':
+          askConfirm('🚪 나갈까요?', '나가면 입장권이 사라져서, 다시 오려면 입장권을 또 사야 해요.', function () {
+            Game.leaveCore(state); renderer.cam = null; sound.recall(); toast('지상으로 돌아왔어요.'); saveNow();
+          });
+          break;
+        case 'core-button':
+          askConfirm('🔴 버튼을 누를까요?', '…', function () {
+            askConfirm('정말 누를까요?', '…', destroyEarth);
+          });
           break;
       }
     });
@@ -376,6 +471,40 @@
   }
   $('mtEndingContinue').addEventListener('click', function () { closeModal('mtEndingModal'); });
   $('mtEndingRankButton').addEventListener('click', function () { closeModal('mtEndingModal'); openRanking('time'); });
+
+  // 🌍 두 번째 엔딩: 버튼을 누르는 순간 기록·저장을 정리하고(연출 중에 창을 닫아도 남게), 연출이 끝나면 엔딩 창.
+  function destroyEarth() {
+    var result = Game.pressCoreButton(state);
+    if (!result.ok) return;
+    closePanel();
+    releaseKeys();
+    var stats = { time: state.time, earned: state.earned, treasureTime: state.treasureTime, autoBought: state.autoBought };
+    var count = Save.addDestroyed();
+    Save.clear();
+    ranking.queueMoney(state);
+    var rankPromise = ranking.submitDestroy(state);
+    renderer.startDestroy(performance.now());
+    sound.destroy();
+    setTimeout(function () {
+      $('mtDestroyTime').textContent = fmt.time(stats.time);
+      $('mtDestroyEarned').textContent = fmt.money(stats.earned);
+      $('mtDestroyTreasure').textContent = stats.treasureTime == null ? '-' : fmt.time(stats.treasureTime);
+      $('mtDestroyAutos').textContent = stats.autoBought + '대';
+      $('mtDestroyCount').textContent = '🌍 지구를 부순 횟수: ' + count + '번';
+      $('mtDestroyRank').textContent = '순위를 등록하는 중이에요…';
+      openModal('mtDestroyModal');
+      rankPromise
+        .then(function (data) { $('mtDestroyRank').textContent = data.rank ? '🌍 지구 파괴 시간 순위 ' + data.rank + '위에 올랐어요!' : '🌍 아쉽게도 50위 안에는 못 들었어요.'; })
+        .catch(function () { $('mtDestroyRank').textContent = '순위 등록에 실패했어요. 인터넷 연결을 확인해 주세요.'; });
+    }, 6800);
+  }
+  $('mtDestroyRestart').addEventListener('click', function () {
+    closeModal('mtDestroyModal');
+    renderer.destroyAt = null;
+    state = null;
+    showStart(false);
+  });
+  $('mtDestroyRankButton').addEventListener('click', function () { openRanking('destroy'); });
 
   // ---------- 순위·멈춤·소리 단추 ----------
   function openRanking(tab) { releaseKeys(); ranking.open(tab); }
@@ -423,6 +552,7 @@
     if (key) { input[key] = true; e.preventDefault(); return; }
     if (e.code === 'KeyQ') toggleWide();
     if (e.code === 'KeyR') askRecall();
+    if (e.code === 'KeyF') instantSell();
     if (e.code === 'Space') e.preventDefault();
   });
   document.addEventListener('keyup', function (e) {
@@ -443,10 +573,10 @@
     b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-action]'), function (b) {
-    b.addEventListener('click', function () { sound.unlock(); if (b.getAttribute('data-action') === 'wide') toggleWide(); else askRecall(); });
+    b.addEventListener('click', function () { sound.unlock(); var action = b.getAttribute('data-action'); if (action === 'wide') toggleWide(); else if (action === 'instant') instantSell(); else askRecall(); });
   });
   if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
-    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기 · 💥 넓게/1칸 · 🌀 귀환석';
+    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기 · 💥 넓게/1칸 · 🌀 귀환석 · 💸 즉시 팔기';
   }
 
   // ---------- 매 화면 ----------
@@ -485,7 +615,7 @@
   // 가게 창 안 숫자가 실제로 바뀌었을 때만 다시 그린다(누르는 중에 단추가 바뀌어 클릭이 사라지지 않게).
   var panelSignature = '';
   function renderPanelThrottled() {
-    var sig = [panelKey, state.money, state.debt, Math.ceil(state.fuel), Math.ceil(state.hp), Game.bagCount(state), state.recall, JSON.stringify(state.levels)].join('|');
+    var sig = [panelKey, state.money, state.debt, Math.ceil(state.fuel), Math.ceil(state.hp), Game.bagCount(state), state.recall, state.instant, state.ticket, state.autos.length, JSON.stringify(state.levels)].join('|');
     if (sig === panelSignature) return;
     panelSignature = sig;
     renderPanel();

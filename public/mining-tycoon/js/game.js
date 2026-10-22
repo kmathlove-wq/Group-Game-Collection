@@ -1,5 +1,5 @@
 // ===== game.js =====
-// 광질 타이쿤의 규칙(움직임·파기·연료·체력·가게). 화면·소리·저장은 전혀 모른다.
+// 광질 타이쿤의 규칙(움직임·파기·연료·체력·열·자동 드릴·가게·지구 중심 방). 화면·소리·저장은 전혀 모른다.
 // update()가 돌려주는 사건(events) 목록을 main.js가 받아 소리·글자·순위로 바꾼다.
 // 그래서 Node에서 화면 없이 모의 실험을 돌릴 수 있다(test/mining-tycoon.test.js).
 (function (MT) {
@@ -13,47 +13,86 @@
   var STEP = 1 / 60;
   var EPS = 1e-6;
 
+  // 지구 중심 방: 땅 지도와 따로 있는 작은 방(지도·미니맵에 안 나온다). 입장권으로만 온다.
+  var CORE_ROOM = (function () {
+    var w = 16, h = 9;
+    var tiles = new Uint8Array(w * h);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (x === 0 || x === w - 1 || y === 0 || y === h - 1) tiles[y * w + x] = TILE.CORE_FLOOR;
+      }
+    }
+    return { w: w, h: h, tiles: tiles, ores: new Uint8Array(w * h), seen: new Uint8Array(w * h), core: true };
+  })();
+  var CORE_DOOR = { x0: 1, x1: 3 }; // 🚪 돌아가기 문
+  var CORE_BUTTON = { x0: 7.2, x1: 8.8 }; // 🔴 버튼
+  var CORE_SPAWN_X = 4.5;
+
   // ---------- 차 능력치 ----------
   function fuelCap(s) { return UP.fuel.values[s.levels.fuel]; }
   function hpCap(s) { return UP.hull.values[s.levels.hull]; }
   function bagCap(s) { return UP.bag.values[s.levels.bag]; }
   function bagCount(s) { var n = 0; for (var i = 1; i < s.bag.length; i++) n += s.bag[i]; return n; }
   function bagValue(s) { var v = 0; for (var i = 1; i < s.bag.length; i++) v += s.bag[i] * Rules.ORES[i].value; return v; }
-  function isUnderground(s) { return s.car.y > 0; }
-  function depthOf(s) { return s.car.y > 0 ? Math.floor(s.car.y) + 1 : 0; }
+  function emptyBag() { var b = []; for (var i = 0; i < Rules.ORES.length; i++) b.push(0); return b; }
+  function isUnderground(s) { return !s.inCore && s.car.y > 0; }
+  function depthOf(s) { return s.inCore ? Rules.DEPTH : s.car.y > 0 ? Math.floor(s.car.y) + 1 : 0; }
   function rangeSize(s) { return s.wide ? UP.range.values[s.levels.range] : [1, 1]; }
-  function upgradePrice(s, key) {
-    var level = s.levels[key];
-    return level < UP[key].prices.length ? UP[key].prices[level] : null;
-  }
+  function unlocked(s) { return s.treasureTime != null; } // 첫 번째 엔딩을 봤는지
   function rescueCost(s) { return Rules.RESCUE_BASE + depthOf(s) * Rules.RESCUE_PER_M; }
+  function world(s) { return s.inCore ? CORE_ROOM : s.world; } // 지금 서 있는 곳
+
+  // 다음 단계 값. 이미 끝이면 null. 엔딩 전이라 잠겨 있으면 locked: true.
+  function upgradeInfo(s, key) {
+    var up = UP[key];
+    var level = s.levels[key];
+    if (level >= up.prices.length) return { price: null, max: true };
+    // 다음 단계(level + 1)가 lockedFrom 이상이면 잠김: 드릴은 lockedFrom 5 → 6단계(0부터 5)로 올리는 것부터.
+    return { price: up.prices[level], locked: up.lockedFrom != null && level + 1 >= up.lockedFrom && !unlocked(s) };
+  }
+  function upgradePrice(s, key) { return upgradeInfo(s, key).price; }
+  // 지금 층의 초당 열 피해(열보호 반영).
+  function heatDps(s) {
+    if (s.inCore || !isUnderground(s)) return 0;
+    return Rules.LAYERS[Rules.layerOf(depthOf(s))].heat * UP.heat.values[s.levels.heat];
+  }
 
   function newGame(options) {
     options = options || {};
     var seed = options.seed != null ? options.seed : Math.floor(Math.random() * 4294967296);
     var s = {
-      version: 1,
+      version: 2,
       name: options.name || '이름없음',
       playerId: options.playerId || '',
       world: World.createWorld(seed),
       car: { x: Rules.SPAWN_X, y: SURFACE_Y, vx: 0, vy: 0, face: 1 },
-      levels: { drill: 0, fuel: 0, bag: 0, hull: 0, engine: 0, range: 0 },
-      bag: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+      levels: {},
+      bag: emptyBag(),
       money: 0,
       debt: 0,
       earned: 0, // 지금까지 번 돈 전체(순위 기준, 쓴 돈은 안 뺌)
       recall: 0,
+      instant: 0, // 💸 즉시 팔기 개수
+      ticket: 0, // 🎫 지구 핵 입장권
+      autos: [], // 🤖 자동 드릴
+      autoEarned: 0,
+      autoBought: 0,
+      inCore: false,
       wide: true,
       time: 0, // 걸린 시간(초, 일시정지 중엔 안 늚)
       treasureTime: null,
+      destroyedTime: null,
       maxDepth: 0,
       // 아래는 저장하지 않는 잠깐 상태
       dig: null,
       building: null,
       lowFuelWarned: false,
       burnTimer: 0,
+      heatTimer: 0,
+      coreTimer: 0,
       thrusting: false
     };
+    Rules.UPGRADE_ORDER.forEach(function (key) { s.levels[key] = 0; });
     s.fuel = fuelCap(s);
     s.hp = hpCap(s);
     markSeen(s);
@@ -61,57 +100,56 @@
   }
 
   // ---------- 부딪힘 ----------
-  function overlapsSolid(world, x, y) {
+  function overlapsSolid(w, x, y) {
     var x0 = Math.floor(x - HALF + EPS), x1 = Math.floor(x + HALF - EPS);
     var y0 = Math.floor(y - HALF + EPS), y1 = Math.floor(y + HALF - EPS);
     for (var ty = y0; ty <= y1; ty++) {
       for (var tx = x0; tx <= x1; tx++) {
-        if (World.isSolid(World.tileAt(world, tx, ty))) return true;
+        if (World.isSolid(World.tileAt(w, tx, ty))) return true;
       }
     }
     return false;
   }
 
-  function touchesLava(world, x, y) {
+  function touchesLava(w, x, y) {
     var r = HALF + 0.06;
     var x0 = Math.floor(x - r), x1 = Math.floor(x + r);
     var y0 = Math.floor(y - r), y1 = Math.floor(y + r);
     for (var ty = y0; ty <= y1; ty++) {
       for (var tx = x0; tx <= x1; tx++) {
-        if (World.tileAt(world, tx, ty) === TILE.LAVA) return true;
+        if (World.tileAt(w, tx, ty) === TILE.LAVA) return true;
       }
     }
     return false;
   }
 
   function moveX(s, dx) {
-    var car = s.car;
+    var car = s.car, w = world(s);
     var nx = car.x + dx;
-    if (!overlapsSolid(s.world, nx, car.y)) { car.x = nx; return; }
+    if (!overlapsSolid(w, nx, car.y)) { car.x = nx; return; }
     nx = dx > 0 ? Math.floor(nx + HALF - EPS) - HALF : Math.floor(nx - HALF + EPS) + 1 + HALF;
-    if (!overlapsSolid(s.world, nx, car.y)) car.x = nx;
+    if (!overlapsSolid(w, nx, car.y)) car.x = nx;
     car.vx = 0;
   }
 
   // 떨어져 바닥에 닿으면 닿는 순간의 속도를 돌려준다(낙하 피해 계산용).
   function moveY(s, dy) {
-    var car = s.car;
+    var car = s.car, w = world(s);
     var ny = car.y + dy;
-    if (!overlapsSolid(s.world, car.x, ny)) { car.y = ny; return 0; }
+    if (!overlapsSolid(w, car.x, ny)) { car.y = ny; return 0; }
     var impact = dy > 0 ? car.vy : 0;
     ny = dy > 0 ? Math.floor(ny + HALF - EPS) - HALF : Math.floor(ny - HALF + EPS) + 1 + HALF;
-    if (!overlapsSolid(s.world, car.x, ny)) car.y = ny;
+    if (!overlapsSolid(w, car.x, ny)) car.y = ny;
     car.vy = 0;
     return impact;
   }
 
-  function isGrounded(s) { return overlapsSolid(s.world, s.car.x, s.car.y + 0.03); }
+  function isGrounded(s) { return overlapsSolid(world(s), s.car.x, s.car.y + 0.03); }
 
   // ---------- 파기 ----------
   function canDrill(s, tile) {
-    if (tile === TILE.DIRT || tile === TILE.STONE) return true;
-    if (tile === TILE.ROCK || tile === TILE.TREASURE) return s.levels.drill >= Rules.ROCK_DRILL_LEVEL;
-    return false;
+    var need = Rules.DRILL_NEED[tile];
+    return need != null && s.levels.drill >= need;
   }
 
   // 파는 범위 안의 칸들. 가운데(차가 들어갈 칸)를 맨 앞에 둔다.
@@ -148,11 +186,13 @@
       var wall = dx > 0 ? col : col + 1;
       if (Math.abs(edge - wall) > 0.08) return false; // 벽에 딱 붙었을 때만
     }
-    var tile = World.tileAt(s.world, col, row);
+    var tile = World.tileAt(world(s), col, row);
     if (tile === TILE.EMPTY) return false;
     if (tile === TILE.LAVA) { events.push({ type: 'blocked', reason: 'lava' }); return false; }
     if (!canDrill(s, tile)) {
-      events.push({ type: 'blocked', reason: tile === TILE.ROCK || tile === TILE.TREASURE ? 'too-hard' : 'wall' });
+      var need = Rules.DRILL_NEED[tile];
+      if (need != null) events.push({ type: 'blocked', reason: 'too-hard', need: need + 1 });
+      else events.push({ type: 'blocked', reason: tile === TILE.SEAL ? 'seal' : 'wall' });
       return false;
     }
     if (s.fuel <= 0) { events.push({ type: 'blocked', reason: 'no-fuel' }); return false; }
@@ -175,18 +215,27 @@
     return true;
   }
 
+  // 번 돈 받기: 빚이 있으면 먼저 갚는다. 번 돈 순위(earned)에는 다 들어간다.
+  function payIncome(s, value) {
+    var debtPaid = Math.min(s.debt, value);
+    s.debt -= debtPaid;
+    s.money += value - debtPaid;
+    s.earned += value;
+    return debtPaid;
+  }
+
   function finishDig(s, events) {
     var d = s.dig;
-    var world = s.world;
+    var w = s.world;
     var got = [];
     var full = false;
     for (var i = 0; i < d.cells.length; i++) {
       var idx = d.cells[i];
-      if (world.tiles[idx] === TILE.TREASURE) findTreasure(s, events);
-      world.tiles[idx] = TILE.EMPTY;
-      var ore = world.ores[idx];
+      if (w.tiles[idx] === TILE.TREASURE) findTreasure(s, events);
+      w.tiles[idx] = TILE.EMPTY;
+      var ore = w.ores[idx];
       if (ore) {
-        if (addOre(s, ore)) { got.push(ore); world.ores[idx] = 0; } else full = true;
+        if (addOre(s, ore)) { got.push(ore); w.ores[idx] = 0; } else full = true;
       }
     }
     s.fuel = Math.max(0, s.fuel - (Rules.DIG_FUEL * d.hard + Rules.DIG_FUEL_EXTRA * (d.cells.length - 1)));
@@ -196,26 +245,90 @@
   }
 
   function findTreasure(s, events) {
-    if (s.treasureTime == null) s.treasureTime = Math.round(s.time);
-    s.money += Rules.TREASURE_REWARD;
-    s.earned += Rules.TREASURE_REWARD;
-    events.push({ type: 'treasure', time: s.treasureTime, reward: Rules.TREASURE_REWARD });
+    var first = s.treasureTime == null;
+    if (first) s.treasureTime = Math.round(s.time);
+    payIncome(s, Rules.TREASURE_REWARD);
+    World.openSeal(s.world); // 지각 바닥이 부서져 아래가 열린다
+    events.push({ type: 'treasure', time: s.treasureTime, reward: Rules.TREASURE_REWARD, first: first });
+  }
+
+  // ---------- 🤖 자동 드릴 ----------
+  // 칸 단위로 움직인다: 아래가 비었으면 내려가고, 파낼 수 있으면 파고, 막히면 옆으로. 가방·연료 없음.
+  function autoMaxRow(s) { return s.levels.autoHeat ? s.world.h - 2 : Rules.CRUST_DEPTH - 1; }
+
+  function autoTarget(s, a, x, y) {
+    var w = s.world;
+    if (x < 0 || x >= w.w || y < 0 || y > autoMaxRow(s)) return null;
+    var tile = w.tiles[y * w.w + x];
+    if (tile === TILE.EMPTY) return { mode: 'move', dur: 1 / Rules.AUTO_MOVE };
+    if (tile === TILE.TREASURE || !canDrill(s, tile)) return null;
+    return { mode: 'dig', dur: Rules.DIG_TIME * Rules.HARDNESS[tile] / (UP.drill.values[s.levels.drill] * Rules.AUTO_SPEED) };
+  }
+
+  function autoChoose(s, a) {
+    var down = autoTarget(s, a, a.x, a.y + 1);
+    // 아래가 빈 굴이면 곧장 떨어진다. 새 땅을 팔 때만 가끔(6%) 옆으로 꺾어 굴을 넓힌다.
+    var sideways = a.y >= 0 && (!down || (down.mode === 'dig' && (a.side > 0 || Math.random() < 0.06)));
+    if (!sideways && down) { a.side = 0; return set(a, a.x, a.y + 1, down); }
+    var side = a.y >= 0 ? autoTarget(s, a, a.x + a.dir, a.y) : null;
+    if (!side) { a.dir = -a.dir; side = a.y >= 0 ? autoTarget(s, a, a.x + a.dir, a.y) : null; }
+    if (side) {
+      if (a.side <= 0) a.side = 2 + Math.floor(Math.random() * 4);
+      a.side--;
+      return set(a, a.x + a.dir, a.y, side);
+    }
+    if (down) return set(a, a.x, a.y + 1, down);
+    a.wait = 0.5; // 사방이 막혔다. 잠깐 쉬었다가 다시 본다.
+    return false;
+  }
+  function set(a, tx, ty, plan) { a.tx = tx; a.ty = ty; a.mode = plan.mode; a.dur = plan.dur; a.p = 0; return true; }
+
+  function updateAutos(s, h, events) {
+    var w = s.world;
+    for (var i = s.autos.length - 1; i >= 0; i--) {
+      var a = s.autos[i];
+      a.life -= h;
+      if (a.life <= 0) { s.autos.splice(i, 1); events.push({ type: 'auto-end', x: a.x, y: a.y }); continue; }
+      if (a.wait > 0) { a.wait -= h; continue; }
+      if (a.mode == null && !autoChoose(s, a)) continue;
+      a.p += h / a.dur;
+      if (a.p < 1) continue;
+      var idx = a.ty * w.w + a.tx;
+      if (a.mode === 'dig') {
+        // 파는 사이 내가 먼저 파 버렸거나 바뀌었으면 그냥 지나간다.
+        if (w.tiles[idx] !== TILE.EMPTY) {
+          if (!canDrill(s, w.tiles[idx])) { a.mode = null; continue; }
+          w.tiles[idx] = TILE.EMPTY;
+        }
+        var ore = w.ores[idx];
+        if (ore) {
+          w.ores[idx] = 0;
+          var value = Rules.ORES[ore].value;
+          payIncome(s, value);
+          s.autoEarned += value;
+          events.push({ type: 'auto-ore', ore: ore, value: value, x: a.tx, y: a.ty });
+        }
+      } else if (World.isSolid(w.tiles[idx])) { a.mode = null; continue; }
+      a.x = a.tx; a.y = a.ty; a.mode = null; a.p = 0;
+    }
   }
 
   // ---------- 매 순간 ----------
   function markSeen(s) {
-    var world = s.world;
+    if (s.inCore) return;
+    var w = s.world;
     var cx = Math.floor(s.car.x), cy = Math.floor(s.car.y);
     for (var y = cy - 4; y <= cy + 4; y++) {
-      if (y < 0 || y >= world.h) continue;
+      if (y < 0 || y >= w.h) continue;
       for (var x = cx - 4; x <= cx + 4; x++) {
-        if (x < 0 || x >= world.w) continue;
-        if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= 18) world.seen[y * world.w + x] = 1;
+        if (x < 0 || x >= w.w) continue;
+        if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= 18) w.seen[y * w.w + x] = 1;
       }
     }
   }
 
   function teleportHome(s) {
+    s.inCore = false;
     s.car.x = Rules.SPAWN_X; s.car.y = SURFACE_Y;
     s.car.vx = 0; s.car.vy = 0;
     s.dig = null;
@@ -228,16 +341,25 @@
     events.push({ type: 'hurt', amount: amount, cause: cause });
     if (s.hp <= 0) {
       var lost = bagCount(s);
-      s.bag = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      s.bag = emptyBag();
       teleportHome(s);
       s.hp = hpCap(s);
-      events.push({ type: 'dead', lost: lost });
+      events.push({ type: 'dead', lost: lost, cause: cause });
     }
+  }
+
+  // 지구 중심 방: 문·버튼 앞에서 ↓를 누르면 사건만 알린다(확인 창은 main.js).
+  function stepCore(s, input, events) {
+    s.coreTimer = Math.max(0, s.coreTimer - STEP);
+    if (!input.down || s.coreTimer > 0 || !isGrounded(s)) return;
+    var x = s.car.x;
+    if (x >= CORE_DOOR.x0 && x <= CORE_DOOR.x1) { s.coreTimer = 0.8; events.push({ type: 'core-door' }); }
+    else if (x >= CORE_BUTTON.x0 && x <= CORE_BUTTON.x1) { s.coreTimer = 0.8; events.push({ type: 'core-button' }); }
   }
 
   function step(s, input, h, events) {
     var car = s.car;
-    var world = s.world;
+    updateAutos(s, h, events);
     if (s.dig) {
       var d = s.dig;
       d.t += h;
@@ -252,7 +374,8 @@
     var lr = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (lr) car.face = lr;
 
-    if (grounded && car.vy >= 0 && !input.up) {
+    if (s.inCore) stepCore(s, input, events);
+    else if (grounded && car.vy >= 0 && !input.up) {
       if (input.down && tryDig(s, 0, 1, events)) return;
       if (lr && tryDig(s, lr, 0, events)) return;
     }
@@ -272,27 +395,38 @@
       var use = Rules.FUEL_IDLE + (Math.abs(car.vx) > 0.5 ? Rules.FUEL_MOVE : 0) + (s.thrusting ? Rules.FUEL_THRUST : 0);
       s.fuel = Math.max(0, s.fuel - use * Rules.ENGINE_FUEL_USE[s.levels.engine] * h);
     }
+    // 🛢️ 간이 주유소: 날지 않을 때만 연료가 저절로 찬다(날 때는 줄기만 함).
+    if (!s.thrusting) s.fuel = Math.min(fuelCap(s), s.fuel + UP.minigas.values[s.levels.minigas] * h);
 
     moveX(s, car.vx * h);
     var impact = moveY(s, car.vy * h);
     if (car.y < SKY_TOP) { car.y = SKY_TOP; car.vy = 0; }
     if (impact > Rules.SAFE_FALL_SPEED) hurt(s, Math.round((impact - Rules.SAFE_FALL_SPEED) * Rules.FALL_DAMAGE), 'fall', events);
+    if (s.inCore) return;
 
     // 가방이 가득 차서 남겨 둔 광석 줍기
+    var w = s.world;
     var cx = Math.floor(car.x), cy = Math.floor(car.y);
-    if (cy >= 0 && cy < world.h) {
-      var idx = cy * world.w + cx;
-      if (world.tiles[idx] === TILE.EMPTY && world.ores[idx] && addOre(s, world.ores[idx])) {
-        events.push({ type: 'pickup', ore: world.ores[idx] });
-        world.ores[idx] = 0;
+    if (cy >= 0 && cy < w.h) {
+      var idx = cy * w.w + cx;
+      if (w.tiles[idx] === TILE.EMPTY && w.ores[idx] && addOre(s, w.ores[idx])) {
+        events.push({ type: 'pickup', ore: w.ores[idx] });
+        w.ores[idx] = 0;
       }
     }
 
     // 용암
     s.burnTimer = Math.max(0, s.burnTimer - h);
-    if (touchesLava(world, car.x, car.y)) {
+    if (touchesLava(w, car.x, car.y)) {
       if (s.burnTimer <= 0) { events.push({ type: 'burn' }); s.burnTimer = 0.5; }
       hurt(s, Rules.LAVA_BURN * h, 'lava', events);
+    }
+    // 🔥 지각 밑의 열
+    var dps = heatDps(s);
+    s.heatTimer = Math.max(0, s.heatTimer - h);
+    if (dps > 0) {
+      if (s.heatTimer <= 0) { events.push({ type: 'heat', dps: dps }); s.heatTimer = 1.2; }
+      hurt(s, dps * h, 'heat', events);
     }
 
     markSeen(s);
@@ -326,6 +460,7 @@
   // input = { left, right, up, down } (true/false). dt는 지난 화면 이후 흐른 시간(초).
   function update(s, input, dt) {
     var events = [];
+    if (s.destroyedTime != null) return events; // 지구가 부서진 뒤에는 아무것도 안 움직인다
     dt = Math.min(dt, 0.1);
     s.time += dt;
     var steps = Math.max(1, Math.ceil(dt / STEP - 1e-9));
@@ -338,11 +473,8 @@
     var count = bagCount(s);
     var total = bagValue(s);
     if (!count) return { count: 0, total: 0, debtPaid: 0 };
-    var debtPaid = Math.min(s.debt, total);
-    s.debt -= debtPaid;
-    s.money += total - debtPaid;
-    s.earned += total;
-    s.bag = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    var debtPaid = payIncome(s, total);
+    s.bag = emptyBag();
     return { count: count, total: total, debtPaid: debtPaid };
   }
 
@@ -364,14 +496,22 @@
   function refuelCost(s) { return Math.ceil(Math.max(0, fuelCap(s) - s.fuel) * Rules.FUEL_PRICE); }
   function repairCost(s) { return Math.ceil(Math.max(0, hpCap(s) - s.hp) * Rules.REPAIR_PRICE); }
 
+  // 살 수 있는지 공통 검사(빚·돈).
+  function payFor(s, price) {
+    if (s.debt > 0) return 'debt';
+    if (s.money < price) return 'money';
+    s.money -= price;
+    return null;
+  }
+
   function buyUpgrade(s, key) {
     if (!UP[key]) return { ok: false, reason: 'unknown' };
-    var price = upgradePrice(s, key);
-    if (price == null) return { ok: false, reason: 'max' };
-    if (s.debt > 0) return { ok: false, reason: 'debt' };
-    if (s.money < price) return { ok: false, reason: 'money' };
+    var info = upgradeInfo(s, key);
+    if (info.max) return { ok: false, reason: 'max' };
+    if (info.locked) return { ok: false, reason: 'locked' };
     var oldFuel = fuelCap(s), oldHp = hpCap(s);
-    s.money -= price;
+    var reason = payFor(s, info.price);
+    if (reason) return { ok: false, reason: reason };
     s.levels[key]++;
     s.fuel += fuelCap(s) - oldFuel; // 큰 연료통·튼튼한 몸체는 늘어난 만큼 채워서 준다
     s.hp += hpCap(s) - oldHp;
@@ -379,9 +519,8 @@
   }
 
   function buyRecall(s) {
-    if (s.debt > 0) return { ok: false, reason: 'debt' };
-    if (s.money < Rules.RECALL_PRICE) return { ok: false, reason: 'money' };
-    s.money -= Rules.RECALL_PRICE;
+    var reason = payFor(s, Rules.RECALL_PRICE);
+    if (reason) return { ok: false, reason: reason };
     s.recall++;
     return { ok: true };
   }
@@ -394,9 +533,73 @@
     return { ok: true };
   }
 
+  function buyInstant(s) {
+    if (s.instant >= Rules.INSTANT_MAX) return { ok: false, reason: 'full' };
+    var reason = payFor(s, Rules.INSTANT_PRICE);
+    if (reason) return { ok: false, reason: reason };
+    s.instant++;
+    return { ok: true };
+  }
+
+  // 💸 즉시 팔기: 땅속 어디서든 가방을 판다(값은 판매소와 같음).
+  function useInstant(s) {
+    if (s.instant <= 0) return { ok: false, reason: 'none' };
+    if (!bagCount(s)) return { ok: false, reason: 'empty' };
+    s.instant--;
+    var result = sell(s);
+    result.ok = true;
+    return result;
+  }
+
+  function buyAuto(s) {
+    if (!unlocked(s)) return { ok: false, reason: 'locked' };
+    if (s.autos.length >= Rules.AUTO_MAX) return { ok: false, reason: 'full' };
+    var reason = payFor(s, Rules.AUTO_PRICE);
+    if (reason) return { ok: false, reason: reason };
+    var life = UP.autoLife.values[s.levels.autoLife];
+    var col = Rules.PAD_WIDTH + Math.floor(Math.random() * (s.world.w - Rules.PAD_WIDTH));
+    s.autos.push({ x: col, y: -1, tx: col, ty: -1, mode: null, p: 0, dur: 1, dir: Math.random() < 0.5 ? -1 : 1, side: 0, wait: 0, life: life, lifeMax: life });
+    s.autoBought++;
+    return { ok: true };
+  }
+
+  // 🎫 입장권: 첫 번째 엔딩 뒤, 열보호 끝 단계여야 살 수 있다.
+  function ticketBlock(s) {
+    if (!unlocked(s)) return 'locked';
+    if (s.levels.heat < UP.heat.prices.length) return 'heat';
+    if (s.ticket > 0) return 'have';
+    return null;
+  }
+  function buyTicket(s) {
+    var block = ticketBlock(s);
+    if (block) return { ok: false, reason: block };
+    var reason = payFor(s, Rules.TICKET_PRICE);
+    if (reason) return { ok: false, reason: reason };
+    s.ticket = 1;
+    return { ok: true };
+  }
+  function useTicket(s) {
+    if (s.ticket <= 0) return { ok: false, reason: 'none' };
+    s.ticket = 0; // 들어가면 없어진다(나갔다가 다시 오려면 또 사야 함)
+    s.inCore = true;
+    s.dig = null;
+    s.building = null;
+    s.coreTimer = 0;
+    s.car.x = CORE_SPAWN_X; s.car.y = CORE_ROOM.h - 1 - HALF;
+    s.car.vx = 0; s.car.vy = 0;
+    return { ok: true };
+  }
+  function leaveCore(s) { if (s.inCore) teleportHome(s); }
+  // 🔴 버튼을 끝까지 누르면: 두 번째 엔딩(지구 파괴). 이 뒤로 update는 멈춘다.
+  function pressCoreButton(s) {
+    if (!s.inCore) return { ok: false };
+    s.destroyedTime = Math.round(s.time);
+    return { ok: true, time: s.destroyedTime };
+  }
+
   // 불러온 저장에서 차가 땅에 끼어 있으면 지상으로 옮긴다.
   function fixStuck(s) {
-    if (overlapsSolid(s.world, s.car.x, s.car.y)) teleportHome(s);
+    if (overlapsSolid(world(s), s.car.x, s.car.y)) teleportHome(s);
   }
 
   var Game = {
@@ -410,18 +613,34 @@
     buyUpgrade: buyUpgrade,
     buyRecall: buyRecall,
     useRecall: useRecall,
+    buyInstant: buyInstant,
+    useInstant: useInstant,
+    buyAuto: buyAuto,
+    buyTicket: buyTicket,
+    ticketBlock: ticketBlock,
+    useTicket: useTicket,
+    leaveCore: leaveCore,
+    pressCoreButton: pressCoreButton,
     fixStuck: fixStuck,
     teleportHome: teleportHome,
     overlapsSolid: overlapsSolid,
+    world: world,
     fuelCap: fuelCap,
     hpCap: hpCap,
     bagCap: bagCap,
     bagCount: bagCount,
     bagValue: bagValue,
+    emptyBag: emptyBag,
     depthOf: depthOf,
+    heatDps: heatDps,
     isUnderground: isUnderground,
+    unlocked: unlocked,
+    upgradeInfo: upgradeInfo,
     upgradePrice: upgradePrice,
     rescueCost: rescueCost,
+    CORE_ROOM: CORE_ROOM,
+    CORE_DOOR: CORE_DOOR,
+    CORE_BUTTON: CORE_BUTTON,
     SURFACE_Y: SURFACE_Y
   };
 

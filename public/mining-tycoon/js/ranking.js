@@ -1,6 +1,6 @@
 // ===== ranking.js =====
-// 전체 순위 두 개: 💰 번 돈(클수록 위) / ⏱️ 보물까지 걸린 시간(짧을수록 위).
-// 두 순위 모두 한 사람(새 게임마다 새 playerId)당 한 줄이라, 번 돈은 팔 때마다 같은 줄이 커진다.
+// 전체 순위 세 개: 💰 번 돈(클수록 위) / ⏱️ 보물까지 걸린 시간 / 🌍 지구 파괴까지 걸린 시간(둘 다 짧을수록 위).
+// 세 순위 모두 한 사람(새 게임마다 새 playerId)당 한 줄이라, 번 돈은 팔 때마다 같은 줄이 커진다.
 (function (MT) {
   var Rules = MT.Rules;
 
@@ -49,15 +49,16 @@
   // 새 게임을 시작하면 "이미 올린 금액"을 처음부터 다시 센다.
   Ranking.prototype.reset = function () { clearTimeout(this.moneyTimer); this.sentEarned = 0; };
 
-  Ranking.prototype.submitTime = function (state, tries) {
-    var self = this;
-    tries = tries || 0;
-    return post(Rules.TIME_API, { name: state.name, playerId: state.playerId, score: Math.round(state.treasureTime) })
+  // 시간 기록 올리기(실패하면 2.5초 뒤 최대 3번 다시).
+  function submitOnce(api, state, score, tries) {
+    return post(api, { name: state.name, playerId: state.playerId, score: Math.round(score) })
       .catch(function (err) {
         if (tries >= 3) throw err;
-        return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () { return self.submitTime(state, tries + 1); });
+        return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () { return submitOnce(api, state, score, tries + 1); });
       });
-  };
+  }
+  Ranking.prototype.submitTime = function (state) { return submitOnce(Rules.TIME_API, state, state.treasureTime, 0); };
+  Ranking.prototype.submitDestroy = function (state) { return submitOnce(Rules.DESTROY_API, state, state.destroyedTime, 0); };
 
   Ranking.prototype.open = function (tab) {
     this.modal.classList.remove('hidden');
@@ -74,9 +75,9 @@
       button.classList.toggle('active', on);
       button.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    this.note.textContent = tab === 'money' ? '지금까지 번 돈 전체 (쓴 돈은 빼지 않아요)' : '전설의 보물을 캐기까지 걸린 시간 (짧을수록 위)';
+    this.note.textContent = { money: '지금까지 번 돈 전체 (쓴 돈은 빼지 않아요)', time: '전설의 보물을 캐기까지 걸린 시간 (짧을수록 위)', destroy: '지구를 부수기까지 걸린 시간 (짧을수록 위)' }[tab];
     this.renderMessage('순위를 불러오는 중이에요…');
-    fetch(tab === 'money' ? Rules.MONEY_API : Rules.TIME_API)
+    fetch({ money: Rules.MONEY_API, time: Rules.TIME_API, destroy: Rules.DESTROY_API }[tab])
       .then(function (res) { if (!res.ok) throw new Error('bad'); return res.json(); })
       .then(function (data) { if (self.tab === tab) self.render(data.scores || [], tab); })
       .catch(function () { if (self.tab === tab) self.renderMessage('순위를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.'); });
@@ -91,7 +92,7 @@
   };
 
   Ranking.prototype.render = function (scores, tab) {
-    if (!scores.length) { this.renderMessage(tab === 'money' ? '아직 기록이 없어요. 첫 1위가 되어 보세요!' : '아직 보물을 찾은 사람이 없어요!'); return; }
+    if (!scores.length) { this.renderMessage({ money: '아직 기록이 없어요. 첫 1위가 되어 보세요!', time: '아직 보물을 찾은 사람이 없어요!', destroy: '아직 아무도 없어요…' }[tab]); return; }
     this.list.textContent = '';
     var self = this;
     scores.forEach(function (item, index) {

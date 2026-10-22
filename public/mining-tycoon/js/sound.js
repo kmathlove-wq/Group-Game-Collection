@@ -101,6 +101,20 @@
     [523, 659, 784, 1047, 784, 1047, 1319, 1568].forEach(function (f, i) { self.tone(f, i === 7 ? 0.8 : 0.18, 'triangle', 0.2, null, i * 0.13); });
   };
 
+  // 지구 파괴: 점점 커지는 땅 울림(2.6초) → 쾅! 폭발. 배경음악도 멈춘다.
+  Sound.prototype.destroy = function () {
+    this.stopMusic();
+    for (var i = 0; i < 6; i++) this.noise(0.5, 0.08 + i * 0.05, 120 + i * 30, 'lowpass', i * 0.42);
+    this.tone(60, 2.6, 'sawtooth', 0.12, 30);
+    this.noise(2.2, 0.5, 900, 'lowpass', 2.6);
+    this.tone(90, 1.8, 'square', 0.25, 25, 2.6);
+  };
+
+  Sound.prototype.stopMusic = function () {
+    clearInterval(this.musicTimer);
+    this.musicTimer = null;
+  };
+
   // 배경음악: 잔잔한 가단조 아르페지오(화음을 한 음씩 차례로 치기) + 낮은 베이스. 계속 돈다.
   var CHORDS = [[220, 261.6, 329.6], [174.6, 220, 261.6], [261.6, 329.6, 392], [196, 246.9, 293.7]];
   var PATTERN = [0, 1, 2, 1, 0, 2, 1, 2];

@@ -183,3 +183,25 @@ button, input { font: inherit; }
   .mt-fuel .mt-bar i.low { animation: none; }
   .mt-bar i { transition: none; }
 }
+
+/* ===== 2차 업데이트: 지각 밑·자동 드릴·지구 파괴 ===== */
+.mt-shop-head { margin: 14px 0 2px; font-size: 14px; color: #8a7a60; }
+.mt-locked { opacity: .55; }
+.mt-locked .mt-buy { background: #e4ddd1; }
+.mt-stat b.hot { color: #ff9a5a; animation: mt-blink .5s infinite alternate; }
+.mt-badge { display: inline-block; padding: 6px 12px; border-radius: 999px; background: #1f2a5a; color: #fff !important; font-weight: 800; }
+.mt-open-news { padding: 10px; border-radius: 10px; background: #fff0e0; color: #8a3a00 !important; }
+.mt-destroy { background: linear-gradient(160deg, #1b1640, #3a1030); color: #fff; }
+.mt-destroy p, .mt-destroy h2 { color: #fff; }
+.mt-destroy-stats { list-style: none; padding: 0; margin: 10px 0; text-align: left; }
+.mt-destroy-stats li { display: flex; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
+.mt-destroy .mt-secondary { background: rgba(255, 255, 255, .15); color: #fff; }
+@media (pointer: coarse) {
+  .mt-touch-right { height: 190px; }
+  .mt-touch-right button:nth-child(1) { bottom: 132px; }
+  .mt-touch-right button:nth-child(2) { bottom: 66px; }
+  .mt-touch-right button:nth-child(3) { bottom: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mt-stat b.hot { animation: none; }
+}

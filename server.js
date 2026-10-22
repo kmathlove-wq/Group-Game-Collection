@@ -119,9 +119,10 @@ function registerScoreboard(slug, scoreMax, options = {}) {
 }
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
-// 광질 타이쿤: 💰 번 돈(클수록 위)과 ⏱️ 보물까지 걸린 초(작을수록 위). 둘 다 게임 한 판(playerId)당 한 줄.
+// 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });
+registerScoreboard('mining-tycoon-destroy', MINING_TIME_MAX, { order: 'asc', perPlayer: true }); // 🌍 지구 파괴까지 걸린 초
 // 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음).
 setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }) });
 app.use(express.static(path.join(__dirname, 'public')));

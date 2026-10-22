@@ -34,42 +34,52 @@
     return Math.max(1, deepest - Math.floor(rand() * 3));
   }
 
-  // 깊이에 맞는 땅 종류. 경계 근처(±6m)는 섞여서 자연스럽게 바뀐다.
+  // 깊이에 맞는 땅 종류. 경계 근처(±6m)는 섞여서 자연스럽게 바뀐다(지각과 맨틀 경계만은 섞지 않음).
   function groundAt(depth, rand) {
     var jitter = (rand() - 0.5) * 12;
-    if (depth + jitter < Rules.STONE_DEPTH) return TILE.DIRT;
-    if (depth + jitter < Rules.ROCK_DEPTH) return TILE.STONE;
-    return TILE.ROCK;
+    var d = depth + jitter;
+    if (depth <= Rules.CRUST_DEPTH) {
+      if (d < Rules.STONE_DEPTH) return TILE.DIRT;
+      if (d < Rules.ROCK_DEPTH) return TILE.STONE;
+      return TILE.ROCK;
+    }
+    if (d < Rules.LAYERS[2].from) return TILE.MANTLE;
+    if (d < Rules.LAYERS[3].from) return TILE.OUTER;
+    return TILE.INNER;
   }
 
-  // 용암이 나올 확률: 100m부터, 깊을수록 조금씩 많아진다.
+  // 용암이 나올 확률: 100m부터 깊을수록 많아지고, 맨틀에 가장 많다. 외핵·내핵에는 없다(열 피해만).
   function lavaChance(depth) {
     if (depth < Rules.LAVA_DEPTH) return 0;
     if (depth < 150) return 0.02;
     if (depth < 250) return 0.04;
-    return 0.06;
+    if (depth <= Rules.CRUST_DEPTH) return 0.06;
+    if (depth < Rules.LAYERS[2].from) return Rules.MANTLE_LAVA;
+    return 0;
   }
 
   function createWorld(seed) {
     var rand = makeRandom(seed);
     var w = Rules.WIDTH;
-    var h = Rules.DEPTH + 1; // 마지막 줄은 못 파는 바닥
+    var h = Rules.DEPTH + 1; // 마지막 줄은 못 파는 바닥(내핵처럼 보임)
+    var seal = Rules.CRUST_DEPTH; // 이 줄(301m)은 보물을 찾기 전까지 막힌 지각 바닥
     var tiles = new Uint8Array(w * h);
     var ores = new Uint8Array(w * h);
     for (var y = 0; y < h; y++) {
       var depth = y + 1;
       for (var x = 0; x < w; x++) {
         var i = y * w + x;
-        if (y === h - 1) { tiles[i] = TILE.BEDROCK; continue; }
+        if (y === h - 1) { tiles[i] = TILE.CORE_FLOOR; continue; }
         if (y === 0 && x < Rules.PAD_WIDTH) { tiles[i] = TILE.CONCRETE; continue; }
+        if (y === seal) { tiles[i] = TILE.SEAL; ores[i] = oreAt(depth, rand); continue; }
         if (rand() < lavaChance(depth)) { tiles[i] = TILE.LAVA; continue; }
         tiles[i] = groundAt(depth, rand);
         ores[i] = oreAt(depth, rand);
       }
     }
-    // 맨 아래 줄(300m)에 전설의 보물 하나. 둘레의 용암은 바위로 바꿔 보물에 닿을 수 있게 한다.
+    // 지각 맨 아래 줄(300m)에 전설의 보물 하나. 둘레의 용암은 바위로 바꿔 보물에 닿을 수 있게 한다.
     var tx = 2 + Math.floor(rand() * (w - 4));
-    var ty = h - 2;
+    var ty = Rules.CRUST_DEPTH - 1;
     for (var dy = -2; dy <= 0; dy++) {
       for (var dx = -2; dx <= 2; dx++) {
         var j = (ty + dy) * w + (tx + dx);
@@ -91,12 +101,19 @@
 
   function isSolid(tile) { return tile !== TILE.EMPTY; }
 
+  // 첫 번째 엔딩: 막혀 있던 지각 바닥이 부서져 맨틀이 된다.
+  function openSeal(world) {
+    var row = Rules.CRUST_DEPTH * world.w;
+    for (var x = 0; x < world.w; x++) if (world.tiles[row + x] === TILE.SEAL) world.tiles[row + x] = TILE.MANTLE;
+  }
+
   var World = {
     makeRandom: makeRandom,
     oreAt: oreAt,
     createWorld: createWorld,
     tileAt: tileAt,
-    isSolid: isSolid
+    isSolid: isSolid,
+    openSeal: openSeal
   };
 
   MT.World = World;
