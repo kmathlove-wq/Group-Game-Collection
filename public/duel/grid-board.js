@@ -1,5 +1,6 @@
 // 오목·바둑 공통 바둑판(Canvas). 교차점에 돌을 놓는다.
-// 마우스는 한 번 클릭으로 두고, 손가락은 첫 번째 터치로 미리 보기, 같은 자리를 한 번 더 누르면 둔다(실수 방지).
+// 마우스·손가락 모두: 빈 자리를 누르면 반투명 돌과 [수락]/[취소] 막대가 뜨고, [수락]을 눌러야 진짜로 둔다(실수 방지).
+// 다른 자리를 누르면 반투명 돌이 옮겨 간다. 계가 중 죽은 돌 표시는 한 번 누르면 바로 된다.
 window.DuelBoard = (() => {
   const STARS = { 9: [2, 4, 6], 13: [3, 6, 9], 15: [3, 7, 11], 19: [3, 9, 15] };
   const STONE = { 1: 'black', 2: 'white' };
@@ -8,6 +9,9 @@ window.DuelBoard = (() => {
     const canvas = document.createElement('canvas'); canvas.className = 'duel-grid-canvas';
     canvas.setAttribute('aria-label', '바둑판'); root.append(canvas);
     const ctx = canvas.getContext('2d');
+    const confirmBar = document.createElement('div'); confirmBar.className = 'duel-confirm'; confirmBar.hidden = true;
+    confirmBar.innerHTML = '<span class="duel-confirm-text">여기에 돌을 놓을까요?</span><button type="button" class="duel-confirm-ok">수락</button><button type="button" class="duel-confirm-no">취소</button>';
+    root.append(confirmBar);
     let match = null; let view = {};
     let hover = -1; let pending = -1;
     let forbidden = { key: '', spots: new Map() };
@@ -27,6 +31,19 @@ window.DuelBoard = (() => {
       if (forbidden.key !== key) forbidden = { key, spots: new Map(rules.forbiddenSpots(game(), view.myColor).map((s) => [s.index, s.reason])) };
       return forbidden.spots;
     }
+
+    function syncConfirm() {
+      if (pending >= 0 && !canMove()) pending = -1;
+      confirmBar.hidden = pending < 0;
+    }
+    function accept() {
+      if (pending < 0 || !canMove()) { pending = -1; syncConfirm(); draw(); return; }
+      const cell = pending; pending = -1; syncConfirm(); draw();
+      onAct({ type: 'move', x: cell % n(), y: Math.floor(cell / n()) });
+    }
+    function cancel() { pending = -1; syncConfirm(); draw(); }
+    confirmBar.querySelector('.duel-confirm-ok').addEventListener('click', accept);
+    confirmBar.querySelector('.duel-confirm-no').addEventListener('click', cancel);
 
     function resize() {
       const ratio = window.devicePixelRatio || 1; const width = root.clientWidth;
@@ -112,24 +129,22 @@ window.DuelBoard = (() => {
       if (!canMove() || game().board[cell]) return;
       const reason = forbiddenSpots().get(cell);
       if (reason) { onAct({ type: 'move', x, y }); return; } // 서버가 이유를 알려 준다
-      if (event.pointerType !== 'mouse' && pending !== cell) { pending = cell; draw(); return; }
-      pending = -1; onAct({ type: 'move', x, y });
+      pending = cell; syncConfirm(); draw();
     });
 
     new ResizeObserver(resize).observe(root);
 
     return {
       render(state, nextView) {
-        if (match?.game.moveCount !== state.game.moveCount) pending = -1;
+        if (match?.game.moveCount !== state.game.moveCount || match?.game.phase !== state.game.phase) pending = -1;
         match = state; view = nextView;
-        draw();
+        syncConfirm(); draw();
       },
       helpText({ myTurn, game: g }) {
         if (!view.myColor) return '';
         if (g.phase === 'scoring') return '죽은 돌을 누르면 표시되고, 다시 누르면 풀려요. 집 계산이 맞으면 "계가 확인"을 누르세요.';
         if (!myTurn) return '상대가 두는 중이에요…';
-        const touch = matchMedia('(pointer: coarse)').matches;
-        return `${touch ? '둘 자리를 한 번 누르면 미리 보이고, 한 번 더 누르면 둬요.' : '둘 자리를 클릭하세요.'}${rules.forbiddenSpots ? ' ✕는 금수 자리예요.' : ''}`;
+        return `둘 자리를 누르면 반투명 돌이 보여요. [수락]을 눌러야 둬요.${rules.forbiddenSpots ? ' ✕는 금수 자리예요.' : ''}`;
       }
     };
   }

@@ -5,7 +5,7 @@
 //      두음법칙 때문에 한 낱말이 다른 글자의 "돌아오는 길"이기도 하다: 릅에서 늡늡을 내면 늡늡은 늡의 돌아오는 길이라
 //      상대는 "돌아오는 길이 하나 줄어든 늡"(늡⁻)을 받는다. 늡⁻은 길이 0개라 필패 → 릅은 필승(집주릅을 내면 진다).
 //   ② 끝까지 안 정해진 글자(루트)는 정해진 시간 동안 끝까지 따라가 본다(이기는 수를 찾으면 바로 낸다).
-//   ③ 질 수밖에 없으면 상대가 이어 갈 단어가 가장 적은 수(사람은 사전 없이 찾기 어렵다).
+//   ③ 질 수밖에 없으면 패배까지 남은 수가 가장 긴(게임을 가장 오래 끄는) 수. 같으면 상대가 이어 갈 단어가 적은 수.
 // 같은 첫 글자·끝 글자 낱말(각가속도·각도 = 각→도)은 결과가 같아서 "길 하나에 낱말 n개"로 묶어 계산한다.
 // 이번 판에 나온 단어는 지도에서 뺀 채로 매번 다시 계산한다(단어가 나오면 길이 사라져 승패가 바뀔 수 있다).
 // 이 파일은 계산만 한다. 시간이 오래 걸리므로 서버에서는 master.js가 따로 일하는 일꾼(worker_threads)에서 돌린다.
@@ -172,7 +172,7 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
     return pool.length ? pool[Math.floor(random() * pool.length)] : null;
   }
 
-  // ③ 버티기: 상대가 이어 갈 단어가 가장 적은 길(같으면 오래 버티는 쪽).
+  // ③ 버티기 보조 기준: 패배까지 남은 수가 같은 길 중 상대가 이어 갈 단어가 가장 적은 길.
   function fewestReplies(moves, a, used) {
     let best = null;
     for (const m of moves) {
@@ -257,7 +257,13 @@ function createMasterEngine(words = [], { random = Math.random, now = () => perf
       if (win) return { word: wordOf(win.s, win.e, used), how: 'think', type: 'root', proven: true };
       if (unknown.length) return { word: fewestReplies(unknown, a, used), how: 'think', type: 'root', proven: false };
     }
-    return { word: fewestReplies(moves, a, used), how: 'hold', type: type === LOSE ? 'lose' : type === WIN ? 'win' : 'root' };
+    // 필패면 상대의 가장 빠른 승리가 가장 늦게 오는 길(패배 깊이 최대)만 남기고, 동점이면 fewestReplies가 가른다.
+    let pool = moves;
+    if (type === LOSE) {
+      const slowest = Math.max(...moves.map((m) => a.depth.get(m.t) ?? 0));
+      pool = moves.filter((m) => (a.depth.get(m.t) ?? 0) === slowest);
+    }
+    return { word: fewestReplies(pool, a, used) ?? fewestReplies(moves, a, used), how: 'hold', type: type === LOSE ? 'lose' : type === WIN ? 'win' : 'root' };
   }
 
   // 컴퓨터가 먼저 할 때 첫 낱말. 첫 단어로 한방단어는 못 쓰니(규칙) 상대를 "필패지만 이어 갈 단어는 있는" 글자로 보낸다.

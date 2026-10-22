@@ -156,7 +156,7 @@
       const hint = { attack: '🌱 컴퓨터가 노리고 낸 단어 같아요… 조심!', trap: '🪤 컴퓨터가 함정을 판 것 같아요… 다음 단어를 잘 골라요!', hard: '🧩 컴퓨터가 대답하기 어려운 단어를 냈어요!',
         'master-win': '🏆 고수 컴퓨터가 이기는 길을 찾았대요… 정신 바짝!',
         'master-think': data.computer.proven ? '🧠 고수 컴퓨터가 끝까지 따라가 보고 이기는 수를 찾았어요!' : '🧠 고수 컴퓨터가 깊이 생각해서 낸 단어예요.',
-        'master-hold': '🪨 고수 컴퓨터가 버티는 중이에요. 이어 갈 단어가 아주 적을 거예요!' }[data.computer.how];
+        'master-hold': '🪨 고수 컴퓨터가 질 것 같아서 최대한 오래 버티는 중이에요. 끝까지 잘 이어 가면 이길 수 있어요!' }[data.computer.how];
       if (hint) message(hint);
       if (data.checkOneShot) watchOneShot(game.id, data.computer.word);
       if (!hint) message('');

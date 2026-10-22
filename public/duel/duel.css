@@ -82,7 +82,14 @@
 .duel-header .danger { padding: 9px 14px; }
 
 .duel-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
-.duel-side, .duel-chat-panel { padding: 16px; }
+.duel-side { padding: 16px; }
+.duel-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 10px; border-radius: 12px; background: #f5f2ec; box-sizing: border-box; max-width: 100%; }
+.duel-confirm[hidden] { display: none; }
+.duel-confirm-text { flex: 1 1 100%; text-align: center; font-weight: 800; }
+.duel-confirm button { flex: 1 1 120px; min-height: 48px; min-width: 44px; padding: 0 14px; border: 0; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; touch-action: manipulation; background: #fff; color: inherit; box-shadow: 0 0 0 1px #0002 inset; }
+.duel-confirm .duel-confirm-ok { background: var(--duel); color: #fff; box-shadow: none; }
+
+.duel-chat-panel { padding: 16px; }
 .duel-seats { display: grid; gap: 10px; }
 .duel-seat {
   display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto auto; column-gap: 10px; align-items: center;

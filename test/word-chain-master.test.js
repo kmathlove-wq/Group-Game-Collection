@@ -40,10 +40,19 @@ test('고수 컴퓨터: 두음으로 다른 글자의 돌아오는 길을 쓰면
   assert.notEqual(m.pick('누집', ['누집'], 100).word, '집주릅');
 });
 
-test('고수 컴퓨터: 질 수밖에 없으면 상대가 이어 갈 단어가 가장 적은 수를 낸다(버티기)', () => {
+test('고수 컴퓨터: 질 수밖에 없으면 같은 깊이 중 상대가 이어 갈 단어가 가장 적은 수를 낸다(버티기)', () => {
   // 가 → 다(다륨·다수·다도 3개) / 라(라륨 1개): 둘 다 상대 필승이라 가는 필패
   const m = engine(['가다', '가라', '다륨', '다수', '다도', '라륨']);
   assert.equal(m.analyze(new Set(), ['가']).typeOf('가'), m.LOSE); // '가'로 끝나는 낱말이 없어 위치로 직접 넣는다
+  assert.deepEqual(m.pick('누가', ['누가']), { word: '가라', how: 'hold', type: 'lose' });
+});
+
+test('고수 컴퓨터: 질 수밖에 없으면 패배까지 가장 오래 걸리는 수를 낸다(이어 갈 단어 수보다 우선)', () => {
+  // 가 → 다(1수 만에 상대 승, 이어 갈 단어 1개) / 라(3수 만에 상대 승, 이어 갈 단어 2개): 옛 기준은 가다, 새 기준은 가라
+  const m = engine(['가다', '가라', '다륨', '라마', '라사', '사륨', '마바', '바륨']);
+  const a = m.analyze(new Set(), ['가']);
+  assert.equal(a.typeOf('가'), m.LOSE);
+  assert.equal(a.depth.get('다'), 1); assert.equal(a.depth.get('라'), 3);
   assert.deepEqual(m.pick('누가', ['누가']), { word: '가라', how: 'hold', type: 'lose' });
 });
 
