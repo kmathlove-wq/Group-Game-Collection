@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="드릴 차로 땅을 파 내려가 광석을 캐고, 팔아서 업그레이드하며 300m 아래 전설의 보물을 찾는 광질 타이쿤 게임이에요.">
+  <title>그룹 게임 컬렉션-광질 타이쿤</title>
+  <link rel="icon" type="image/png" href="/assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="mt-page">
+  <nav class="mt-toolbar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="mt-toolbar-actions">
+      <button id="mtRankButton" type="button">🏆 순위</button>
+      <button id="mtSoundButton" type="button" aria-pressed="true">🔊 소리 켜짐</button>
+      <button id="mtPauseButton" type="button">⏸ 멈춤</button>
+    </div>
+  </nav>
+
+  <main class="mt-shell">
+    <h1 class="mt-title">⛏️ 광질 타이쿤</h1>
+
+    <section class="mt-hud" aria-label="차 상태">
+      <div class="mt-meter mt-fuel" title="연료"><span aria-hidden="true">⛽</span><div class="mt-bar"><i id="mtFuelBar"></i></div><b id="mtFuelText">100</b></div>
+      <div class="mt-meter mt-hp" title="체력"><span aria-hidden="true">❤️</span><div class="mt-bar"><i id="mtHpBar"></i></div><b id="mtHpText">100</b></div>
+      <div class="mt-stat" title="가방"><span aria-hidden="true">🎒</span><b id="mtBagText">0/8</b></div>
+      <div class="mt-stat" title="가진 돈"><span aria-hidden="true">💰</span><b id="mtMoneyText">0원</b></div>
+      <div class="mt-stat mt-debt hidden" id="mtDebt" title="빚"><span aria-hidden="true">💳</span><b id="mtDebtText">빚 0원</b></div>
+      <div class="mt-stat" title="깊이"><span aria-hidden="true">📏</span><b id="mtDepthText">0m</b></div>
+      <div class="mt-stat" title="걸린 시간"><span aria-hidden="true">⏱️</span><b id="mtTimeText">0:00</b></div>
+      <div class="mt-stat" title="파는 범위 (Q로 바꾸기)"><span aria-hidden="true">💥</span><b id="mtWideText">1칸</b></div>
+      <div class="mt-stat" title="귀환석 (R로 쓰기)"><span aria-hidden="true">🌀</span><b id="mtRecallText">0</b></div>
+    </section>
+
+    <div class="mt-stage" id="mtStage">
+      <canvas id="mtCanvas" width="960" height="540" aria-label="광질 타이쿤 게임 화면"></canvas>
+      <div class="mt-toast hidden" id="mtToast" role="status" aria-live="polite"></div>
+
+      <aside class="mt-panel hidden" id="mtPanel" data-ui aria-labelledby="mtPanelTitle">
+        <header><h2 id="mtPanelTitle">상점</h2><button id="mtPanelClose" type="button" aria-label="닫기">✕</button></header>
+        <div id="mtPanelBody"></div>
+      </aside>
+
+      <div class="mt-touch" aria-hidden="true">
+        <div class="mt-pad">
+          <button type="button" data-key="up" class="mt-up">▲</button>
+          <button type="button" data-key="left" class="mt-left">◀</button>
+          <button type="button" data-key="down" class="mt-down">▼</button>
+          <button type="button" data-key="right" class="mt-right">▶</button>
+        </div>
+        <div class="mt-touch-right">
+          <button type="button" data-action="wide">💥</button>
+          <button type="button" data-action="recall">🌀</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-help" id="mtHelp">← → 이동·옆으로 파기 · ↓ 아래로 파기 · ↑ 날기 · Q 넓게/1칸 파기 · R 귀환석 · Esc 멈춤 (WASD도 돼요)</p>
+    <p class="mt-rotate-hint">📱 휴대폰을 가로로 돌리면 더 크게 볼 수 있어요</p>
+  </main>
+
+  <!-- 시작 창 -->
+  <div class="mt-modal" id="mtStartModal">
+    <div class="mt-card">
+      <div class="mt-card-emoji" aria-hidden="true">⛏️</div>
+      <h2>광질 타이쿤</h2>
+      <p>드릴 차로 땅을 파 내려가 광석을 모으고, 연료가 떨어지기 전에 올라와 팔아요.<br>번 돈으로 차를 업그레이드해서 <b>300m 아래 전설의 보물</b>을 찾아보세요!</p>
+      <p class="mt-notice hidden" id="mtBrokenNotice">저장이 망가졌어요. 새로 시작할게요.</p>
+      <div id="mtContinueBox" class="hidden">
+        <p class="mt-save-info" id="mtSaveInfo"></p>
+        <button class="mt-primary" id="mtContinueButton" type="button">이어하기</button>
+      </div>
+      <div id="mtNewBox">
+        <label for="mtNameInput">순위에 표시할 이름</label>
+        <input id="mtNameInput" type="text" maxlength="20" placeholder="이름을 입력하세요" autocomplete="off">
+        <button class="mt-primary" id="mtNewButton" type="button">새로 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 멈춤 창 -->
+  <div class="mt-modal hidden" id="mtPauseModal">
+    <div class="mt-card">
+      <h2>⏸ 잠깐 멈췄어요</h2>
+      <p>멈춘 동안은 시간이 흐르지 않아요.</p>
+      <button class="mt-primary" id="mtResumeButton" type="button">이어하기</button>
+    </div>
+  </div>
+
+  <!-- 확인 창(귀환석·처음부터 다시) -->
+  <div class="mt-modal hidden" id="mtConfirmModal">
+    <div class="mt-card">
+      <h2 id="mtConfirmTitle">정말요?</h2>
+      <p id="mtConfirmText"></p>
+      <div class="mt-row">
+        <button class="mt-secondary" id="mtConfirmNo" type="button">아니요</button>
+        <button class="mt-primary" id="mtConfirmYes" type="button">네</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 보물 엔딩 -->
+  <div class="mt-modal hidden" id="mtEndingModal">
+    <div class="mt-card mt-ending">
+      <div class="mt-card-emoji" aria-hidden="true">🏆</div>
+      <h2>전설의 보물을 찾았어요!</h2>
+      <p>걸린 시간 <b id="mtEndingTime">0:00</b> · 보상 <b id="mtEndingReward">50,000원</b></p>
+      <p id="mtEndingRank">순위를 등록하는 중이에요…</p>
+      <p>보물을 찾은 뒤에도 계속 광석을 캐서 💰 번 돈 순위를 올릴 수 있어요.</p>
+      <div class="mt-row">
+        <button class="mt-secondary" id="mtEndingRankButton" type="button">🏆 순위 보기</button>
+        <button class="mt-primary" id="mtEndingContinue" type="button">계속 캐기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 순위 -->
+  <div class="mt-modal hidden" id="mtRankModal">
+    <div class="mt-card mt-rank-card">
+      <h2>🏆 전체 순위</h2>
+      <div class="mt-tabs" role="tablist">
+        <button type="button" role="tab" data-rank-tab="money">💰 번 돈</button>
+        <button type="button" role="tab" data-rank-tab="time">⏱️ 보물 시간</button>
+      </div>
+      <p class="mt-rank-note" id="mtRankNote"></p>
+      <ol class="mt-rank-list" id="mtRankList"></ol>
+      <button class="mt-primary" id="mtRankClose" type="button">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/rules.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/ranking.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

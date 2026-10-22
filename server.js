@@ -19,9 +19,12 @@ const { createGistSync } = require('./lib/gist-sync');
 const { createStudy } = require('./src/word-chain/study');
 const { createBoardStore } = require('./lib/board-store');
 const { setupBoard } = require('./src/board');
-const { createGeometryDashScoreStore, SCORE_MAX } = require('./lib/geometry-dash-scores');
+const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
+// 광질 타이쿤 순위 상한: 번 돈 1조 원, 보물 시간 10년(초). 사용자 결정(2026-10)으로 그 밖의 부정 검사는 하지 않는다.
+const MINING_MONEY_MAX = 1_000_000_000_000;
+const MINING_TIME_MAX = 315_360_000;
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_CHAT_HISTORY = 100;
@@ -88,8 +91,9 @@ app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'ad
 // 1인용 게임의 전체 순위 API(GET 조회, POST 제출)를 게임별 파일 저장소로 연결한다.
 // Gist 설정이 있으면 순위도 Gist(`<slug>-scores.json`)에 보관해 Render가 다시 켜져도 남는다.
 // SCORES_DIR: 순위 파일 폴더(시험은 임시 폴더를 써서 진짜 순위에 시험 점수가 쌓이지 않게 한다).
-function registerScoreboard(slug, scoreMax) {
-  const store = createGeometryDashScoreStore(path.join(process.env.SCORES_DIR || path.join(__dirname, 'data'), `${slug}-scores.json`), { remote: gistSync, remoteName: `${slug}-scores.json` });
+// options.order 'asc'는 작을수록 위(걸린 시간), options.perPlayer는 같은 playerId를 한 줄로(광질 타이쿤).
+function registerScoreboard(slug, scoreMax, options = {}) {
+  const store = createGeometryDashScoreStore(path.join(process.env.SCORES_DIR || path.join(__dirname, 'data'), `${slug}-scores.json`), { remote: gistSync, remoteName: `${slug}-scores.json`, order: options.order, perPlayer: options.perPlayer });
   const submitAt = new Map();
   app.get(`/api/${slug}/scores`, (_req, res) => {
     res.json({ scores: store.getTop(10) });
@@ -99,6 +103,9 @@ function registerScoreboard(slug, scoreMax) {
     if (!Number.isInteger(score) || score < 0 || score > scoreMax) {
       return res.status(400).json({ error: '유효하지 않은 점수입니다.' });
     }
+    if (options.perPlayer && !sanitizePlayerId(req.body?.playerId)) {
+      return res.status(400).json({ error: '유효하지 않은 사용자입니다.' });
+    }
     const ip = req.ip || 'unknown';
     const now = Date.now();
     const lastSubmitAt = submitAt.get(ip) || 0;
@@ -106,12 +113,15 @@ function registerScoreboard(slug, scoreMax) {
       return res.status(429).json({ error: '너무 빠르게 제출했습니다. 잠시 후 다시 시도하세요.' });
     }
     submitAt.set(ip, now);
-    const { rank } = store.addScore(req.body?.name, score);
+    const { rank } = store.addScore(req.body?.name, score, req.body?.playerId);
     res.json({ scores: store.getTop(10), rank });
   });
 }
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
+// 광질 타이쿤: 💰 번 돈(클수록 위)과 ⏱️ 보물까지 걸린 초(작을수록 위). 둘 다 게임 한 판(playerId)당 한 줄.
+registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
+registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });
 // 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음).
 setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }) });
 app.use(express.static(path.join(__dirname, 'public')));

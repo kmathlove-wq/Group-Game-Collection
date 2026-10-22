@@ -59,7 +59,7 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
-  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz', '/geometry-dash', '/bubble-bobble/']) {
+  for (const route of ['/', '/doodlepang', '/music', '/impossible-quiz', '/geometry-dash', '/bubble-bobble/', '/mining-tycoon/']) {
     const response = await fetch(`${url}${route}`);
     assert.equal(response.status, 200, `${route} 진입 화면이 열려야 한다`);
   }
@@ -102,6 +102,14 @@ test('게임에 참여하는 방장에게 정답을 숨기고 점수와 권한�
   assert.equal(bubbleSubmitted.status, 200, '버블보블 순위는 지오메트리 대쉬 쿨다운과 따로 계산해야 한다');
   const bubbleBody = await bubbleSubmitted.json();
   assert.ok(bubbleBody.rank >= 1 && bubbleBody.rank <= 50);
+  // 광질 타이쿤 순위: playerId가 없으면 거부, 번 돈은 큰 쪽·시간은 작은 쪽이 위, 공개 목록에 playerId 없음.
+  const post = (slug, body) => fetch(`${url}/api/${slug}/scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await post('mining-tycoon-money', { name: uniqueName, score: 100 })).status, 400, 'playerId가 없으면 거부해야 한다');
+  const moneyBody = await (await post('mining-tycoon-money', { name: uniqueName, score: 999_999_999, playerId: 'test-money-1' })).json();
+  assert.equal(moneyBody.rank, 1);
+  assert.ok(moneyBody.scores.every((entry) => !('id' in entry)), '공개 순위에 playerId를 넣지 않는다');
+  const timeFast = await (await post('mining-tycoon-time', { name: uniqueName, score: 5, playerId: 'test-time-1' })).json();
+  assert.equal(timeFast.rank, 1, '보물 시간은 짧을수록 1등이어야 한다');
   const scoreList = await fetch(`${url}/api/geometry-dash/scores`);
   assert.equal(scoreList.status, 200);
   const scoreListBody = await scoreList.json();

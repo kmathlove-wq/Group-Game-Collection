@@ -2,7 +2,7 @@
 
 ## 프로젝트 개요
 그룹 게임 컬렉션은 여럿이 함께 즐기는 온라인 게임을 한곳에 모으는 플랫폼이다.
-현재 그림 퀴즈 `두들팡`, 노래 퀴즈 `송캐치`, 2~4인 `삼각형 땅따먹기`, 누구나 함께하는 실시간 `색칠 땅따먹기`, 여럿/컴퓨터 대결 `끝말잇기`, 1:1 대결(관전 가능) `오목`·`바둑`·`체스`, 1인용 `절대 못 맞히는 퀴즈쇼`·`지오메트리 대쉬`·`버블보블`을 제공한다.
+현재 그림 퀴즈 `두들팡`, 노래 퀴즈 `송캐치`, 2~4인 `삼각형 땅따먹기`, 누구나 함께하는 실시간 `색칠 땅따먹기`, 여럿/컴퓨터 대결 `끝말잇기`, 1:1 대결(관전 가능) `오목`·`바둑`·`체스`, 1인용 `절대 못 맞히는 퀴즈쇼`·`지오메트리 대쉬`·`버블보블`·`광질 타이쿤`을 제공한다.
 Express와 Socket.IO가 서로 분리된 두 게임의 방과 상태를 동기화한다.
 방 상태는 메모리, 송캐치 음원 메타데이터와 관리자는 SQLite에 저장한다.
 
@@ -44,6 +44,7 @@ Express와 Socket.IO가 서로 분리된 두 게임의 방과 상태를 동기�
 │   ├── impossible-quiz.*            # 20문제 1인용 퀴즈쇼
 │   ├── duel/                       # 오목·바둑·체스 로비·대국 화면 코드와 판 그리기
 │   ├── bubble-bobble/              # 버블보블(원래 P17) 게임 파일·그림·음악
+│   ├── mining-tycoon/              # 광질 타이쿤(땅파기 타이쿤, 그림 파일 없이 코드로 그림)
 │   ├── admin*.html/js              # 숨겨진 관리자 화면
 │   └── assets/                     # 두들팡 로고 PNG, geometry-dash/ 게임 그림
 └── test/
@@ -118,6 +119,7 @@ npm test          # node --test
 - `/geometry-dash`는 서버 방 없이 Canvas로 직접 그린 1인용 점프 액션 게임이다. 원작 그래픽·음원은 쓰지 않는다. 배경·캐릭터·장애물은 `public/assets/geometry-dash/`의 자체 제작 그림(AI 생성 후 투명 배경·워터마크 보정)을 `drawImage`로 그리고(로드 실패 시 단색 도형 대체, 구덩이는 항상 벡터), 비행 구간 장애물은 그림 하나를 위아래로 뒤집어 재사용한다. 효과음·배경음악은 WebAudio로 직접 합성한다. 순위는 `lib/geometry-dash-scores.js`가 `data/geometry-dash-scores.json`(Git 제외)에 상위 50개를 저장하는 전체 통합 순위이며(파일 폴더는 `SCORES_DIR`로 바꿀 수 있고 `test/server.test.js`는 임시 폴더를 씀; `GIST_TOKEN`·`GIST_ID`가 있으면 `registerScoreboard`가 `gist-sync`로 Gist `<slug>-scores.json`에도 보관하고 시작 때 합침 — 버블보블도 같음), `GET/POST /api/geometry-dash/scores`로 조회·제출한다. 제출은 점수 상한과 IP당 2초 쿨다운으로만 검사하고 서버가 물리를 재현하지는 않는다. 가시·블록·구덩이 외에 누르고 있으면 뜨고 떼면 떨어지는 비행 구간(`flight-ceiling`/`flight-floor`)이 있다. 점프·비행 물리 상수를 바꾸면 통과 가능성을 오프라인 시뮬레이션으로 먼저 검증한다(임의 컨트롤러로 실패율 0%가 기준).
 - 지오메트리 대쉬 휴대폰: 입력은 `.gd-stage-wrap` 전체의 pointer 이벤트(`setPointerCapture`, 손가락 여러 개는 모두 뗄 때 떼기, Canvas `touch-action:none`, 길게 누르기 메뉴 차단)로 받는다. 폭 640px 이하·높이 500px 이하 화면에서는 시작/게임오버/일시정지 카드를 `position:fixed`로 화면 전체에 띄운다(납작한 게임판 안에서 버튼이 잘리던 문제). 세로 휴대폰은 가로 회전 안내를, 가로 휴대폰은 게임 중(`body.gd-playing`) 메뉴·순위를 숨기고 게임판을 화면에 꽉 채운다. `pointer: coarse`이면 안내 문구를 터치용으로 바꾼다. 다른 화면으로 가면(`visibilitychange`) 일시정지 카드를 띄우고, 이어하기는 3·2·1 카운트다운 뒤 멈춘 자리부터 다시 달린다.
 - `/bubble-bobble/`은 원래 별도 프로젝트(P17)였던 순수 Canvas 1인용 게임으로 `public/bubble-bobble/`에 그림·음악과 함께 들어 있고 상대경로로 에셋을 읽으므로 끝 슬래시 주소를 쓴다(설계 문서는 `docs/bubble-bobble/`). 순위는 `server.js`의 `registerScoreboard(slug, scoreMax)`로 지오메트리 대쉬와 같은 저장소 구현을 쓰되 `data/bubble-bobble-scores.json`(Git 제외)·`/api/bubble-bobble/scores`·쿨다운을 따로 둔다(상한 9,999,999점). 게임오버·엔딩 때 HTML 순위 창(`js/ranking.js`)을 띄우고 닫혀야 타이틀로 가며, `data-ui` 요소 안의 키·마우스 입력은 `input.js`가 게임 조작으로 가로채지 않는다.
+- `/mining-tycoon/`은 서버 방 없이 순수 Canvas로 그린 1인용 땅파기 탐험 게임 `광질 타이쿤`이다(사용자 설계 확정 2026-10, 설계 문서 `docs/mining-tycoon/설계.md`). 파일은 `public/mining-tycoon/`(`js/rules.js` 숫자 표 · `world.js` 땅 만들기 · `game.js` 규칙 · `save.js` 저장 — 이 넷은 브라우저와 Node가 함께 씀(`window.MT` / `module.exports`), `draw.js`·`sound.js`·`ranking.js`·`main.js`는 화면 전용), 시험은 `test/mining-tycoon.test.js`. `game.js`는 화면을 모르고 `update(state, input, dt)`가 사건 목록(`dig-done`·`pickup`·`blocked`·`hurt`·`burn`·`dead`·`rescue`·`low-fuel`·`building`·`treasure`)만 돌려준다. 땅은 가로 40칸 × 깊이 300m(+못 파는 바닥 줄), 새 게임마다 무작위 씨앗으로 만들어 저장한다: 흙(~60m)·돌(~150m)·단단한 바위(150m~, 드릴 3단계 = `ROCK_DRILL_LEVEL` 2부터), 용암 100m~(못 파고 닿으면 초당 18 피해, 넓게 파도 그 칸은 남음 — 흐르지 않음, 사용자 결정), 광석 8종(석탄 10원 ~ 다이아몬드 6,000원, `oreAt`은 사용자가 직접 고쳐 보도록 남겨 둔 TODO), 맨 아래 줄의 전설의 보물(보상 50,000원·엔딩). 위로는 못 파고 ↑로 난다. 업그레이드 6가지(드릴·연료통·가방·몸체·엔진 5단계, 파는 범위 1칸→1×3→3×3→5×5 4단계, Q로 1칸/넓게 바꾸기), 귀환석(2,000원, R + 확인 창). 연료는 땅속에서만 줄고 지상(차 가운데 y≤0)에서는 안 준다. 연료가 0이면 구조대(100원+깊이×3원)가 끌어올리고 모자란 돈은 빚(외상)이 되어 다음 판매 때 먼저 갚으며, 빚이 있으면 업그레이드·귀환석을 못 산다(사용자 결정). 체력 0이면 가방을 잃고 지상에서 다시 시작. 가방이 차서 못 담은 광석은 빈 칸에 남아 나중에 주울 수 있다. 저장은 `localStorage` `mining-tycoon:save:v1`(5초마다·팔기·사기·탭 숨김·pagehide, 칸마다 숫자 한 글자), 망가지면 알리고 새로 시작, 이름 `mining-tycoon:nickname`, 소리 `mining-tycoon:sound`. 다른 탭으로 가면 자동 멈춤(시간도 멈춤). 손전등(깊을수록 어두움)·미니맵·코드로 만든 효과음과 배경음악. 순위는 두 개: `registerScoreboard('mining-tycoon-money', …, { perPlayer: true })`(💰 번 돈 전체, 팔 때마다 2.5초 모아 제출)와 `('mining-tycoon-time', …, { order: 'asc', perPlayer: true })`(⏱️ 보물까지 걸린 초, 짧을수록 위). 저장소 옵션 `order`·`perPlayer`는 같은 `playerId`(새 게임마다 새로 만듦)를 한 줄로 두고 더 좋은 기록만 반영하며 공개 응답에서 `id`를 뺀다(기존 게임은 옵션 없이 그대로). 점수 상한·쿨다운 외의 부정 검사는 하지 않는다(사용자 결정: 문제가 생기면 그때 직접 지움). `MT.debug.state`는 콘솔·자동 확인용 통로다. 규칙·물리 숫자를 바꾸면 `npm test`의 모의 실험(무작위로 몰아도 끼임·NaN 없음)을 다시 돌린다.
 - 퀴즈쇼는 총 20문항, 4·5번 항상 오답, 18점 만점이며 20번 제출 전까지 누적 점수를 화면에 노출하지 않는다.
 - 퀴즈쇼 저장 점수는 답안 `history`를 다시 채점해 복구하며, 객관식은 저장된 `choice`를 우선하고 20번 진입·제출 시에도 저장된 `score` 대신 앞선 답안을 즉시 재채점한다.
 - 퀴즈쇼 9번은 35개의 1을 절대 위치로 불규칙 배치하고, Ctrl 두 번 숨은 창의 비밀번호가 맞으면 퀴즈 음성을 문제→보기와 정오답 순서로 재생한다. 분기 오답 파일은 `WRONG_AUDIO_VARIANTS`로 명시한다.
