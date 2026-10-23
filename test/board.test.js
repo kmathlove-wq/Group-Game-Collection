@@ -62,9 +62,9 @@ async function startBoard(t) {
   await new Promise((resolve) => server.listen(0, resolve));
   t.after(() => server.close());
   const url = `http://127.0.0.1:${server.address().port}`;
-  return (route, { method = 'GET', body, token } = {}) => fetch(url + route, {
+  return (route, { method = 'GET', body, token, owner } = {}) => fetch(url + route, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Board-Admin': token } : {}) },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Board-Admin': token } : {}), ...(owner ? { 'X-Board-Owner': owner } : {}) },
     body: body ? JSON.stringify(body) : undefined
   }).then(async (response) => ({ status: response.status, body: await response.json() }));
 }
@@ -111,4 +111,40 @@ test('비밀번호를 여러 번 틀리면 잠깐 막는다', async (t) => {
   const call = await startBoard(t);
   for (let i = 0; i < 5; i += 1) await call('/api/board/admin/login', { method: 'POST', body: { password: 'x' } });
   assert.equal((await call('/api/board/admin/login', { method: 'POST', body: { password: '1234' } })).status, 429);
+});
+
+test('내가 쓴 글·답글만 고치고 지울 수 있고, 고친 글엔 (수정됨) 표시가 붙는다', async (t) => {
+  const call = await startBoard(t);
+  const me = 'a'.repeat(32);
+  const other = 'b'.repeat(32);
+  const { body: { token } } = await call('/api/board/admin/login', { method: 'POST', body: { password: '1234' } });
+  const post = (await call('/api/board/posts', { method: 'POST', body: { name: '철수', text: '처음 글' }, owner: me })).body.posts[0];
+  assert.equal(post.mine, true);
+  assert.equal(post.edited, false);
+  assert.equal((await call('/api/board', { owner: other })).body.posts[0].mine, false, '다른 사람에겐 내 글로 안 보인다');
+  assert.equal((await call(`/api/board/items/${post.id}`, { method: 'PATCH', body: { text: '몰래 고침' }, owner: other })).status, 403);
+  assert.equal((await call(`/api/board/items/${post.id}`, { method: 'PATCH', body: { text: '고친 글' } })).status, 403, '열쇠가 없으면 못 고친다');
+  assert.equal((await call(`/api/board/items/${post.id}`, { method: 'PATCH', body: { text: '시1발' }, owner: me })).status, 400, '고칠 때도 비속어는 막는다');
+  const edited = (await call(`/api/board/items/${post.id}`, { method: 'PATCH', body: { text: '고친 글' }, owner: me })).body.posts[0];
+  assert.equal(edited.text, '고친 글');
+  assert.equal(edited.edited, true);
+  assert.equal(edited.name, '철수');
+  const reply = (await call(`/api/board/posts/${post.id}/replies`, { method: 'POST', body: { text: '관리자 답글' }, token, owner: other })).body.posts[0].replies[0];
+  assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', owner: me })).status, 403, '남의 답글은 못 지운다');
+  assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', owner: other })).body.posts[0].replies.length, 0, '내 답글은 지운다');
+  assert.equal((await call(`/api/board/items/${post.id}`, { method: 'DELETE', owner: other })).status, 403);
+  assert.deepEqual((await call(`/api/board/items/${post.id}`, { method: 'DELETE', owner: me })).body.posts, []);
+});
+
+test('Gist와 합칠 때 더 늦게 고친 내용을 쓴다', () => {
+  let now = 1_000;
+  const store = createBoardStore(tempFile(), { now: () => now });
+  const post = store.addPost('a', '처음');
+  const old = JSON.parse(JSON.stringify(store.toJSON()));
+  now += 10;
+  store.edit(post.id, '고친 내용');
+  store.absorb(old); // 고치기 전 내용이 Gist에 남아 있어도
+  assert.equal(store.list()[0].text, '고친 내용');
+  store.absorb({ posts: [{ ...old.posts[0], text: '다른 곳에서 더 늦게 고침', editedAt: now + 5 }] });
+  assert.equal(store.list()[0].text, '다른 곳에서 더 늦게 고침');
 });
