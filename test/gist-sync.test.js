@@ -118,3 +118,45 @@ test('Gist 보관: 서버가 다시 켜져도 지오메트리 대쉬 순위가 �
   assert.equal(store.getTop().length, 2); // 두 번 들어가지 않는다
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('Gist 보관: 1시간 100번 한도를 넘지 않게 올리기 사이를 1분 이상 띄우고, 한도에 걸리면 알려 준 시각까지 기다린다', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const github = fakeGitHub();
+  let limited = false;
+  const fetchImpl = async (url, options = {}) => {
+    if (options.method === 'PATCH' && limited) {
+      const headers = new Map([['x-ratelimit-remaining', '0'], ['x-ratelimit-reset', String(Math.floor(Date.now() / 1000) + 30 * 60)]]);
+      return { ok: false, status: 403, headers };
+    }
+    return github.fetchImpl(url, options);
+  };
+  const sync = createGistSync({ token: 't', gistId: 'g1', fetchImpl, saveDelayMs: 10_000 });
+  let value = 0;
+  const attached = sync.attach('a.json', { absorb() {}, snapshot: () => String(value) });
+  t.mock.timers.tick(1);
+  await attached;
+  const patches = () => github.requests.filter((r) => r.method === 'PATCH').length;
+  const pass = async (ms) => { t.mock.timers.tick(ms); for (let i = 0; i < 10; i += 1) await Promise.resolve(); };
+
+  value = 1; sync.save('a.json');
+  await pass(10_000);
+  assert.equal(patches(), 1);
+  value = 2; sync.save('a.json');
+  await pass(10_000);
+  assert.equal(patches(), 1, '1분이 안 지났으면 아직 안 올린다');
+  await pass(50_000);
+  assert.equal(patches(), 2);
+  assert.equal(github.files['a.json'], '2');
+
+  t.mock.method(console, 'error', () => {});
+  limited = true;
+  value = 3; sync.save('a.json');
+  await pass(60_000); // 거절됨(403, 30분 뒤 다시)
+  const tries = () => github.requests.length;
+  const before = tries();
+  limited = false;
+  await pass(20 * 60_000);
+  assert.equal(tries(), before, '알려 준 시각 전에는 다시 두드리지 않는다');
+  await pass(11 * 60_000);
+  assert.equal(github.files['a.json'], '3', '한도가 풀리면 올린다');
+});

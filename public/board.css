@@ -34,4 +34,12 @@
 .board-admin-card{max-width:360px;text-align:left}
 .board-admin-card h3{margin:0 0 12px}
 .board-admin-card .board-form-foot{margin-top:12px}
+.game-request-card{max-width:440px;text-align:left}
+.game-request-card h3{margin:0 0 8px}
+.game-request-card textarea{width:100%;margin-top:14px;padding:12px 14px;border:1.5px solid #d9dbe8;border-radius:12px;background:#fff;color:var(--ink);resize:vertical}
+.game-request-card textarea:focus{outline:none;border-color:var(--music2);box-shadow:0 0 0 3px #6c4cff26}
+.game-request-card .board-form-foot{margin-top:12px}
+.board-requests{margin-top:14px;padding:16px;border:2px dashed #202331;border-radius:16px}
+.board-requests h3{margin:0}
+.board-requests .board-list{margin-top:12px}
 @media(max-width:760px){.board{margin-top:36px;padding:20px}.board h2{font-size:24px}.board-replies{margin-left:6px;padding-left:10px}}

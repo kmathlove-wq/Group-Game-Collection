@@ -18,6 +18,7 @@ const { createBrain } = require('./src/word-chain/brain');
 const { createGistSync } = require('./lib/gist-sync');
 const { createStudy } = require('./src/word-chain/study');
 const { createBoardStore } = require('./lib/board-store');
+const { createGameRequestStore } = require('./lib/game-request-store');
 const { setupBoard } = require('./src/board');
 const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
@@ -123,8 +124,10 @@ registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });
 registerScoreboard('mining-tycoon-destroy', MINING_TIME_MAX, { order: 'asc', perPlayer: true }); // 🌍 지구 파괴까지 걸린 초
-// 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음).
-setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }) });
+// 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음)과
+// 기간 한정 게임 추천받기 창(Gist `game-requests.json`, 관리자만 봄).
+setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }),
+  requests: createGameRequestStore(process.env.GAME_REQUESTS_PATH || path.join(__dirname, 'data', 'game-requests.json'), { remote: gistSync }) });
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));

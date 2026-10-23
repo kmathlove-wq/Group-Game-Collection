@@ -34,6 +34,7 @@
       <p class="board-desc">바라는 점, 고쳐 줬으면 하는 점, 하고 싶은 말을 누구나 자유롭게 남겨 주세요. 다른 사람 글에 답글도 달 수 있고, 내가 쓴 글은 같은 기기에서 고치거나 지울 수 있어요. 글은 쓴 지 30일이 지나면 자동으로 사라져요.</p>
       <p class="board-rule" role="note">⚠️ 비속어와 욕설은 쓸 수 없어요. 서로 기분 좋은 말을 써 주세요.</p>
       <div class="board-admin-bar hidden" id="boardAdminBar"><b>👑 관리자 모드</b><span>글 삭제 · 고정 · 관리자 글쓰기를 할 수 있어요.</span><button class="secondary" type="button" id="boardAdminExit">관리자 모드 끄기</button></div>
+      <div class="board-requests hidden" id="gameRequestAdmin"><h3>🎮 들어온 게임 추천 <span id="gameRequestCount"></span></h3><div class="board-list" id="gameRequestList"></div></div>
       <form class="board-form" id="boardForm">
         <input id="boardName" maxlength="20" placeholder="닉네임 (안 쓰면 익명)" autocomplete="nickname">
         <textarea id="boardText" maxlength="400" rows="3" placeholder="내용을 적어 주세요 (400자까지)" required></textarea>
@@ -44,5 +45,6 @@
     </section>
   </main>
   <div class="modal hidden" id="boardAdminModal"><form class="panel modal-card board-admin-card" id="boardAdminForm"><h3>🔒 비밀번호</h3><input id="boardAdminPassword" type="password" inputmode="numeric" autocomplete="off" maxlength="100" aria-label="관리자 비밀번호"><p class="notice error hidden" id="boardAdminError"></p><div class="board-form-foot"><button class="secondary" type="button" id="boardAdminCancel">닫기</button><button class="primary" type="submit">확인</button></div></form></div>
+  <div class="modal hidden" id="gameRequestModal" role="dialog" aria-modal="true" aria-labelledby="gameRequestTitle"><form class="panel modal-card game-request-card" id="gameRequestForm"><h3 id="gameRequestTitle">🎮 어떤 게임이 있으면 좋겠어요?</h3><p class="board-desc">하고 싶은 게임을 자유롭게 적어 주세요. 다음 게임을 만들 때 참고할게요! <small id="gameRequestUntil"></small></p><textarea id="gameRequestText" maxlength="200" rows="3" placeholder="예: 여럿이 하는 달리기 게임" required></textarea><p class="notice hidden" id="gameRequestMessage" role="status"></p><div class="board-form-foot"><small id="gameRequestCountText">0 / 200</small><button class="secondary" type="button" id="gameRequestClose">닫기</button><button class="primary" type="submit">보내기</button></div></form></div>
   <script src="/games.js"></script><script src="/board.js"></script>
 </body></html>

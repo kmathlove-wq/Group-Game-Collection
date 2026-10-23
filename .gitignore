@@ -17,3 +17,4 @@ uploads/images/*
 !uploads/audio/.gitkeep
 !uploads/images/.gitkeep
 data/board.json*
+data/game-requests.json*

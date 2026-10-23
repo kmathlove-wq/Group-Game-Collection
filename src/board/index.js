@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { hasBadWord } = require('../../lib/bad-words');
 const { NAME_MAX_LENGTH, TEXT_MAX_LENGTH } = require('../../lib/board-store');
+const { TEXT_MAX_LENGTH: REQUEST_MAX_LENGTH } = require('../../lib/game-request-store');
 
 const DEFAULT_ADMIN_HASH = '$2b$12$iaJ3D1/Q9nqNoZc4eMhFN.6njgc41KBLejogL/14n/7jNxQYBX2x.';
 const POST_COOLDOWN_MS = 20_000; // 같은 사람(IP)은 20초에 한 번 쓰기
@@ -14,10 +15,13 @@ const LOGIN_MAX_FAILS = 5; // 10분에 5번 틀리면 잠깐 막기
 const CLEANUP_MS = 60 * 60 * 1000;
 const RESERVED_NAME = /관리자|운영자|admin/i; // 관리자인 척 못 하게
 const OWNER_KEY = /^[0-9a-f]{32,64}$/;
+// 게임 추천받기 창은 이때까지만 뜨고 받는다(사용자 결정 2026-10: 10/23부터 10/31 토요일 밤까지, 한국 시간).
+const REQUEST_ENDS_AT = Date.parse('2026-10-31T23:59:59.999+09:00');
 
-function setupBoard({ app, store, adminHash = process.env.BOARD_ADMIN_PASSWORD_HASH || DEFAULT_ADMIN_HASH,
+function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_AT, adminHash = process.env.BOARD_ADMIN_PASSWORD_HASH || DEFAULT_ADMIN_HASH,
   cooldownMs = POST_COOLDOWN_MS, now = Date.now, cleanupTimer = true }) {
   const lastPostAt = new Map(); // IP → 마지막으로 쓴 때
+  const lastRequestAt = new Map(); // IP → 마지막으로 게임 추천을 보낸 때
   const loginFails = new Map(); // IP → [틀린 때들]
   const sessions = new Map(); // 관리자 열쇠 → 끝나는 때
 
@@ -123,6 +127,32 @@ function setupBoard({ app, store, adminHash = process.env.BOARD_ADMIN_PASSWORD_H
     if (!store.setPinned(req.params.id, req.body?.pinned)) return res.status(404).json({ error: '글을 찾을 수 없어요.' });
     res.json(listFor(req));
   });
+
+  // ── 게임 추천받기: 기간 안에만 받고, 들어온 추천은 관리자만 본다 ──
+  if (requests) {
+    const requestOpen = () => now() <= requestEndsAt;
+    app.get('/api/game-requests/status', (_req, res) => res.json({ open: requestOpen(), endsAt: requestEndsAt }));
+
+    app.post('/api/game-requests', (req, res) => {
+      if (!requestOpen()) return res.status(403).json({ error: '게임 추천받기 기간이 끝났어요.' });
+      const text = String(req.body?.text ?? '').trim();
+      if (!text) return res.status(400).json({ error: '원하는 게임을 적어 주세요.' });
+      if ([...text].length > REQUEST_MAX_LENGTH) return res.status(400).json({ error: `${REQUEST_MAX_LENGTH}자까지 쓸 수 있어요.` });
+      if (hasBadWord(text)) return res.status(400).json({ error: '비속어나 욕설이 들어 있어요. 바른 말로 고쳐 주세요.' });
+      const ip = ipOf(req);
+      if (now() - (lastRequestAt.get(ip) ?? -Infinity) < cooldownMs) return res.status(429).json({ error: '조금 뒤에 다시 보내 주세요. (20초에 한 번)' });
+      lastRequestAt.set(ip, now());
+      requests.add(text);
+      res.json({ ok: true });
+    });
+
+    app.get('/api/board/admin/game-requests', requireAdmin, (_req, res) => res.json({ requests: requests.list() }));
+
+    app.delete('/api/board/admin/game-requests/:id', requireAdmin, (req, res) => {
+      requests.remove(req.params.id);
+      res.json({ requests: requests.list() });
+    });
+  }
 
   // 아무도 화면을 열지 않아도 30일 지난 글이 정리되게 한 시간마다 확인한다.
   if (cleanupTimer) setInterval(() => store.cleanup(), CLEANUP_MS).unref();

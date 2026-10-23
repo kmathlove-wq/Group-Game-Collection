@@ -204,6 +204,64 @@
     } catch (error) { showMessage(error.message); }
   });
 
+  // ── 게임 추천받기 창: 기간 안이면 들어올 때마다 뜬다(닉네임 없이 내용만) ──
+  const requestModal = $('gameRequestModal');
+  const requestText = $('gameRequestText');
+  const requestMessage = $('gameRequestMessage');
+  const closeRequest = () => requestModal.classList.add('hidden');
+
+  function requestNotice(text, kind) {
+    requestMessage.textContent = text;
+    requestMessage.className = `notice ${kind}`;
+  }
+
+  fetch('/api/game-requests/status').then((response) => response.json()).then(({ open, endsAt }) => {
+    if (!open) return;
+    const end = new Date(endsAt);
+    $('gameRequestUntil').textContent = `(${end.getMonth() + 1}월 ${end.getDate()}일까지 받아요)`;
+    requestModal.classList.remove('hidden');
+    requestText.focus();
+  }).catch(() => {});
+
+  requestText.addEventListener('input', () => { $('gameRequestCountText').textContent = `${[...requestText.value].length} / 200`; });
+  $('gameRequestClose').addEventListener('click', closeRequest);
+  requestModal.addEventListener('click', (event) => { if (event.target === requestModal) closeRequest(); });
+  $('gameRequestForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await api('/api/game-requests', { method: 'POST', body: { text: requestText.value } });
+      requestText.value = '';
+      $('gameRequestCountText').textContent = '0 / 200';
+      requestNotice('고마워요! 추천이 잘 전달됐어요 🎉', 'success');
+      setTimeout(closeRequest, 1500);
+      if (adminToken) loadRequests();
+    } catch (error) { requestNotice(error.message, 'error'); }
+  });
+
+  // 관리자 모드에서만 들어온 추천 목록을 본다.
+  async function loadRequests() {
+    const box = $('gameRequestAdmin');
+    box.classList.toggle('hidden', !adminToken);
+    if (!adminToken) return;
+    try { renderRequests((await api('/api/board/admin/game-requests')).requests); } catch { /* 관리자 모드가 끝나면 setAdmin이 숨김 */ }
+  }
+
+  function renderRequests(items) {
+    const target = $('gameRequestList');
+    $('gameRequestCount').textContent = `${items.length}개`;
+    target.replaceChildren();
+    if (!items.length) { target.append(el('p', 'board-empty', '아직 들어온 추천이 없어요.')); return; }
+    for (const item of items) {
+      const row = el('div', 'board-reply');
+      row.append(header({ name: '🎮 추천', at: item.at }), el('p', 'board-text', item.text));
+      row.append(button('🗑 삭제', 'board-link danger-text', async () => {
+        if (!confirm('이 추천을 지울까요?')) return;
+        try { renderRequests((await api(`/api/board/admin/game-requests/${item.id}`, { method: 'DELETE' })).requests); } catch (error) { showMessage(error.message); }
+      }));
+      target.append(row);
+    }
+  }
+
   // ── 관리자 모드 ──
   function setAdmin(token) {
     adminToken = token;
@@ -212,6 +270,7 @@
     nameInput.hidden = Boolean(token);
     textInput.placeholder = token ? '👑 관리자 이름으로 글을 써요' : '내용을 적어 주세요 (400자까지)';
     render(posts);
+    loadRequests();
   }
 
   function openAdminModal() {
@@ -259,7 +318,7 @@
       openAdminModal();
     }
   });
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAdminModal(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeAdminModal(); closeRequest(); } });
 
   if (adminToken) {
     api('/api/board/admin/check').then(({ admin }) => setAdmin(admin ? adminToken : null)).catch(() => setAdmin(null));
