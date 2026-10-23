@@ -76,6 +76,9 @@
     var destroyed = Save.destroyedCount();
     $('mtDestroyedBadge').classList.toggle('hidden', !destroyed);
     $('mtDestroyedBadge').textContent = '🌍 지구를 부순 횟수: ' + destroyed + '번';
+    var hidden = Save.hiddenCounts();
+    $('mtHiddenBadge').classList.toggle('hidden', !hidden[1] && !hidden[2]);
+    $('mtHiddenBadge').textContent = [hidden[1] ? '🕳️ 지각 정복 ' + hidden[1] + '번' : '', hidden[2] ? '🌋 지구 속 정복 ' + hidden[2] + '번' : ''].filter(Boolean).join(' · ');
     $('mtNameInput').value = Save.getName();
     if (saved) {
       var s = saved.state;
@@ -284,6 +287,7 @@
         }, !!block || state.debt > 0 || state.money < Rules.TICKET_PRICE);
       }
     }
+    renderGacha(body, open);
     body.append(button('🔄 처음부터 다시', 'mt-reset', function () {
       askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.', function () {
         askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
@@ -291,6 +295,35 @@
         });
       });
     }));
+  }
+
+  // 🎰 뽑기: 보물 전에는 일반 뽑기, 보물 뒤에는 특수 뽑기만 보인다(특수 뽑기는 보물 전에 🔒로 미리 보여 줌).
+  function gachaOdds(kind) {
+    return Rules.GACHA[kind].ores.map(function (item) { return Rules.ORES[item[0]].name + ' ' + item[1] + '%'; }).join(' · ');
+  }
+  function renderGacha(body, open) {
+    body.append(el('h3', 'mt-shop-head', '🎰 뽑기'));
+    var kind = open ? 'special' : 'normal';
+    var g = Rules.GACHA[kind];
+    var block = Game.gachaBlock(state, kind);
+    var row = el('div', 'mt-shop-row');
+    var info = el('div', 'mt-shop-info');
+    info.append(el('b', null, g.icon + ' ' + g.name), el('small', null, block === 'bag' ? '🎒 가방이 가득 찼어요. 먼저 팔고 오세요!' : '광석이 하나 나와서 가방에 들어가요'), el('small', 'mt-gacha-odds', gachaOdds(kind)));
+    row.append(info, button(fmt.money(g.price), 'mt-buy', function () { pullGacha(kind); }, !!block || state.debt > 0 || state.money < g.price));
+    body.append(row);
+    if (!open) shopRow(body, '🌟 특수 뽑기', '🔒 보물을 찾으면 열려요 · 맨틀~내핵 광석(페리도트~별의 심장)이 나와요', '🔒', function () {}, true, 'mt-locked');
+  }
+  function pullGacha(kind) {
+    var result = Game.gacha(state, kind);
+    if (!result.ok) { failBuy(result.reason); return; }
+    var ore = Rules.ORES[result.ore];
+    var weight = Rules.GACHA[kind].ores.filter(function (item) { return item[0] === result.ore; })[0][1];
+    var rare = weight <= 3; // 3% 이하가 나오면 대박
+    if (rare) { sound.treasure(); renderer.shake = 0.5; } else sound.pickup(result.ore);
+    renderer.floatText('+' + ore.name, state.car.x, state.car.y - 1, ore.shine);
+    toast((rare ? '✨ 대박! 나온 광석은 ' : '🎰 두구두구… 나온 광석은 ') + ore.name + ' (' + fmt.money(ore.value) + ')!', rare ? 4000 : 2600);
+    saveNow();
+    renderPanel();
   }
 
   function buyItem(result, message) {
@@ -323,7 +356,9 @@
       locked: '🔒 보물을 찾으면 열려요.',
       full: '이미 가득 가지고 있어요.',
       heat: '🔥 열보호 5단계가 있어야 살 수 있어요.',
-      have: '🎫 이미 입장권을 가지고 있어요.'
+      have: '🎫 이미 입장권을 가지고 있어요.',
+      ended: '🎰 일반 뽑기는 보물을 찾기 전까지만 할 수 있어요.',
+      bag: '🎒 가방이 가득 찼어요. 먼저 팔고 오세요!'
     }[reason] || '이미 최고 단계예요.');
   }
 
@@ -437,6 +472,10 @@
           renderer.shake = 0.8;
           if (e.first) showEnding();
           break;
+        case 'hidden':
+          pendingHidden.push(e.n);
+          if (!modal) showHidden();
+          break;
         case 'auto-ore':
           renderer.floatText('+' + fmt.money(e.value), e.x + 0.5, e.y, Rules.ORES[e.ore].shine);
           ranking.queueMoney(state);
@@ -469,7 +508,72 @@
       .then(function (data) { $('mtEndingRank').textContent = data.rank ? '⏱️ 보물 시간 순위 ' + data.rank + '위에 올랐어요!' : '⏱️ 아쉽게도 50위 안에는 못 들었어요.'; })
       .catch(function () { $('mtEndingRank').textContent = '순위 등록에 실패했어요. 인터넷 연결을 확인해 주세요.'; });
   }
-  $('mtEndingContinue').addEventListener('click', function () { closeModal('mtEndingModal'); });
+  $('mtEndingContinue').addEventListener('click', function () { closeModal('mtEndingModal'); showHidden(); });
+
+  // 🤫 히든 엔딩: 보물 엔딩과 같은 순간에 생기면 앞 창을 닫은 뒤 차례로 보여 준다.
+  var pendingHidden = [];
+  var HIDDEN_INFO = {
+    1: { emoji: '🕳️', title: '히든 엔딩 1 — 지각 정복', text: '300m까지 팔 수 있는 땅을 한 칸도 남김없이 다 팠어요! 지각이 텅 비었어요.', badge: '🕳️ 지각 정복' },
+    2: { emoji: '🌋', title: '히든 엔딩 2 — 지구 속 정복', text: '1000m까지 팔 수 있는 땅을 전부 다 팠어요!! 지구 속이 텅 비었어요. 정말 대단해요!', badge: '🌋 지구 속 정복' }
+  };
+  function showHidden() {
+    if (!pendingHidden.length || !state) return;
+    var n = pendingHidden.shift();
+    var info = HIDDEN_INFO[n];
+    var count = Save.addHidden(n);
+    $('mtHiddenEmoji').textContent = info.emoji;
+    $('mtHiddenTitle').textContent = info.title;
+    $('mtHiddenText').textContent = info.text;
+    $('mtHiddenTime').textContent = fmt.time(n === 1 ? state.hidden1Time : state.hidden2Time);
+    $('mtHiddenCount').textContent = info.badge + ' 배지 ' + count + '번째!';
+    sound.treasure();
+    renderer.shake = 0.8;
+    openModal('mtHiddenModal');
+    saveNow();
+  }
+  $('mtHiddenContinue').addEventListener('click', function () { closeModal('mtHiddenModal'); showHidden(); });
+
+  // 📖 설명 창: 처음 들어오면 한 번 뜨고, ❓ 설명 단추로 언제든 다시 본다. 닫으면 원래 열려 있던 창으로 돌아간다.
+  var guideReturn = null;
+  (function fillGuide() {
+    var tbody = $('mtGuideOres');
+    var layer = -1;
+    for (var i = 1; i < Rules.ORES.length; i++) {
+      var ore = Rules.ORES[i];
+      var l = Rules.layerOf(ore.minDepth);
+      if (l !== layer) {
+        layer = l;
+        var head = el('tr', 'mt-guide-layer');
+        var cell = el('td', null, Rules.LAYERS[l].name + (l ? ' (보물을 찾은 뒤에 갈 수 있어요)' : ''));
+        cell.colSpan = 3;
+        head.append(cell);
+        tbody.append(head);
+      }
+      var tr = el('tr');
+      var name = el('td');
+      var dot = el('i', 'mt-ore-dot'); dot.style.background = ore.color;
+      name.append(dot, document.createTextNode(' ' + ore.name));
+      tr.append(name, el('td', null, ore.minDepth + 'm~'), el('td', null, fmt.money(ore.value)));
+      tbody.append(tr);
+    }
+    $('mtGuideGacha').textContent = '🎰 일반 뽑기(' + fmt.money(Rules.GACHA.normal.price) + '): 석탄~다이아몬드가 나와요. 보물을 찾기 전까지만 할 수 있어요. '
+      + '🌟 특수 뽑기(' + fmt.money(Rules.GACHA.special.price) + '): 페리도트~별의 심장이 나와요. 보물을 찾은 뒤부터 할 수 있어요. 뽑은 광석은 가방에 들어가요.';
+  })();
+  function openGuide() {
+    if (modal === 'mtGuideModal') return;
+    guideReturn = modal;
+    openModal('mtGuideModal');
+    $('mtGuideClose').focus();
+  }
+  function closeGuide() {
+    Save.setGuideSeen();
+    closeModal('mtGuideModal');
+    var back = guideReturn;
+    guideReturn = null;
+    if (back) openModal(back);
+  }
+  $('mtGuideButton').addEventListener('click', function () { if (ranking.isOpen()) ranking.close(); openGuide(); });
+  $('mtGuideClose').addEventListener('click', closeGuide);
   $('mtEndingRankButton').addEventListener('click', function () { closeModal('mtEndingModal'); openRanking('time'); });
 
   // 🌍 두 번째 엔딩: 버튼을 누르는 순간 기록·저장을 정리하고(연출 중에 창을 닫아도 남게), 연출이 끝나면 엔딩 창.
@@ -542,7 +646,9 @@
       if (ranking.isOpen()) { ranking.close(); lastTime = performance.now(); return; }
       if (modal === 'mtPauseModal') { closeModal('mtPauseModal'); return; }
       if (modal === 'mtConfirmModal') { $('mtConfirmNo').click(); return; }
-      if (modal === 'mtEndingModal') { closeModal('mtEndingModal'); return; }
+      if (modal === 'mtEndingModal') { $('mtEndingContinue').click(); return; }
+      if (modal === 'mtHiddenModal') { $('mtHiddenContinue').click(); return; }
+      if (modal === 'mtGuideModal') { closeGuide(); return; }
       if (panelKey) { closePanel(); return; }
       pause();
       return;
@@ -576,7 +682,7 @@
     b.addEventListener('click', function () { sound.unlock(); var action = b.getAttribute('data-action'); if (action === 'wide') toggleWide(); else if (action === 'instant') instantSell(); else askRecall(); });
   });
   if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
-    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기 · 💥 넓게/1칸 · 🌀 귀환석 · 💸 즉시 팔기';
+    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기(날면서 ◀ ▶로 옆도 파요) · 💥 넓게/1칸 · 🌀 귀환석 · 💸 즉시 팔기';
   }
 
   // ---------- 매 화면 ----------
@@ -632,5 +738,6 @@
   MT.debug = { get state() { return state; } };
 
   showStart(false);
+  if (!Save.guideSeen()) openGuide();
   requestAnimationFrame(frame);
 })(window.MT = window.MT || {});

@@ -55,6 +55,14 @@
     autoLife: { icon: '⏳', name: '자동 드릴 수명', desc: '자동 드릴이 더 오래 일해요', values: [120, 150, 180, 240, 300], prices: [10000, 30000, 80000, 200000], lockedFrom: 0 },
     autoHeat: { icon: '🧯', name: '자동 드릴 열보호', desc: '자동 드릴이 지각 밑(맨틀·외핵·내핵)까지 내려가요', values: [0, 1], prices: [300000], lockedFrom: 0 }
   };
+  // 🎰 뽑기: ores = [광석 번호, 무게]. 무게가 클수록 잘 나온다(무게 합이 100이라 곧 % 확률).
+  // 평균으로 낸 돈의 약 90%가 돌아온다(일반 268.8원/300원, 특수 89,750원/10만 원 — 사용자 결정 2026-10).
+  // normal은 첫 번째 엔딩(보물) 전까지만, special은 그 뒤부터 뽑을 수 있다.
+  var GACHA = {
+    normal: { icon: '🎰', name: '일반 뽑기', price: 300, ores: [[1, 30], [2, 22], [3, 17], [4, 12], [5, 9], [6, 6], [7, 3], [8, 1]] },
+    special: { icon: '🌟', name: '특수 뽑기', price: 100000, ores: [[9, 35], [10, 27], [11, 18], [12, 12], [13, 6], [14, 2]] }
+  };
+
   var UPGRADE_ORDER = ['drill', 'fuel', 'minigas', 'bag', 'hull', 'engine', 'range', 'heat', 'autoLife', 'autoHeat'];
   var ENGINE_FUEL_USE = [1, 0.9, 0.8, 0.7, 0.6]; // 엔진 단계별 연료 사용 배수
   var ROCK_DRILL_LEVEL = 2; // 단단한 바위는 드릴 3단계(0부터 세면 2)부터
@@ -78,6 +86,7 @@
     DRILL_NEED: DRILL_NEED,
     ORES: ORES,
     UPGRADES: UPGRADES,
+    GACHA: GACHA,
     UPGRADE_ORDER: UPGRADE_ORDER,
     ENGINE_FUEL_USE: ENGINE_FUEL_USE,
     ROCK_DRILL_LEVEL: ROCK_DRILL_LEVEL,

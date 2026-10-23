@@ -12,6 +12,7 @@
   <nav class="mt-toolbar" aria-label="게임 메뉴">
     <a href="/">← 그룹 게임 컬렉션</a>
     <div class="mt-toolbar-actions">
+      <button id="mtGuideButton" type="button">❓ 설명</button>
       <button id="mtRankButton" type="button">🏆 순위</button>
       <button id="mtSoundButton" type="button" aria-pressed="true">🔊 소리 켜짐</button>
       <button id="mtPauseButton" type="button">⏸ 멈춤</button>
@@ -59,7 +60,7 @@
       </div>
     </div>
 
-    <p class="mt-help" id="mtHelp">← → 이동·옆으로 파기 · ↓ 아래로 파기 · ↑ 날기 · Q 넓게/1칸 파기 · R 귀환석 · F 즉시 팔기 · Esc 멈춤 (WASD도 돼요)</p>
+    <p class="mt-help" id="mtHelp">← → 이동·옆으로 파기 · ↓ 아래로 파기 · ↑ 날기(날면서 ← → 로 옆도 파요) · Q 넓게/1칸 파기 · R 귀환석 · F 즉시 팔기 · Esc 멈춤 (WASD도 돼요)</p>
     <p class="mt-rotate-hint">📱 휴대폰을 가로로 돌리면 더 크게 볼 수 있어요</p>
   </main>
 
@@ -70,6 +71,7 @@
       <h2>광질 타이쿤</h2>
       <p>드릴 차로 땅을 파 내려가 광석을 모으고, 연료가 떨어지기 전에 올라와 팔아요.<br>번 돈으로 차를 업그레이드해서 <b>300m 아래 전설의 보물</b>을 찾아보세요!</p>
       <p class="mt-badge hidden" id="mtDestroyedBadge"></p>
+      <p class="mt-badge hidden" id="mtHiddenBadge"></p>
       <p class="mt-notice hidden" id="mtBrokenNotice">저장이 망가졌어요. 새로 시작할게요.</p>
       <div id="mtContinueBox" class="hidden">
         <p class="mt-save-info" id="mtSaveInfo"></p>
@@ -139,6 +141,56 @@
         <button class="mt-secondary" id="mtDestroyRankButton" type="button">🏆 순위 보기</button>
         <button class="mt-primary" id="mtDestroyRestart" type="button">처음부터 다시</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 📖 설명 창(처음 들어오면 한 번 뜨고, ❓ 설명 단추로 다시 봄) -->
+  <div class="mt-modal hidden" id="mtGuideModal">
+    <div class="mt-card mt-guide">
+      <div class="mt-card-emoji" aria-hidden="true">📖</div>
+      <h2>광질 타이쿤 설명서</h2>
+      <h3>⛏️ 어떤 게임이에요?</h3>
+      <p>드릴 차로 땅을 파 내려가 광석을 캐요. 연료가 떨어지기 전에 지상으로 올라와 💰 판매소에서 팔고, 번 돈으로 🛒 상점에서 차를 업그레이드해 더 깊이 내려가요.</p>
+      <h3>🎮 조작법</h3>
+      <ul class="mt-guide-list">
+        <li><b>← →</b> 이동 · 벽에 대고 누르면 옆으로 파기</li>
+        <li><b>↓</b> 아래로 파기 · <b>↑</b> 날기 (위로는 못 파요)</li>
+        <li><b>날면서 ← →</b> 공중에서도 옆 벽을 팔 수 있어요</li>
+        <li><b>Q</b> 넓게/1칸 파기 · <b>R</b> 귀환석 · <b>F</b> 즉시 팔기 · <b>Esc</b> 멈춤</li>
+        <li>휴대폰은 화면의 ◀ ▲ ▼ ▶ 💥 🌀 💸 단추를 눌러요</li>
+      </ul>
+      <h3>⚠️ 조심할 것</h3>
+      <ul class="mt-guide-list">
+        <li>⛽ 연료가 0이 되면 구조대가 끌어올리고 돈을 받아요(모자라면 빚)</li>
+        <li>❤️ 높이 떨어지거나 🌋 용암에 닿으면 체력이 줄어요. 0이 되면 가방 속 광석을 잃어요</li>
+        <li>🎒 가방이 가득 차면 더 못 담아요. 못 담은 광석은 그 자리에 남아요</li>
+      </ul>
+      <h3>💎 광석 값</h3>
+      <table class="mt-guide-ores">
+        <thead><tr><th>광석</th><th>나오는 깊이</th><th>값</th></tr></thead>
+        <tbody id="mtGuideOres"></tbody>
+      </table>
+      <h3>🎰 뽑기 (🛒 상점)</h3>
+      <p id="mtGuideGacha"></p>
+      <h3>🏆 엔딩 보는 법</h3>
+      <ul class="mt-guide-list">
+        <li><b>엔딩 1 — 전설의 보물:</b> 300m 맨 아래 줄 어딘가에 보물이 하나 숨어 있어요. 드릴을 3단계 이상으로 올려 바위를 뚫고 내려가 보물을 캐면 엔딩!</li>
+        <li><b>엔딩 2 — ???:</b> 보물을 찾은 뒤에 또 하나의 엔딩이 기다리고 있다는 소문이… 🤫</li>
+        <li><b>히든 엔딩 ??? 2개:</b> 어딘가에 숨어 있어요. 찾아보세요! 🔍</li>
+      </ul>
+      <button class="mt-primary" id="mtGuideClose" type="button">알겠어요!</button>
+    </div>
+  </div>
+
+  <!-- 🤫 히든 엔딩 -->
+  <div class="mt-modal hidden" id="mtHiddenModal">
+    <div class="mt-card mt-ending mt-hidden-ending">
+      <div class="mt-card-emoji" aria-hidden="true" id="mtHiddenEmoji">🕳️</div>
+      <h2 id="mtHiddenTitle">히든 엔딩</h2>
+      <p id="mtHiddenText"></p>
+      <p>걸린 시간 <b id="mtHiddenTime">0:00</b></p>
+      <p class="mt-badge" id="mtHiddenCount"></p>
+      <button class="mt-primary" id="mtHiddenContinue" type="button">계속 캐기</button>
     </div>
   </div>
 

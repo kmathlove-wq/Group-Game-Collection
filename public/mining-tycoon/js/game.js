@@ -82,8 +82,11 @@
       time: 0, // 걸린 시간(초, 일시정지 중엔 안 늚)
       treasureTime: null,
       destroyedTime: null,
+      hidden1Time: null, // 🤫 히든 엔딩 1: 지각(300m)까지 팔 수 있는 칸을 다 팠을 때
+      hidden2Time: null, // 🤫 히든 엔딩 2: 1000m까지 팔 수 있는 칸을 다 팠을 때
       maxDepth: 0,
       // 아래는 저장하지 않는 잠깐 상태
+      left: null, // 남은 팔 수 있는 칸 수(null이면 다음에 다시 셈)
       dig: null,
       building: null,
       lowFuelWarned: false,
@@ -172,7 +175,8 @@
     return cells;
   }
 
-  function tryDig(s, dx, dy, events) {
+  // flying: 날면서(공중에서) 옆으로 파기. 차가 두 줄에 걸쳐 있어도 되고, 파는 동안 그 줄 높이로 맞춰진다.
+  function tryDig(s, dx, dy, events, flying) {
     var car = s.car;
     var col, row;
     if (dy) {
@@ -180,11 +184,14 @@
       row = Math.floor(car.y + HALF + 0.05);
     } else {
       row = Math.floor(car.y);
-      if (Math.floor(car.y - HALF + EPS) !== row) return false; // 차가 두 줄에 걸쳐 있으면 옆으로 못 판다
+      var top = Math.floor(car.y - HALF + EPS), bottom = Math.floor(car.y + HALF - EPS);
+      if (!flying && top !== row) return false; // 땅에 서 있을 때 차가 두 줄에 걸쳐 있으면 옆으로 못 판다
       col = dx > 0 ? Math.floor(car.x + HALF + 0.05) : Math.floor(car.x - HALF - 0.05);
       var edge = dx > 0 ? car.x + HALF : car.x - HALF;
       var wall = dx > 0 ? col : col + 1;
       if (Math.abs(edge - wall) > 0.08) return false; // 벽에 딱 붙었을 때만
+      // 날 때 가운데 줄 옆이 비어 있으면, 차가 걸친 다른 줄의 벽을 판다.
+      if (flying && World.tileAt(world(s), col, row) === TILE.EMPTY) row = top !== row ? top : bottom;
     }
     var tile = World.tileAt(world(s), col, row);
     if (tile === TILE.EMPTY) return false;
@@ -232,7 +239,7 @@
     for (var i = 0; i < d.cells.length; i++) {
       var idx = d.cells[i];
       if (w.tiles[idx] === TILE.TREASURE) findTreasure(s, events);
-      w.tiles[idx] = TILE.EMPTY;
+      clearTile(s, idx, events);
       var ore = w.ores[idx];
       if (ore) {
         if (addOre(s, ore)) { got.push(ore); w.ores[idx] = 0; } else full = true;
@@ -249,7 +256,47 @@
     if (first) s.treasureTime = Math.round(s.time);
     payIncome(s, Rules.TREASURE_REWARD);
     World.openSeal(s.world); // 지각 바닥이 부서져 아래가 열린다
+    s.left = null; // 바닥이 맨틀이 되면서 팔 수 있는 칸이 늘었으니 다시 센다
     events.push({ type: 'treasure', time: s.treasureTime, reward: Rules.TREASURE_REWARD, first: first });
+  }
+
+  // ---------- 🤫 히든 엔딩: 팔 수 있는 칸이 몇 개 남았나 ----------
+  // 용암·콘크리트·막힌 지각 바닥처럼 원래 못 파는 칸은 세지 않는다(사용자 결정 2026-10: 용암은 빼고 세기).
+  // 매번 땅 전체(4만 칸)를 세면 느리니 한 번 센 뒤로는 칸을 비울 때마다 하나씩 뺀다.
+  function diggable(tile) { return Rules.DRILL_NEED[tile] != null; }
+  function leftCounts(s) {
+    if (!s.left) {
+      var w = s.world;
+      var crustEnd = Rules.CRUST_DEPTH * w.w; // 0~299줄 = 1~300m
+      var crust = 0, all = 0;
+      for (var i = 0; i < w.tiles.length; i++) {
+        if (!diggable(w.tiles[i])) continue;
+        all++;
+        if (i < crustEnd) crust++;
+      }
+      s.left = { crust: crust, all: all };
+    }
+    return s.left;
+  }
+
+  // 칸을 비울 때는 꼭 이걸 거친다(남은 수를 줄이고 히든 엔딩을 확인한다).
+  function clearTile(s, idx, events) {
+    var w = s.world;
+    if (diggable(w.tiles[idx])) {
+      var left = leftCounts(s);
+      left.all--;
+      if (idx < Rules.CRUST_DEPTH * w.w) left.crust--;
+    }
+    w.tiles[idx] = TILE.EMPTY;
+    var counts = leftCounts(s);
+    if (s.hidden1Time == null && counts.crust <= 0) {
+      s.hidden1Time = Math.round(s.time);
+      events.push({ type: 'hidden', n: 1, time: s.hidden1Time });
+    }
+    if (s.hidden2Time == null && counts.all <= 0) {
+      s.hidden2Time = Math.round(s.time);
+      events.push({ type: 'hidden', n: 2, time: s.hidden2Time });
+    }
   }
 
   // ---------- 🤖 자동 드릴 ----------
@@ -298,7 +345,7 @@
         // 파는 사이 내가 먼저 파 버렸거나 바뀌었으면 그냥 지나간다.
         if (w.tiles[idx] !== TILE.EMPTY) {
           if (!canDrill(s, w.tiles[idx])) { a.mode = null; continue; }
-          w.tiles[idx] = TILE.EMPTY;
+          clearTile(s, idx, events);
         }
         var ore = w.ores[idx];
         if (ore) {
@@ -378,7 +425,7 @@
     else if (grounded && car.vy >= 0 && !input.up) {
       if (input.down && tryDig(s, 0, 1, events)) return;
       if (lr && tryDig(s, lr, 0, events)) return;
-    }
+    } else if (!grounded && lr && tryDig(s, lr, 0, events, true)) return; // ✈️ 날면서 옆으로 파기
 
     var speed = Rules.MOVE_SPEED[s.levels.engine];
     var accel = Rules.MOVE_ACCEL * h;
@@ -551,6 +598,40 @@
     return result;
   }
 
+  // ---------- 🎰 뽑기 ----------
+  // 일반 뽑기는 첫 번째 엔딩 전까지, 특수 뽑기는 그 뒤부터. 뽑은 광석은 가방에 들어간다(가득 차면 못 뽑음).
+  function gachaBlock(s, kind) {
+    if (!Rules.GACHA[kind]) return 'unknown';
+    if (kind === 'normal' && unlocked(s)) return 'ended';
+    if (kind === 'special' && !unlocked(s)) return 'locked';
+    if (bagCount(s) >= bagCap(s)) return 'bag';
+    return null;
+  }
+
+  // 무게대로 광석 하나 고르기: 0~무게 합 사이에서 수를 하나 뽑고, 무게를 차례로 빼다가 0 아래로 떨어진 광석.
+  function rollGacha(kind, rand) {
+    var list = Rules.GACHA[kind].ores;
+    var total = 0;
+    for (var i = 0; i < list.length; i++) total += list[i][1];
+    var r = rand() * total;
+    for (var j = 0; j < list.length; j++) {
+      r -= list[j][1];
+      if (r < 0) return list[j][0];
+    }
+    return list[list.length - 1][0];
+  }
+
+  // rand는 시험에서 결과를 정할 때만 넘긴다(보통은 Math.random).
+  function gacha(s, kind, rand) {
+    var block = gachaBlock(s, kind);
+    if (block) return { ok: false, reason: block };
+    var reason = payFor(s, Rules.GACHA[kind].price);
+    if (reason) return { ok: false, reason: reason };
+    var ore = rollGacha(kind, rand || Math.random);
+    s.bag[ore]++;
+    return { ok: true, ore: ore };
+  }
+
   function buyAuto(s) {
     if (!unlocked(s)) return { ok: false, reason: 'locked' };
     if (s.autos.length >= Rules.AUTO_MAX) return { ok: false, reason: 'full' };
@@ -616,6 +697,10 @@
     buyInstant: buyInstant,
     useInstant: useInstant,
     buyAuto: buyAuto,
+    gacha: gacha,
+    gachaBlock: gachaBlock,
+    rollGacha: rollGacha,
+    leftCounts: leftCounts,
     buyTicket: buyTicket,
     ticketBlock: ticketBlock,
     useTicket: useTicket,

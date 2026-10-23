@@ -205,3 +205,19 @@ button, input { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .mt-stat b.hot { animation: none; }
 }
+
+/* ===== 3차 업데이트: 설명 창·뽑기·히든 엔딩 ===== */
+.mt-guide { width: min(560px, 100%); text-align: left; }
+.mt-guide .mt-card-emoji, .mt-guide h2 { text-align: center; }
+.mt-guide h3 { margin: 16px 0 6px; font-size: 16px; }
+.mt-guide p { margin: 0 0 6px; }
+.mt-guide-list { margin: 0; padding-left: 20px; line-height: 1.6; color: #4a4558; }
+.mt-guide-ores { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mt-guide-ores th, .mt-guide-ores td { padding: 5px 8px; border-bottom: 1px solid #eadfcd; text-align: left; }
+.mt-guide-ores td:last-child, .mt-guide-ores th:last-child { text-align: right; font-weight: 800; }
+.mt-guide-ores tr.mt-guide-layer td { background: #f2ebdf; color: #8a7a60; font-weight: 800; }
+.mt-guide .mt-primary { margin-top: 16px; }
+.mt-gacha-odds { display: block; margin-top: 2px; color: #8a7a60; }
+.mt-hidden-ending { background: linear-gradient(160deg, #f3f0ff, #d9f7ff); }
+.mt-guide-ores .mt-ore-dot { display: inline-block; margin-right: 4px; vertical-align: -1px; }
+.mt-guide-ores tr.mt-guide-layer td { text-align: left; }

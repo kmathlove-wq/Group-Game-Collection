@@ -320,7 +320,7 @@ test('모의 실험: 무작위로 오래 몰아도 땅에 끼거나 숫자가 �
     for (let t = 0; t < 60 * 120; t++) {
       if (t % 20 === 0) {
         const r = Math.random();
-        input = { down: r < 0.45, left: r >= 0.45 && r < 0.6, right: r >= 0.6 && r < 0.75, up: r >= 0.75 };
+        input = { down: r < 0.45, left: (r >= 0.45 && r < 0.6) || (r >= 0.85 && r < 0.92), right: (r >= 0.6 && r < 0.75) || r >= 0.92, up: r >= 0.75 }; // 0.85~ = 날면서 옆으로
       }
       Game.update(s, input, 1 / 60);
       assert.ok(Number.isFinite(s.car.x) && Number.isFinite(s.car.y) && Number.isFinite(s.fuel) && Number.isFinite(s.hp));
@@ -328,4 +328,78 @@ test('모의 실험: 무작위로 오래 몰아도 땅에 끼거나 숫자가 �
       assert.ok(s.debt >= 0 && s.money >= 0);
     }
   }
+});
+
+test('뽑기: 일반은 보물 전까지 석탄~다이아, 특수는 보물 뒤에 맨틀~내핵, 가방이 차면 못 뽑는다', () => {
+  const s = Game.newGame({ seed: 21 });
+  s.money = 1000;
+  assert.equal(Game.gacha(s, 'special').reason, 'locked');
+  assert.deepEqual(Game.gacha(s, 'normal', () => 0), { ok: true, ore: 1 });
+  assert.equal(s.money, 700);
+  assert.equal(Game.gacha(s, 'normal', () => 0.9999).ore, 8, '가장 드문 것은 다이아몬드');
+  assert.equal(Game.bagCount(s), 2);
+
+  s.bag[1] = Game.bagCap(s);
+  assert.equal(Game.gacha(s, 'normal').reason, 'bag');
+  s.bag = Game.emptyBag();
+  s.money = 100;
+  assert.equal(Game.gacha(s, 'normal').reason, 'money');
+
+  s.treasureTime = 50; // 첫 번째 엔딩을 봤다
+  s.money = 300000;
+  assert.equal(Game.gacha(s, 'normal').reason, 'ended');
+  const got = Game.gacha(s, 'special');
+  assert.ok(got.ok && got.ore >= 9 && got.ore <= 14);
+  assert.equal(s.money, 200000);
+
+  // 평균으로 돌아오는 돈은 값의 약 90%(살짝 손해)
+  for (const kind of ['normal', 'special']) {
+    const g = Rules.GACHA[kind];
+    const total = g.ores.reduce((n, o) => n + o[1], 0);
+    const mean = g.ores.reduce((n, o) => n + Rules.ORES[o[0]].value * o[1], 0) / total;
+    assert.ok(mean / g.price > 0.85 && mean / g.price < 0.95, kind + ' 평균 ' + mean);
+  }
+});
+
+test('날면서 옆으로 파기: 공중에서 두 줄에 걸쳐 있어도 벽을 판다', () => {
+  const s = Game.newGame({ seed: 4 });
+  for (let y = 3; y <= 12; y++) { setTile(s, 19, y, TILE.DIRT); setTile(s, 20, y, TILE.EMPTY); setTile(s, 21, y, TILE.DIRT); }
+  setTile(s, 20, 3, TILE.DIRT);
+  setTile(s, 20, 12, TILE.DIRT);
+  s.car.x = 20.5; s.car.y = 7; s.car.vx = 0; s.car.vy = 0; // 6줄과 7줄에 걸쳐 공중에 떠 있다
+  let done = null;
+  for (let i = 0; i < 60 && !done; i++) done = Game.update(s, { up: true, right: true }, 1 / 60).find((e) => e.type === 'dig-done');
+  assert.ok(done && done.x === 21, '오른쪽 벽을 판다');
+  assert.ok(!Game.overlapsSolid(s.world, s.car.x, s.car.y), '다 판 뒤 차는 판 칸에 딱 들어가 있다');
+  assert.equal(s.car.x, 21.5);
+});
+
+test('히든 엔딩: 300m까지 / 1000m까지 팔 수 있는 칸을 다 파면(용암은 안 셈)', () => {
+  const s = Game.newGame({ seed: 8 });
+  const w = s.world;
+  for (let i = 0; i < Rules.CRUST_DEPTH * w.w; i++) if (Rules.DRILL_NEED[w.tiles[i]] != null) w.tiles[i] = TILE.EMPTY;
+  setTile(s, 25, 5, TILE.DIRT);
+  setTile(s, 26, 6, TILE.LAVA); // 용암은 남아 있어도 된다
+  s.left = null;
+  assert.equal(Game.leftCounts(s).crust, 1);
+  standOn(s, 25, 5);
+  let events = run(s, { down: true }, 0.5);
+  assert.deepEqual(events.filter((e) => e.type === 'hidden').map((e) => e.n), [1]);
+  assert.equal(Game.leftCounts(s).crust, 0);
+  assert.ok(s.hidden1Time != null && s.hidden2Time == null);
+
+  s.treasureTime = 10;
+  World.openSeal(w);
+  s.levels.drill = 9;
+  for (let i = 0; i < w.tiles.length; i++) if (Rules.DRILL_NEED[w.tiles[i]] != null) w.tiles[i] = TILE.EMPTY;
+  setTile(s, 30, 700, TILE.OUTER);
+  s.left = null;
+  s.levels.heat = 5;
+  standOn(s, 30, 700);
+  events = run(s, { down: true }, 1);
+  assert.deepEqual(events.filter((e) => e.type === 'hidden').map((e) => e.n), [2]);
+
+  const back = Save.deserialize(Save.serialize(s));
+  assert.equal(back.hidden1Time, s.hidden1Time);
+  assert.equal(back.hidden2Time, s.hidden2Time);
 });

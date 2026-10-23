@@ -11,6 +11,8 @@
   var NAME_KEY = 'mining-tycoon:nickname';
   var SOUND_KEY = 'mining-tycoon:sound';
   var DESTROYED_KEY = 'mining-tycoon:destroyed'; // 🌍 지구를 부순 횟수(새 게임을 해도 남음)
+  var HIDDEN_KEY = 'mining-tycoon:hidden'; // 🤫 히든 엔딩을 본 횟수 { "1": n, "2": n }(새 게임을 해도 남음)
+  var GUIDE_KEY = 'mining-tycoon:guide-seen'; // 📖 설명 창을 한 번 봤는지
   var ORE_MAX = Rules.ORES.length - 1;
   var V1_ORE_MAX = 8;
   var V1_TILE_MAX = 7;
@@ -46,6 +48,7 @@
       fuel: s.fuel, hp: s.hp, money: s.money, debt: s.debt, earned: s.earned,
       recall: s.recall, instant: s.instant, ticket: s.ticket, wide: s.wide, time: s.time,
       treasureTime: s.treasureTime, destroyedTime: s.destroyedTime, maxDepth: s.maxDepth,
+      hidden1Time: s.hidden1Time, hidden2Time: s.hidden2Time,
       inCore: s.inCore, autoEarned: s.autoEarned, autoBought: s.autoBought,
       autos: s.autos.map(function (a) { return { x: a.x, y: a.y, dir: a.dir, life: Math.round(a.life * 10) / 10, lifeMax: a.lifeMax }; })
     });
@@ -110,6 +113,8 @@
     s.maxDepth = num(d.maxDepth, 0, s.world.h);
     s.treasureTime = d.treasureTime == null ? null : num(d.treasureTime, 0, 1e9);
     s.destroyedTime = d.destroyedTime == null ? null : num(d.destroyedTime, 0, 1e9);
+    s.hidden1Time = d.hidden1Time == null ? null : num(d.hidden1Time, 0, 1e9);
+    s.hidden2Time = d.hidden2Time == null ? null : num(d.hidden2Time, 0, 1e9);
     s.autoEarned = d.autoEarned == null ? 0 : num(d.autoEarned, 0, Number.MAX_SAFE_INTEGER);
     s.autoBought = d.autoBought == null ? 0 : int(d.autoBought, 0, 1e9);
     s.autos = (Array.isArray(d.autos) ? d.autos : []).slice(0, Rules.AUTO_MAX).map(function (a) {
@@ -146,7 +151,16 @@
     soundOn: function () { return storageGet(SOUND_KEY) !== 'off'; },
     setSound: function (on) { storageSet(SOUND_KEY, on ? 'on' : 'off'); },
     destroyedCount: function () { var n = parseInt(storageGet(DESTROYED_KEY), 10); return n > 0 ? n : 0; },
-    addDestroyed: function () { var n = Save.destroyedCount() + 1; storageSet(DESTROYED_KEY, String(n)); return n; }
+    addDestroyed: function () { var n = Save.destroyedCount() + 1; storageSet(DESTROYED_KEY, String(n)); return n; },
+    hiddenCounts: function () {
+      var d = null;
+      try { d = JSON.parse(storageGet(HIDDEN_KEY)); } catch (e) {}
+      var one = d && d['1'] > 0 ? Math.floor(d['1']) : 0, two = d && d['2'] > 0 ? Math.floor(d['2']) : 0;
+      return { 1: one, 2: two };
+    },
+    addHidden: function (n) { var c = Save.hiddenCounts(); c[n]++; storageSet(HIDDEN_KEY, JSON.stringify(c)); return c[n]; },
+    guideSeen: function () { return storageGet(GUIDE_KEY) === '1'; },
+    setGuideSeen: function () { storageSet(GUIDE_KEY, '1'); }
   };
 
   MT.Save = Save;
