@@ -439,6 +439,14 @@
         ctx.fillRect(mx + x * cell, my + y * cell, cell, cell);
       }
     }
+    for (var p = 0; p < s.warps.length; p++) { // 📍 저장한 워프석 자리는 분홍 점(미니맵 밖이면 위·아래 끝에 표시)
+      var spot = s.warps[p];
+      if (!spot || s.inCore) continue;
+      var py = Math.floor(spot.y) - top;
+      ctx.fillStyle = '#ff5fa2';
+      if (py >= 0 && py < rows) ctx.fillRect(mx + spot.x * cell - 2, my + py * cell - 2, 4, 4);
+      else ctx.fillRect(mx + spot.x * cell - 2, py < 0 ? my - 3 : my + mh + 1, 4, 2);
+    }
     for (var k = 0; k < s.autos.length; k++) { // 자동 드릴은 파란 점
       var ay = s.autos[k].y - top;
       if (ay >= 0 && ay < rows) { ctx.fillStyle = '#4f8cff'; ctx.fillRect(mx + s.autos[k].x * cell, my + ay * cell, cell, cell); }

@@ -72,6 +72,7 @@
       debt: 0,
       earned: 0, // 지금까지 번 돈 전체(순위 기준, 쓴 돈은 안 뺌)
       recall: 0,
+      warps: [], // 📍 지정 워프석: 하나마다 저장한 위치 { x, y } 또는 아직 안 정함(null)
       instant: 0, // 💸 즉시 팔기 개수
       ticket: 0, // 🎫 지구 핵 입장권
       autos: [], // 🤖 자동 드릴
@@ -580,6 +581,44 @@
     return { ok: true };
   }
 
+  // ---------- 📍 지정 워프석 ----------
+  // 위치는 워프석마다 한 번만 저장하고, 저장한 뒤엔 몇 번이든 그 자리로 간다. 지구 핵 방 안에서는 못 쓴다(땅 지도와 따로 있는 곳).
+  function buyWarp(s) {
+    if (s.warps.length >= Rules.WARP_MAX) return { ok: false, reason: 'full' };
+    var reason = payFor(s, Rules.WARP_PRICE);
+    if (reason) return { ok: false, reason: reason };
+    s.warps.push(null);
+    return { ok: true };
+  }
+
+  function saveWarp(s, i) {
+    if (s.inCore) return { ok: false, reason: 'core' };
+    if (!(i >= 0 && i < s.warps.length)) return { ok: false, reason: 'none' };
+    if (s.warps[i]) return { ok: false, reason: 'saved' };
+    s.warps[i] = { x: s.car.x, y: s.car.y };
+    return { ok: true };
+  }
+
+  function useWarp(s, i) {
+    if (s.inCore) return { ok: false, reason: 'core' };
+    var spot = s.warps[i];
+    if (!spot) return { ok: false, reason: 'empty' };
+    s.car.x = spot.x; s.car.y = spot.y;
+    s.car.vx = 0; s.car.vy = 0;
+    s.dig = null;
+    s.building = null;
+    fixStuck(s); // 저장한 자리는 빈 칸이라 막힐 일이 없지만, 혹시 막히면 지상으로
+    markSeen(s);
+    return { ok: true };
+  }
+
+  // 더 안 쓰는 워프석 버리기(돈은 돌려주지 않음).
+  function dropWarp(s, i) {
+    if (!(i >= 0 && i < s.warps.length)) return { ok: false, reason: 'none' };
+    s.warps.splice(i, 1);
+    return { ok: true };
+  }
+
   function buyInstant(s) {
     if (s.instant >= Rules.INSTANT_MAX) return { ok: false, reason: 'full' };
     var reason = payFor(s, Rules.INSTANT_PRICE);
@@ -694,6 +733,10 @@
     buyUpgrade: buyUpgrade,
     buyRecall: buyRecall,
     useRecall: useRecall,
+    buyWarp: buyWarp,
+    saveWarp: saveWarp,
+    useWarp: useWarp,
+    dropWarp: dropWarp,
     buyInstant: buyInstant,
     useInstant: useInstant,
     buyAuto: buyAuto,

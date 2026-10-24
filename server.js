@@ -20,6 +20,8 @@ const { createStudy } = require('./src/word-chain/study');
 const { createBoardStore } = require('./lib/board-store');
 const { createGameRequestStore } = require('./lib/game-request-store');
 const { setupBoard } = require('./src/board');
+const { createMiningLinkStore } = require('./lib/mining-link-store');
+const { setupMiningTycoon } = require('./src/mining-tycoon');
 const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -128,6 +130,9 @@ registerScoreboard('mining-tycoon-destroy', MINING_TIME_MAX, { order: 'asc', per
 // 기간 한정 게임 추천받기 창(Gist `game-requests.json`, 관리자만 봄).
 setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }),
   requests: createGameRequestStore(process.env.GAME_REQUESTS_PATH || path.join(__dirname, 'data', 'game-requests.json'), { remote: gistSync }) });
+// 광질 타이쿤 📱 다른 기기 연동 보관함(30일 안 하면 지움, Gist `mining-tycoon-worlds.json`에도 보관).
+const miningLinkStore = createMiningLinkStore(process.env.MINING_LINK_PATH || path.join(__dirname, 'data', 'mining-tycoon-worlds.json'), { remote: gistSync });
+setupMiningTycoon({ app, store: miningLinkStore });
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
@@ -980,6 +985,7 @@ if (require.main === module) {
     process.once(signal, () => {
       const done = () => process.exit(0);
       setTimeout(done, 8_000).unref();
+      miningLinkStore.flush();
       Promise.all([oneShotStore.flush(), wordChainBrain.flush(), wordChainStudy.flush(), wordChainMaster.flush(), wordChainPatrol.flush(), gistSync?.flush()]).finally(done);
     });
   }

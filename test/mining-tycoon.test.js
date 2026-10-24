@@ -403,3 +403,44 @@ test('히든 엔딩: 300m까지 / 1000m까지 팔 수 있는 칸을 다 파면(�
   assert.equal(back.hidden1Time, s.hidden1Time);
   assert.equal(back.hidden2Time, s.hidden2Time);
 });
+
+test('📍 지정 워프석: 여러 개 사고, 하나마다 위치는 한 번만 저장, 그 뒤로 몇 번이든 이동, 버리기·저장도 된다', () => {
+  const s = Game.newGame({ seed: 7 });
+  s.money = Rules.WARP_PRICE * (Rules.WARP_MAX + 1);
+  for (let i = 0; i < Rules.WARP_MAX; i += 1) assert.equal(Game.buyWarp(s).ok, true);
+  assert.equal(Game.buyWarp(s).reason, 'full', `${Rules.WARP_MAX}개까지만`);
+  assert.equal(s.money, Rules.WARP_PRICE);
+  assert.equal(Game.useWarp(s, 0).reason, 'empty', '저장 안 한 워프석은 못 씀');
+
+  // 30줄 근처에 빈 굴을 만들고 그 자리를 저장한다
+  for (let row = 25; row <= 31; row += 1) s.world.tiles[row * s.world.w + 20] = TILE.EMPTY;
+  s.world.tiles[32 * s.world.w + 20] = TILE.STONE;
+  standOn(s, 20, 32);
+  const spot = { x: s.car.x, y: s.car.y };
+  assert.equal(Game.saveWarp(s, 0).ok, true);
+  assert.equal(Game.saveWarp(s, 0).reason, 'saved', '위치는 한 번만');
+
+  for (let n = 0; n < 3; n += 1) { // 몇 번이든 간다
+    Game.teleportHome(s);
+    assert.equal(Game.useWarp(s, 0).ok, true);
+    assert.deepEqual({ x: s.car.x, y: s.car.y }, spot);
+  }
+  run(s, {}, 0.5);
+  assert.ok(Math.abs(s.car.y - spot.y) < 0.01, '옮긴 자리에 그대로 서 있다');
+
+  s.inCore = true;
+  assert.equal(Game.useWarp(s, 0).reason, 'core', '지구 핵 방에서는 못 씀');
+  assert.equal(Game.saveWarp(s, 1).reason, 'core');
+  s.inCore = false;
+
+  const back = Save.deserialize(Save.serialize(s));
+  assert.equal(back.warps.length, Rules.WARP_MAX);
+  assert.deepEqual(back.warps[0], spot);
+  assert.equal(back.warps[1], null);
+  assert.equal(Game.dropWarp(back, 0).ok, true);
+  assert.equal(back.warps.length, Rules.WARP_MAX - 1);
+  assert.equal(back.warps[0], null, '버린 워프석 자리는 사라진다');
+  const old = JSON.parse(Save.serialize(Game.newGame({ seed: 1 })));
+  delete old.warps;
+  assert.deepEqual(Save.deserialize(JSON.stringify(old)).warps, [], '워프석이 없던 예전 저장도 불러온다');
+});

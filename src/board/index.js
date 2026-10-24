@@ -123,7 +123,8 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
     res.json(listFor(req));
   });
 
-  app.post('/api/board/posts/:id/pin', requireAdmin, (req, res) => {
+  // 원글·답글 고정(답글 고정은 2026-10 추가 — 예전 주소 /posts/:id/pin도 그대로 받는다).
+  app.post(['/api/board/posts/:id/pin', '/api/board/items/:id/pin'], requireAdmin, (req, res) => {
     if (!store.setPinned(req.params.id, req.body?.pinned)) return res.status(404).json({ error: '글을 찾을 수 없어요.' });
     res.json(listFor(req));
   });

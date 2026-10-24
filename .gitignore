@@ -18,3 +18,4 @@ uploads/images/*
 !uploads/images/.gitkeep
 data/board.json*
 data/game-requests.json*
+data/mining-tycoon-worlds.json*

@@ -119,6 +119,26 @@ button, input { font: inherit; }
 #mtContinueBox { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed #d9cfbf; }
 .mt-row { display: flex; gap: 10px; }
 .mt-row > * { flex: 1; }
+/* 📍 지정 워프석 */
+.mt-warp-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; max-height: 50dvh; overflow-y: auto; }
+.mt-warp-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #f2ebdf; }
+.mt-warp-list li span { flex: 1; font-weight: 700; }
+.mt-warp-list li .mt-buy { min-width: 0; }
+.mt-warp-list li .mt-drop { background: #eee5d6; color: #8a3b2b; }
+.mt-warp-card .mt-secondary.mt-wide { width: 100%; margin-top: 12px; }
+/* 📱 다른 기기 연동 */
+.mt-link-worlds { margin-top: 16px; text-align: left; }
+.mt-link-worlds-head { margin: 0 0 8px; font-weight: 800; }
+.mt-link-worlds ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mt-link-worlds li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #e9f1ff; }
+.mt-link-worlds li span { flex: 1; font-weight: 700; font-size: 14px; }
+.mt-link-worlds li .mt-buy { flex: none; }
+.mt-link-card .mt-secondary.mt-wide { width: 100%; margin-top: 10px; }
+.mt-link-card form .mt-primary { margin-top: 14px; }
+#mtJoinForm .mt-row { margin-top: 14px; }
+.mt-taken-compare li { gap: 12px; border-bottom-color: #e8dfcf; }
+.mt-taken-compare span { flex: none; white-space: nowrap; }
+.mt-taken-compare b { white-space: normal; text-align: right; }
 .mt-ending { background: linear-gradient(160deg, #fffaf2, #fff1c2); }
 
 /* 순위 */
@@ -197,10 +217,13 @@ button, input { font: inherit; }
 .mt-destroy-stats li { display: flex; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
 .mt-destroy .mt-secondary { background: rgba(255, 255, 255, .15); color: #fff; }
 @media (pointer: coarse) {
-  .mt-touch-right { height: 190px; }
-  .mt-touch-right button:nth-child(1) { bottom: 132px; }
-  .mt-touch-right button:nth-child(2) { bottom: 66px; }
-  .mt-touch-right button:nth-child(3) { bottom: 0; }
+  /* 💥 🌀 / 📍 💸 를 2×2로 둔다(네 개를 세로로 쌓으면 가로 휴대폰에서 너무 길어서) */
+  .mt-touch-right { width: 124px; height: 124px; }
+  .mt-touch-right button:nth-child(1) { left: 0; bottom: 66px; }
+  .mt-touch-right button:nth-child(2) { right: 0; bottom: 66px; }
+  .mt-touch-right button:nth-child(3) { left: 0; bottom: 0; }
+  .mt-touch-right button:nth-child(4) { right: 0; bottom: 0; }
+  .mt-panel { right: 146px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mt-stat b.hot { animation: none; }

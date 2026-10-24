@@ -31,6 +31,7 @@
 .board-replies{display:grid;gap:8px;margin:12px 0 0 18px;padding-left:14px;border-left:3px solid var(--line)}
 .board-reply{padding:10px 12px;border-radius:12px;background:#fff}
 .board-reply .board-link{margin-top:4px}
+.board-reply.pinned{border:1px solid #ffc94d;background:#fffbea}
 .board-admin-card{max-width:360px;text-align:left}
 .board-admin-card h3{margin:0 0 12px}
 .board-admin-card .board-form-foot{margin-top:12px}

@@ -2,7 +2,7 @@
 // 전체를 묶는다: 입력(키보드·터치) → Game.update → 사건(events)을 소리·글자·순위로 → 그리기.
 // 상단 막대·가게 창·시작/멈춤/확인/엔딩 창도 여기서 다룬다. 사용자 글자는 모두 textContent로 넣는다.
 (function (MT) {
-  var Rules = MT.Rules, Game = MT.Game, Save = MT.Save, fmt = MT.format;
+  var Rules = MT.Rules, Game = MT.Game, Save = MT.Save, Link = MT.Link, fmt = MT.format;
   var $ = function (id) { return document.getElementById(id); };
 
   var canvas = $('mtCanvas');
@@ -21,6 +21,9 @@
   var lastBlocked = 0;
   var toastTimer = null;
   var confirmAction = null;
+  var SYNC_EVERY = 30; // 📱 연동된 월드는 30초마다 서버에 올린다
+  var syncTimer = 0;
+  var syncing = false;
 
   // ---------- 창 열고 닫기 ----------
   function openModal(id) {
@@ -60,7 +63,11 @@
     closeModal('mtConfirmModal');
     if (action) action();
   });
-  $('mtConfirmNo').addEventListener('click', function () { confirmAction = null; closeModal('mtConfirmModal'); });
+  $('mtConfirmNo').addEventListener('click', function () {
+    confirmAction = null;
+    closeModal('mtConfirmModal');
+    if (!state) showStart(false); // 시작 화면에서 연 확인 창이었으면 시작 화면으로 돌아간다
+  });
 
   // ---------- 시작 ----------
   function newPlayerId() {
@@ -68,11 +75,14 @@
     return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
-  function showStart(broken) {
+  // notice를 주면 망가짐 안내 자리에 그 글을 보여 준다(다른 기기에서 월드가 끝났을 때 등).
+  function showStart(broken, notice) {
     var saved = broken ? null : Save.load();
     if (saved && saved.broken) { broken = true; saved = null; Save.clear(); }
     if (saved && saved.state.destroyedTime != null) { saved = null; Save.clear(); } // 지구가 부서진 판은 끝
-    $('mtBrokenNotice').classList.toggle('hidden', !broken);
+    if (!saved && Link.get()) Link.clear(); // 저장이 없는데 연동 정보만 남았으면 버린다
+    $('mtBrokenNotice').textContent = notice || '저장이 망가졌어요. 새로 시작할게요.';
+    $('mtBrokenNotice').classList.toggle('hidden', !broken && !notice);
     var destroyed = Save.destroyedCount();
     $('mtDestroyedBadge').classList.toggle('hidden', !destroyed);
     $('mtDestroyedBadge').textContent = '🌍 지구를 부순 횟수: ' + destroyed + '번';
@@ -82,15 +92,18 @@
     $('mtNameInput').value = Save.getName();
     if (saved) {
       var s = saved.state;
-      $('mtSaveInfo').textContent = s.name + ' · 번 돈 ' + fmt.money(s.earned) + ' · 가장 깊이 ' + s.maxDepth + 'm · ' + fmt.time(s.time);
+      $('mtSaveInfo').textContent = (Link.get() ? '📱 ' : '') + s.name + ' · 번 돈 ' + fmt.money(s.earned) + ' · 가장 깊이 ' + s.maxDepth + 'm · ' + fmt.time(s.time);
       $('mtContinueBox').classList.remove('hidden');
       $('mtNewButton').textContent = '처음부터 새로 시작';
-      $('mtContinueButton').onclick = function () { begin(s); };
+      $('mtContinueButton').disabled = false;
+      $('mtContinueButton').textContent = '이어하기';
+      $('mtContinueButton').onclick = function () { continueSaved(s); };
     } else {
       $('mtContinueBox').classList.add('hidden');
       $('mtNewButton').textContent = '새로 시작';
     }
     openModal('mtStartModal');
+    refreshWorlds();
   }
 
   function startNew() {
@@ -102,8 +115,10 @@
 
   $('mtNewButton').addEventListener('click', function () {
     if (!$('mtContinueBox').classList.contains('hidden')) {
-      askConfirm('처음부터 새로 시작할까요?', '저장된 게임(땅·돈·업그레이드)이 모두 사라져요.', function () {
-        askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () { Save.clear(); startNew(); });
+      askConfirm('처음부터 새로 시작할까요?', '저장된 게임(땅·돈·업그레이드)이 모두 사라져요.' + linkedWarning(), function () {
+        askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
+          endLinkedWorld(function () { Save.clear(); startNew(); });
+        });
       });
       return;
     }
@@ -122,7 +137,249 @@
     if (state.treasureTime == null) toast('⛏️ 오른쪽 광산으로 가서 ↓ 를 눌러 파 보세요!', 4000);
   }
 
-  function saveNow() { if (state && state.destroyedTime == null) Save.save(state); saveTimer = 0; } // 지구가 부서진 판은 다시 저장하지 않는다
+  // 지구가 부서진 판은 다시 저장하지 않는다. soon이면(팔기·사기) 연동된 월드를 곧 서버에도 올린다.
+  function saveNow(soon) {
+    if (state && state.destroyedTime == null) {
+      Save.save(state);
+      Link.markDirty();
+      if (soon) syncTimer = Math.max(syncTimer, SYNC_EVERY - 2);
+    }
+    saveTimer = 0;
+  }
+
+  // ---------- 📱 다른 기기 연동 ----------
+  function notice(text) {
+    if (modal === 'mtStartModal') { $('mtBrokenNotice').textContent = text; $('mtBrokenNotice').classList.remove('hidden'); } else toast(text, 4000);
+  }
+  function linkedWarning() { return Link.get() ? ' 📱 연동된 다른 기기에서도 모두 처음부터 시작해요.' : ''; }
+  function summaryText(depth, earned, time) { return '가장 깊이 ' + depth + 'm · 번 돈 ' + fmt.money(earned) + ' · ' + fmt.time(time); }
+  function agoText(at) {
+    var minutes = Math.floor((Date.now() - at) / 60000);
+    if (minutes < 1) return '방금';
+    if (minutes < 60) return minutes + '분 전';
+    if (minutes < 60 * 24) return Math.floor(minutes / 60) + '시간 전';
+    return Math.floor(minutes / 60 / 24) + '일 전';
+  }
+
+  // 연동된 월드면 서버에서도 끝낸다(모든 기기가 처음부터). 인터넷이 안 되면 멈추고 알려 준다.
+  function endLinkedWorld(after) {
+    if (!Link.get()) { after(); return; }
+    Link.end('reset').then(function (result) {
+      if (result.ok || result.gone) { after(); return; }
+      if (!state) showStart(false);
+      notice('📱 연동된 월드라서 인터넷이 있어야 처음부터 다시 할 수 있어요. ' + result.error);
+    });
+  }
+
+  // 다른 기기 때문에 월드가 사라졌을 때.
+  var GONE_TEXT = {
+    reset: '🔄 다른 기기에서 "처음부터 다시"를 해서 이 월드가 끝났어요. 새로 시작해 주세요.',
+    destroyed: '🌍 다른 기기에서 지구를 부숴서 이 월드가 끝났어요. 새로 시작해 주세요.',
+    unlinked: '✂️ 다른 기기에서 연동을 끊어서, 이 기기에서는 이 월드를 더 할 수 없어요.'
+  };
+  function handleGone(reason) {
+    Link.clear();
+    updateLinkButton();
+    if (reason === 'expired') { toast('📱 30일 동안 아무 기기에서도 안 해서 연동이 끝났어요. 이 기기에서 혼자 계속해요.', 5000); return; }
+    Save.clear();
+    state = null;
+    closePanel();
+    if (modal) closeModal(modal);
+    showStart(false, GONE_TEXT[reason] || GONE_TEXT.reset);
+  }
+
+  // 서버 것으로 바꿔 끼운다.
+  function replaceState(s, rev) {
+    state = s;
+    Link.adopt(rev);
+    renderer.cam = null;
+    closePanel();
+    Save.save(state);
+  }
+
+  function doSync(force, keepalive) {
+    if (!state || !Link.get() || syncing) return;
+    syncing = true;
+    syncTimer = 0;
+    Link.sync(state, force, keepalive).then(function (result) {
+      syncing = false;
+      if (result.gone) handleGone(result.gone);
+      else if (result.taken) showTaken(result.summary, '다른 기기에서 이 월드를 열었어요');
+      // 인터넷이 안 되는 등 다른 오류는 다음 차례에 다시 올린다
+    });
+  }
+
+  // 두 상태를 보여 주고 고르게 한다(게임은 창이 열린 동안 멈춤).
+  function showTaken(server, title) {
+    if (!state) return;
+    $('mtTakenTitle').textContent = '📱 ' + title;
+    $('mtTakenServer').textContent = server ? summaryText(server.depth, server.earned, server.time) : '-';
+    $('mtTakenLocal').textContent = summaryText(state.maxDepth, Math.floor(state.earned), state.time);
+    openModal('mtTakenModal');
+  }
+  $('mtTakenServerButton').addEventListener('click', function () {
+    var b = this;
+    b.disabled = true;
+    Link.adopt(-1); // 판 번호를 지워서 서버 것을 꼭 받아 온다
+    Link.open().then(function (result) {
+      b.disabled = false;
+      if (result.gone) { handleGone(result.gone); return; }
+      if (!result.ok) { toast(result.error); return; }
+      closeModal('mtTakenModal');
+      if (result.state) replaceState(result.state, result.rev);
+      toast('☁️ 서버에 있던 내용으로 이어 해요!');
+    });
+  });
+  $('mtTakenLocalButton').addEventListener('click', function () {
+    closeModal('mtTakenModal');
+    toast('📱 이 기기 것으로 계속해요. 다른 기기는 멈춰요.');
+    doSync(true);
+  });
+
+  // 이어하기: 연동된 월드면 먼저 서버에 더 새로운 내용이 있는지 본다.
+  function continueSaved(local) {
+    if (!Link.get()) { begin(local); return; }
+    var b = $('mtContinueButton');
+    b.disabled = true;
+    b.textContent = '☁️ 불러오는 중…';
+    Link.open().then(function (result) {
+      if (result.gone) {
+        if (result.gone !== 'expired') { handleGone(result.gone); return; }
+        begin(local);
+        handleGone('expired');
+        return;
+      }
+      if (!result.ok) { begin(local); toast('📶 인터넷이 안 돼서 이 기기 저장으로 할게요. 연결되면 다시 맞춰요.', 4000); return; }
+      if (!result.state) { begin(local); return; }
+      if (!Link.dirty()) {
+        Link.adopt(result.rev);
+        begin(result.state);
+        toast('☁️ 다른 기기에서 한 내용을 불러왔어요!', 3500);
+        return;
+      }
+      begin(local); // 두 곳 모두 바뀌었으면 고르게 한다
+      showTaken(result.summary, '다른 기기에서도 이 월드를 했어요');
+    });
+  }
+
+  // 시작 화면: 적은 이름으로 연동된 월드 목록.
+  var worldsTimer = null;
+  var joinTarget = null;
+  function refreshWorlds() {
+    clearTimeout(worldsTimer);
+    worldsTimer = setTimeout(function () {
+      var name = $('mtNameInput').value.trim();
+      if (!name) { $('mtLinkWorlds').classList.add('hidden'); return; }
+      Link.list(name).then(function (worlds) {
+        if (modal !== 'mtStartModal' || $('mtNameInput').value.trim() !== name) return;
+        var list = $('mtLinkWorldList');
+        list.textContent = '';
+        worlds.forEach(function (w) {
+          var li = el('li');
+          li.append(el('span', null, '⛏️ ' + summaryText(w.depth, w.earned, w.time) + ' · ' + agoText(w.updatedAt) + ' · 기기 ' + w.devices + '대'),
+            button('하기', 'mt-buy', function () { askJoin(w); }));
+          list.append(li);
+        });
+        $('mtLinkWorlds').classList.toggle('hidden', !worlds.length);
+      });
+    }, 400);
+  }
+  $('mtNameInput').addEventListener('input', refreshWorlds);
+
+  function askJoin(world) {
+    joinTarget = world;
+    var open = function () {
+      $('mtJoinInfo').textContent = '⛏️ ' + summaryText(world.depth, world.earned, world.time);
+      $('mtJoinPassword').value = '';
+      $('mtJoinError').classList.add('hidden');
+      openModal('mtJoinModal');
+      $('mtJoinPassword').focus();
+    };
+    if ($('mtContinueBox').classList.contains('hidden')) { open(); return; }
+    askConfirm('이 기기의 월드가 사라져요', '다른 기기에서 하던 월드를 열면, 이 기기에 저장된 지금 월드는 지워져요.', function () {
+      askConfirm('정말 바꿀까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', open);
+    });
+  }
+  $('mtJoinCancel').addEventListener('click', function () { closeModal('mtJoinModal'); showStart(false); });
+  $('mtJoinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = $('mtJoinSubmit');
+    b.disabled = true;
+    Link.join(joinTarget.id, $('mtJoinPassword').value).then(function (result) {
+      b.disabled = false;
+      if (!result.ok) {
+        $('mtJoinError').textContent = result.gone ? '이 월드는 이제 없어요.' : result.error;
+        $('mtJoinError').classList.remove('hidden');
+        return;
+      }
+      closeModal('mtJoinModal');
+      Save.setName(result.state.name);
+      ranking.reset();
+      begin(result.state);
+      updateLinkButton();
+      toast('📱 다른 기기에서 하던 월드를 불러왔어요! 이제 연동된 기기들이 같은 월드를 함께 써요.', 4500);
+    });
+  });
+
+  // 📱 단추: 연동 시작 또는 관리(비밀번호 바꾸기·연동 끊기).
+  function updateLinkButton() { $('mtLinkButton').textContent = Link.get() ? '📱 연동됨' : '📱 다른 기기'; }
+  function linkDesc(devices) {
+    return '이 월드는 ' + (devices ? '기기 ' + devices + '대에 ' : '다른 기기와 ') + '연동되어 있어요. 30초마다 저장을 맞춰요. 다른 기기의 시작 화면에서 이름 "' + state.name + '"을 쓰면 이 월드가 나와요.';
+  }
+  function openLinkModal() {
+    if (!state) { notice('📱 게임을 시작한 다음 눌러 주세요. 다른 기기에서 하던 월드는 이름 칸에 같은 이름을 쓰면 아래에 나와요.'); return; }
+    if (modal) return;
+    var linked = !!Link.get();
+    $('mtLinkTitle').textContent = linked ? '📱 연동된 월드' : '📱 다른 기기에서 하기';
+    $('mtLinkDesc').textContent = linked ? linkDesc(0)
+      : '지금 월드를 서버에 올려서 다른 기기에서도 이어 할 수 있어요. 다른 기기의 시작 화면에서 이름 "' + state.name + '"을 쓰고 비밀번호를 넣으면 돼요. 연동된 기기들은 같은 월드를 함께 써요.';
+    $('mtLinkPasswordLabel').textContent = linked ? '새 비밀번호 (4자 이상)' : '비밀번호 (4자 이상)';
+    $('mtLinkSubmit').textContent = linked ? '비밀번호 바꾸기' : '연동 시작';
+    $('mtUnlinkButton').classList.toggle('hidden', !linked);
+    $('mtLinkPassword').value = $('mtLinkPassword2').value = '';
+    $('mtLinkError').classList.add('hidden');
+    openModal('mtLinkModal');
+    if (linked) {
+      Link.info().then(function (result) {
+        if (result.gone) { handleGone(result.gone); return; }
+        if (result.ok && modal === 'mtLinkModal') $('mtLinkDesc').textContent = linkDesc(result.devices);
+      });
+    }
+  }
+  $('mtLinkButton').addEventListener('click', openLinkModal);
+  $('mtLinkClose').addEventListener('click', function () { closeModal('mtLinkModal'); });
+  $('mtLinkForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var password = $('mtLinkPassword').value;
+    var error = function (text) { $('mtLinkError').textContent = text; $('mtLinkError').classList.remove('hidden'); };
+    if (password.length < 4) { error('비밀번호는 4자 이상이어야 해요.'); return; }
+    if (password !== $('mtLinkPassword2').value) { error('두 비밀번호가 달라요. 똑같이 써 주세요.'); return; }
+    var linked = !!Link.get();
+    var b = $('mtLinkSubmit');
+    b.disabled = true;
+    saveNow();
+    (linked ? Link.setPassword(password) : Link.create(state, password)).then(function (result) {
+      b.disabled = false;
+      if (result.gone) { handleGone(result.gone); return; }
+      if (!result.ok) { error(result.error); return; }
+      closeModal('mtLinkModal');
+      updateLinkButton();
+      toast(linked ? '🔑 비밀번호를 바꿨어요!' : '📱 연동했어요! 다른 기기의 시작 화면에서 이름 "' + state.name + '"을 쓰면 이 월드가 나와요.', 5000);
+    });
+  });
+  $('mtUnlinkButton').addEventListener('click', function () {
+    askConfirm('✂️ 연동을 끊을까요?', '이 기기만 이 월드를 계속하고, 연동된 다른 기기에서는 이 월드가 사라져서 더 할 수 없어요.', function () {
+      askConfirm('정말 끊을까요?', '되돌릴 수 없어요.', function () {
+        Link.unlink().then(function (result) {
+          if (result.gone) { handleGone(result.gone); return; }
+          if (!result.ok) { toast('✂️ 연동을 끊지 못했어요. ' + result.error, 4000); return; }
+          updateLinkButton();
+          saveNow();
+          toast('✂️ 연동을 끊었어요. 이제 이 기기에서만 하는 월드예요.', 4000);
+        });
+      });
+    });
+  });
 
   // ---------- 상단 막대 ----------
   var hudCache = {};
@@ -149,6 +406,7 @@
     var size = Rules.UPGRADES.range.values[state.levels.range];
     setText('mtWideText', state.wide && state.levels.range > 0 ? size[0] + '×' + size[1] : '1칸');
     setText('mtRecallText', String(state.recall));
+    setText('mtWarpText', String(state.warps.length));
     setText('mtInstantText', String(state.instant));
     var showAuto = Game.unlocked(state) && (state.autos.length > 0 || state.autoEarned > 0);
     $('mtAuto').classList.toggle('hidden', !showAuto);
@@ -214,7 +472,7 @@
       renderer.floatText('+' + fmt.money(result.total), state.car.x, state.car.y - 1, '#ffe066');
       toast('💰 광석 ' + result.count + '개를 ' + fmt.money(result.total) + '에 팔았어요!' + (result.debtPaid ? ' (빚 ' + fmt.money(result.debtPaid) + ' 갚음)' : ''));
       ranking.queueMoney(state);
-      saveNow();
+      saveNow(true);
       renderPanel();
     }));
   }
@@ -266,6 +524,9 @@
     shopRow(body, '🌀 귀환석 (가진 것 ' + state.recall + '개)', '땅속에서 R을 누르면 바로 지상으로 순간이동해요', fmt.money(Rules.RECALL_PRICE), function () {
       buyItem(Game.buyRecall(state));
     }, state.debt > 0 || state.money < Rules.RECALL_PRICE);
+    shopRow(body, '📍 지정 워프석 (가진 것 ' + state.warps.length + '/' + Rules.WARP_MAX + '개)', '원하는 곳에서 위치를 한 번 저장하면, T(휴대폰 📍)로 어디서든 몇 번이든 그 자리로 가요', fmt.money(Rules.WARP_PRICE), function () {
+      buyItem(Game.buyWarp(state), '📍 워프석을 샀어요! 원하는 곳에서 T(휴대폰 📍)를 눌러 위치를 저장해요.');
+    }, state.debt > 0 || state.money < Rules.WARP_PRICE || state.warps.length >= Rules.WARP_MAX);
     shopRow(body, '💸 즉시 팔기 (' + state.instant + '/' + Rules.INSTANT_MAX + '개)', '땅속에서 F(휴대폰 💸)를 누르면 가방 속 광석이 바로 돈이 돼요. 한 번 쓰면 없어져요', fmt.money(Rules.INSTANT_PRICE), function () {
       buyItem(Game.buyInstant(state));
     }, state.debt > 0 || state.money < Rules.INSTANT_PRICE || state.instant >= Rules.INSTANT_MAX);
@@ -289,9 +550,9 @@
     }
     renderGacha(body, open);
     body.append(button('🔄 처음부터 다시', 'mt-reset', function () {
-      askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.', function () {
+      askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.' + linkedWarning(), function () {
         askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
-          Save.clear(); state = null; closePanel(); showStart(false);
+          endLinkedWorld(function () { Save.clear(); state = null; closePanel(); showStart(false); updateLinkButton(); });
         });
       });
     }));
@@ -330,7 +591,7 @@
     if (!result.ok) { failBuy(result.reason); return; }
     sound.buy();
     if (message) toast(message);
-    saveNow();
+    saveNow(true);
     renderPanel();
   }
 
@@ -355,6 +616,7 @@
       money: '💸 돈이 모자라요.',
       locked: '🔒 보물을 찾으면 열려요.',
       full: '이미 가득 가지고 있어요.',
+      core: '⭐ 지구의 중심에서는 워프석을 쓸 수 없어요.',
       heat: '🔥 열보호 5단계가 있어야 살 수 있어요.',
       have: '🎫 이미 입장권을 가지고 있어요.',
       ended: '🎰 일반 뽑기는 보물을 찾기 전까지만 할 수 있어요.',
@@ -369,7 +631,7 @@
     var up = Rules.UPGRADES[key];
     toast(up.icon + ' ' + up.name + (key === 'autoHeat' ? '를 달았어요!' : ' ' + (result.level + 1) + '단계가 됐어요!'));
     if (key === 'range' && result.level === 1) toast('💥 넓게 파기! Q(휴대폰은 💥)로 1칸 파기와 바꿀 수 있어요.', 3500);
-    saveNow();
+    saveNow(true);
     renderPanel();
   }
 
@@ -382,6 +644,57 @@
       if (Game.useRecall(state).ok) { sound.recall(); renderer.cam = null; toast('🌀 지상으로 돌아왔어요!'); saveNow(); }
     });
   }
+  // 📍 지정 워프석 창: 저장한 워프석은 [가기], 아직 안 정한 워프석은 [여기 저장], 모두 [버리기].
+  function warpPlace(p) {
+    var depth = p.y > 0 ? Math.floor(p.y) + 1 : 0;
+    var side = p.x < Rules.WIDTH / 3 ? '왼쪽' : p.x > Rules.WIDTH * 2 / 3 ? '오른쪽' : '가운데';
+    return (depth ? depth + 'm' : '지상') + ' · ' + side;
+  }
+  function openWarp() {
+    if (!state || (modal && modal !== 'mtWarpModal')) return;
+    if (!state.warps.length) { toast('📍 워프석이 없어요. 상점에서 살 수 있어요.'); return; }
+    if (state.inCore) { toast('⭐ 지구의 중심에서는 워프석을 쓸 수 없어요.'); return; }
+    renderWarp();
+    openModal('mtWarpModal');
+  }
+  function renderWarp() {
+    $('mtWarpTitle').textContent = '📍 지정 워프석 (' + state.warps.length + '개)';
+    var list = $('mtWarpList');
+    list.textContent = '';
+    state.warps.forEach(function (p, i) {
+      var li = el('li');
+      li.append(el('span', null, (i + 1) + '번 · ' + (p ? '📍 ' + warpPlace(p) : '아직 저장 안 함')));
+      if (p) {
+        li.append(button('가기', 'mt-buy', function () {
+          if (!Game.useWarp(state, i).ok) return;
+          closeModal('mtWarpModal');
+          sound.recall();
+          renderer.cam = null;
+          toast('📍 ' + warpPlace(p) + ' 자리로 순간이동했어요!');
+          saveNow();
+        }));
+      } else {
+        li.append(button('여기 저장', 'mt-buy', function () {
+          askConfirm('📍 여기를 저장할까요?', (i + 1) + '번 워프석에 지금 자리(' + warpPlace(state.car) + ')를 저장해요. 한 번 저장하면 바꿀 수 없어요.', function () {
+            Game.saveWarp(state, i);
+            saveNow(true);
+            toast('📍 ' + (i + 1) + '번 워프석에 ' + warpPlace(state.car) + ' 자리를 저장했어요!');
+          });
+        }));
+      }
+      li.append(button('버리기', 'mt-buy mt-drop', function () {
+        askConfirm('🗑 ' + (i + 1) + '번 워프석을 버릴까요?', (p ? '저장한 자리(' + warpPlace(p) + ')도 함께 사라져요. ' : '') + '돈은 돌려받지 못해요.', function () {
+          Game.dropWarp(state, i);
+          saveNow(true);
+          if (state.warps.length) openWarp();
+          toast('🗑 워프석을 버렸어요.');
+        });
+      }));
+      list.append(li);
+    });
+  }
+  $('mtWarpClose').addEventListener('click', function () { closeModal('mtWarpModal'); });
+
   function toggleWide() {
     if (!state || modal) return;
     if (state.levels.range === 0) { toast('💥 상점에서 "파는 범위"를 사면 넓게 팔 수 있어요.'); return; }
@@ -585,6 +898,7 @@
     var stats = { time: state.time, earned: state.earned, treasureTime: state.treasureTime, autoBought: state.autoBought };
     var count = Save.addDestroyed();
     Save.clear();
+    if (Link.get()) { Link.end('destroyed'); Link.clear(); updateLinkButton(); } // 연동된 다른 기기에서도 끝난다
     ranking.queueMoney(state);
     var rankPromise = ranking.submitDestroy(state);
     renderer.startDestroy(performance.now());
@@ -632,9 +946,9 @@
   renderSoundButton();
 
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { saveNow(); pause(); sound.pause(); }
+    if (document.hidden) { saveNow(); pause(); sound.pause(); if (Link.dirty()) doSync(false, true); }
   });
-  window.addEventListener('pagehide', saveNow);
+  window.addEventListener('pagehide', function () { saveNow(); if (Link.dirty()) doSync(false, true); });
 
   // ---------- 키보드 ----------
   var KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
@@ -646,6 +960,7 @@
       if (ranking.isOpen()) { ranking.close(); lastTime = performance.now(); return; }
       if (modal === 'mtPauseModal') { closeModal('mtPauseModal'); return; }
       if (modal === 'mtConfirmModal') { $('mtConfirmNo').click(); return; }
+      if (modal === 'mtWarpModal') { closeModal('mtWarpModal'); return; }
       if (modal === 'mtEndingModal') { $('mtEndingContinue').click(); return; }
       if (modal === 'mtHiddenModal') { $('mtHiddenContinue').click(); return; }
       if (modal === 'mtGuideModal') { closeGuide(); return; }
@@ -658,6 +973,7 @@
     if (key) { input[key] = true; e.preventDefault(); return; }
     if (e.code === 'KeyQ') toggleWide();
     if (e.code === 'KeyR') askRecall();
+    if (e.code === 'KeyT') openWarp();
     if (e.code === 'KeyF') instantSell();
     if (e.code === 'Space') e.preventDefault();
   });
@@ -679,10 +995,10 @@
     b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-action]'), function (b) {
-    b.addEventListener('click', function () { sound.unlock(); var action = b.getAttribute('data-action'); if (action === 'wide') toggleWide(); else if (action === 'instant') instantSell(); else askRecall(); });
+    b.addEventListener('click', function () { sound.unlock(); var action = b.getAttribute('data-action'); if (action === 'wide') toggleWide(); else if (action === 'instant') instantSell(); else if (action === 'warp') openWarp(); else askRecall(); });
   });
   if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
-    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기(날면서 ◀ ▶로 옆도 파요) · 💥 넓게/1칸 · 🌀 귀환석 · 💸 즉시 팔기';
+    $('mtHelp').textContent = '◀ ▶ 이동·옆으로 파기 · ▼ 아래로 파기 · ▲ 날기(날면서 ◀ ▶로 옆도 파요) · 💥 넓게/1칸 · 🌀 귀환석 · 📍 워프석 · 💸 즉시 팔기';
   }
 
   // ---------- 매 화면 ----------
@@ -707,6 +1023,8 @@
       }
       saveTimer += dt;
       if (saveTimer >= 5) saveNow();
+      syncTimer += dt;
+      if (syncTimer >= SYNC_EVERY && Link.dirty()) doSync();
       if (panelKey) renderPanelThrottled(dt);
     }
     if (state) {
@@ -721,7 +1039,7 @@
   // 가게 창 안 숫자가 실제로 바뀌었을 때만 다시 그린다(누르는 중에 단추가 바뀌어 클릭이 사라지지 않게).
   var panelSignature = '';
   function renderPanelThrottled() {
-    var sig = [panelKey, state.money, state.debt, Math.ceil(state.fuel), Math.ceil(state.hp), Game.bagCount(state), state.recall, state.instant, state.ticket, state.autos.length, JSON.stringify(state.levels)].join('|');
+    var sig = [panelKey, state.money, state.debt, Math.ceil(state.fuel), Math.ceil(state.hp), Game.bagCount(state), state.recall, state.warps.length, state.instant, state.ticket, state.autos.length, JSON.stringify(state.levels)].join('|');
     if (sig === panelSignature) return;
     panelSignature = sig;
     renderPanel();
@@ -737,6 +1055,7 @@
   // 확인용 통로(브라우저 콘솔·자동 시험에서 지금 상태를 본다). 혼자 하는 게임이라 저장도 원래 바꿀 수 있다.
   MT.debug = { get state() { return state; } };
 
+  updateLinkButton();
   showStart(false);
   if (!Save.guideSeen()) openGuide();
   requestAnimationFrame(frame);

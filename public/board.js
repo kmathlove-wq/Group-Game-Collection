@@ -21,6 +21,7 @@
   let posts = null; // 아직 못 불러왔으면 null
   let openReply = null; // 답글 입력칸이 열린 글 번호
   let editing = null; // 고치는 중인 글(원글·답글) 번호
+  const shownReplies = new Set(); // 답글을 펼친 글 번호(처음엔 모두 접힘, 새로고침하면 다시 접힘)
 
   // 처음 오면 무작위 열쇠를 만들어 둔다. 저장이 안 되는 브라우저면 이번 화면에서만 쓴다.
   const ownerKey = store.get('localStorage', 'board:ownerKey') || (() => {
@@ -127,8 +128,11 @@
   }
 
   async function pin(id, pinned) {
-    try { render((await api(`/api/board/posts/${id}/pin`, { method: 'POST', body: { pinned } })).posts); } catch (error) { showMessage(error.message); }
+    try { render((await api(`/api/board/items/${id}/pin`, { method: 'POST', body: { pinned } })).posts); } catch (error) { showMessage(error.message); }
   }
+
+  // 관리자 모드일 때만 보이는 고정/고정 풀기 단추(원글·답글 같이 씀).
+  const pinButton = (item) => (adminToken ? [button(item.pinned ? '📌 고정 풀기' : '📌 맨 위에 고정', 'board-link', () => pin(item.id, !item.pinned))] : []);
 
   function replyForm(post) {
     const replyBox = el('form', 'board-reply-form');
@@ -151,6 +155,7 @@
         const data = await api(`/api/board/posts/${post.id}/replies`, { method: 'POST', body: { name: replyName.value, text: replyText.value } });
         rememberName(replyName.value);
         openReply = null;
+        shownReplies.add(post.id); // 방금 쓴 답글이 보이게 펼친다
         render(data.posts);
       } catch (error) { showMessage(error.message); }
     });
@@ -167,15 +172,21 @@
       const card = el('article', `board-post${post.pinned ? ' pinned' : ''}${post.admin ? ' by-admin' : ''}`);
       card.append(header(post, { pinned: post.pinned }), body(post));
       const actions = el('div', 'board-actions');
-      actions.append(button(`💬 답글${post.replies.length ? ` ${post.replies.length}` : ''}`, 'board-link', () => { openReply = openReply === post.id ? null : post.id; render(posts); }));
-      if (adminToken) actions.append(button(post.pinned ? '📌 고정 풀기' : '📌 맨 위에 고정', 'board-link', () => pin(post.id, !post.pinned)));
-      actions.append(...ownButtons(post));
-      card.append(actions);
+      const shown = shownReplies.has(post.id);
+      actions.append(button('💬 답글 쓰기', 'board-link', () => { openReply = openReply === post.id ? null : post.id; render(posts); }));
       if (post.replies.length) {
+        actions.append(button(shown ? '▲ 답글 접기' : `▼ 답글 ${post.replies.length}개 보기`, 'board-link', () => {
+          if (shown) shownReplies.delete(post.id); else shownReplies.add(post.id);
+          render(posts);
+        }));
+      }
+      actions.append(...pinButton(post), ...ownButtons(post));
+      card.append(actions);
+      if (shown && post.replies.length) {
         const replies = el('div', 'board-replies');
-        for (const reply of post.replies) {
-          const row = el('div', `board-reply${reply.admin ? ' by-admin' : ''}`);
-          row.append(header(reply), body(reply), ...ownButtons(reply));
+        for (const reply of post.replies) { // 서버가 고정 답글을 맨 위로 보내 준다
+          const row = el('div', `board-reply${reply.pinned ? ' pinned' : ''}${reply.admin ? ' by-admin' : ''}`);
+          row.append(header(reply, { pinned: reply.pinned }), body(reply), ...pinButton(reply), ...ownButtons(reply));
           replies.append(row);
         }
         card.append(replies);

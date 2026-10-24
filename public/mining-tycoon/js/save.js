@@ -46,7 +46,7 @@
       levels: s.levels,
       bag: s.bag,
       fuel: s.fuel, hp: s.hp, money: s.money, debt: s.debt, earned: s.earned,
-      recall: s.recall, instant: s.instant, ticket: s.ticket, wide: s.wide, time: s.time,
+      recall: s.recall, warps: s.warps.map(function (p) { return p ? { x: p.x, y: p.y } : null; }), instant: s.instant, ticket: s.ticket, wide: s.wide, time: s.time,
       treasureTime: s.treasureTime, destroyedTime: s.destroyedTime, maxDepth: s.maxDepth,
       hidden1Time: s.hidden1Time, hidden2Time: s.hidden2Time,
       inCore: s.inCore, autoEarned: s.autoEarned, autoBought: s.autoBought,
@@ -107,6 +107,10 @@
     s.debt = num(d.debt, 0, Number.MAX_SAFE_INTEGER);
     s.earned = num(d.earned, 0, Number.MAX_SAFE_INTEGER);
     s.recall = int(d.recall, 0, 1e6);
+    if (d.warps != null && !Array.isArray(d.warps)) throw new Error('워프석이 이상함');
+    s.warps = (d.warps || []).slice(0, Rules.WARP_MAX).map(function (p) {
+      return p == null ? null : { x: num(p.x, 0, s.world.w), y: num(p.y, -10, s.world.h) };
+    });
     s.instant = d.instant == null ? 0 : int(d.instant, 0, Rules.INSTANT_MAX);
     s.ticket = d.ticket == null ? 0 : int(d.ticket, 0, 1);
     s.time = num(d.time, 0, 1e9);

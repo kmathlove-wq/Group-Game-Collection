@@ -39,6 +39,36 @@ test('글은 30일 뒤 사라지고 고정 글은 남으며, 고정을 풀면 �
   assert.equal(store.list().length, 0);
 });
 
+test('고정 답글은 답글 맨 위에 오고 자기 30일이 지나도 남지만, 원글이 사라지면 함께 사라진다', () => {
+  let now = 1_000_000;
+  const store = createBoardStore(tempFile(), { now: () => now });
+  const post = store.addPost('하나', '원글');
+  const a = store.addReply(post.id, '둘', '첫 답글').reply; now += 10;
+  const b = store.addReply(post.id, '셋', '둘째 답글').reply; now += 10;
+  const c = store.addReply(post.id, '넷', '셋째 답글').reply;
+  assert.deepEqual(store.list()[0].replies.map((r) => r.id), [a.id, b.id, c.id], '답글은 오래된 것부터');
+  assert.equal(store.setPinned(c.id, true), true);
+  const view = store.list()[0].replies;
+  assert.deepEqual(view.map((r) => r.id), [c.id, a.id, b.id], '고정 답글이 맨 위');
+  assert.equal(view[0].pinned, true);
+  assert.equal(view[0].expiresAt, null);
+  store.setPinned(post.id, true); // 원글도 고정해 두면
+  now += KEEP_MS + 1;
+  assert.deepEqual(store.list()[0].replies.map((r) => r.id), [c.id], '고정 답글만 30일이 지나도 남는다');
+  store.setPinned(c.id, false);
+  now += 29 * DAY;
+  assert.equal(store.list()[0].replies.length, 1, '고정을 푼 뒤 30일이 안 지났으면 남는다');
+  now += 2 * DAY;
+  assert.equal(store.list()[0].replies.length, 0);
+
+  const other = store.addPost('다섯', '고정 안 한 원글');
+  const kept = store.addReply(other.id, '여섯', '고정 답글').reply;
+  store.setPinned(kept.id, true);
+  now += KEEP_MS + 1;
+  assert.ok(!store.list().some((item) => item.id === other.id), '원글이 사라지면 고정 답글도 함께 사라진다');
+  assert.equal(store.find(kept.id), null);
+});
+
 test('고정 글이 맨 위, 나머지는 최신순이고 다시 켜도(파일에서) 지운 글은 되살아나지 않는다', () => {
   let now = 1_000;
   const file = tempFile();
@@ -101,6 +131,8 @@ test('관리자는 비밀번호로 열고 삭제·고정·관리자 글쓰기를
   const reply = await call(`/api/board/posts/${first.id}/replies`, { method: 'POST', body: { text: '관리자 답글' }, token });
   const replyId = reply.body.posts[0].replies[0].id;
   assert.equal(reply.body.posts[0].replies[0].admin, true);
+  assert.equal((await call(`/api/board/items/${replyId}/pin`, { method: 'POST', body: { pinned: true } })).status, 403, '답글 고정도 관리자만');
+  assert.equal((await call(`/api/board/items/${replyId}/pin`, { method: 'POST', body: { pinned: true }, token })).body.posts[0].replies[0].pinned, true);
   assert.equal((await call(`/api/board/items/${replyId}`, { method: 'DELETE', token })).body.posts[0].replies.length, 0);
   const afterDelete = await call(`/api/board/items/${first.id}`, { method: 'DELETE', token });
   assert.deepEqual(afterDelete.body.posts.map((post) => post.text), ['두 번째 글']);

@@ -137,6 +137,8 @@
     FUEL_PRICE: 2,
     REPAIR_PRICE: 3,
     RECALL_PRICE: 2000,
+    WARP_PRICE: 15000, // 📍 지정 워프석(위치는 한 번만 저장, 그 뒤로 몇 번이든 이동)
+    WARP_MAX: 10,
     RESCUE_BASE: 100,
     RESCUE_PER_M: 3,
     TREASURE_REWARD: 50000,
