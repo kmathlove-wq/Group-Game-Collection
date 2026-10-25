@@ -1,0 +1,68 @@
+/* 라이어 게임 전용 스타일. 화면 틀(헤더·상태 막대·3열·참가자·채팅·결과 창)은 word-chain.css의 wc- 클래스를 빌려 쓰고 색만 바꾼다. */
+:root { --wc: #8b5cf6; --wc2: #f97316; --music: #8b5cf6; --music2: #f97316; }
+
+.liar-page {
+  background: radial-gradient(circle at 15% 20%, #ede9fe 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #ffedd5 0 22%, transparent 23%),
+    linear-gradient(135deg, #f7f3ff, #fff7ed);
+}
+.liar-page .wc-logo { font-size: 50px; box-shadow: 0 14px 32px #8b5cf644; }
+.liar-page .wc-dict-choice input:checked + span { background: #f5f3ff; }
+/* 숨긴 라디오 단추가 창 밖으로 밀려 가로 스크롤이 생기지 않게 칸 안에 붙잡아 둔다. */
+.liar-page .wc-dict-choice label { position: relative; }
+.liar-page .field-row { grid-template-columns: repeat(3, 1fr); }
+.liar-play-page { background: linear-gradient(135deg, #f7f3ff, #fff7ed); }
+.liar-play-page .wc-brand span { font-size: 18px; }
+.liar-play-page #copyCode { border-color: #d8ccfb; background: #f5f3ff; }
+.liar-play-page .wc-dict-badge { background: #f5f3ff; color: #6d28d9; }
+
+/* 내 제시어 카드 */
+.liar-secret {
+  margin: 12px 0; padding: 18px; border-radius: 20px; text-align: center;
+  background: linear-gradient(135deg, #f5f3ff, #fff7ed); border: 2px solid #ddd6fe;
+}
+.liar-secret small { display: block; color: var(--muted); font-weight: 800; }
+.liar-secret strong { display: block; margin: 6px 0; font-size: clamp(28px, 5vw, 40px); color: #6d28d9; word-break: keep-all; }
+.liar-secret p { margin: 0; color: #555b70; font-size: 14px; line-height: 1.5; }
+.liar-secret.is-liar { background: linear-gradient(135deg, #fff1f2, #ffedd5); border-color: #fda4af; }
+.liar-secret.is-liar strong { color: #e11d48; }
+
+/* 한 줄 설명 목록 */
+.liar-hints { list-style: none; margin: 0 0 12px; padding: 4px; display: grid; gap: 8px; align-content: start; overflow-y: auto; max-height: 40vh; }
+.liar-hint {
+  padding: 10px 14px; border-radius: 14px; border-left: 6px solid var(--player);
+  background: color-mix(in srgb, var(--player) 10%, #fff); animation: wc-pop .25s ease-out;
+}
+.liar-hint small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+.liar-hint b { font-size: 18px; word-break: keep-all; }
+.liar-hint.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--player) 40%, #fff); }
+.liar-hint.skipped b { color: var(--muted); font-weight: 600; font-size: 15px; }
+
+.liar-guess-form { border-color: #f43f5e; box-shadow: 0 0 0 4px #f43f5e22; }
+.liar-vote-help { margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: #fef3c7; color: #92400e; font-weight: 700; }
+
+/* 투표 단추와 내가 찍은 사람 */
+.wc-player .liar-vote-button {
+  grid-column: 3; grid-row: 1 / span 2; padding: 6px 12px; border: 0; border-radius: 10px;
+  background: var(--wc); color: #fff; font-weight: 800; cursor: pointer;
+}
+.wc-player .liar-vote-button:hover { filter: brightness(1.1); }
+.wc-player.liar-picked { border-color: #f43f5e; background: #fff1f2; }
+.wc-player.liar-picked .liar-vote-button { background: #f43f5e; }
+
+/* 결과 창: 라이어·제시어 공개, 받은 표 */
+.liar-reveal { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 0 0 14px; }
+.liar-reveal div { flex: 1 1 110px; padding: 10px; border-radius: 14px; background: #f5f3ff; }
+.liar-reveal small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+.liar-reveal b { font-size: 20px; word-break: keep-all; }
+.liar-section-title { margin: 8px 0; font-size: 15px; text-align: left; }
+.liar-tally small { color: var(--muted); font-weight: 600; font-size: 12px; }
+.wc-result-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+@media (max-width: 760px) {
+  .liar-page .field-row { grid-template-columns: 1fr; }
+  .liar-hints { max-height: 34vh; }
+  /* 투표 중엔 찍기 단추 자리가 필요해서 2칸 대신 한 줄에 한 명씩(이름이 '토…'처럼 잘리지 않게) */
+  .liar-play-page .wc-player-list:has(.liar-vote-button) { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .liar-hint { animation: none; } }

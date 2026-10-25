@@ -10,6 +10,7 @@ const { setupTriangleGame } = require('./src/triangle');
 const { setupLandGame } = require('./src/land');
 const { setupWordChainGame } = require('./src/word-chain');
 const { setupDuelGames } = require('./src/duel');
+const { setupLiarGame } = require('./src/liar');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createPatrol } = require('./src/word-chain/patrol');
@@ -61,6 +62,7 @@ const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
 const triangleGame = setupTriangleGame({ app, io, rootDir: __dirname });
 const landGame = setupLandGame({ app, io, rootDir: __dirname });
 const duelGames = setupDuelGames({ app, io });
+const liarGame = setupLiarGame({ app, io, rootDir: __dirname });
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
 const gistSync = createGistSync({ token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID });
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
@@ -134,7 +136,7 @@ setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__
 const miningLinkStore = createMiningLinkStore(process.env.MINING_LINK_PATH || path.join(__dirname, 'data', 'mining-tycoon-worlds.json'), { remote: gistSync });
 setupMiningTycoon({ app, store: miningLinkStore });
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size,
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
 
 function cleanText(value, maxLength) {
@@ -993,5 +995,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames
+  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame
 };

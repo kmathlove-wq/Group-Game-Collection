@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#8b5cf6">
+  <title>그룹 게임 컬렉션-라이어 게임</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/music-lobby.css">
+  <link rel="stylesheet" href="/word-chain.css">
+  <link rel="stylesheet" href="/liar.css">
+</head>
+<body class="songcatch-lobby-page wc-page liar-page">
+  <header class="music-header songcatch-lobby-header"><a href="/" class="mini-brand">← 그룹 게임 컬렉션</a></header>
+
+  <main class="songcatch-lobby-shell">
+    <section class="songcatch-lobby-card">
+      <div class="wc-logo" aria-hidden="true">🤥</div>
+      <p class="eyebrow">그룹 게임 컬렉션 · 3~10명</p>
+      <h1>라이어 게임</h1>
+      <p class="songcatch-lobby-copy">모두 같은 제시어를 받지만 라이어 한 명만 몰라요. 한 줄 설명으로 라이어를 찾아내세요!</p>
+
+      <label class="songcatch-nickname-label" for="nickname">게임에서 사용할 닉네임</label>
+      <div class="songcatch-nickname-row">
+        <input id="nickname" maxlength="30" autocomplete="nickname" placeholder="자유롭게 닉네임 입력">
+        <span id="nicknameCount">0/30</span>
+      </div>
+      <p class="songcatch-field-help">이모지와 특수문자도 자유롭게 사용할 수 있어요.</p>
+
+      <div class="songcatch-main-actions">
+        <button id="openCreate" class="primary">＋ 방 만들기</button>
+        <button id="openRooms" class="secondary">🔎 공개 방 찾기</button>
+      </div>
+      <button id="openCode" class="songcatch-code-button">⌨ 방 코드로 입장</button>
+      <p id="connectionStatus" class="songcatch-connection" role="status">● 서버에 연결하는 중…</p>
+    </section>
+
+    <aside class="songcatch-lobby-features" aria-label="게임 규칙">
+      <div><span>✍️</span><strong>차례대로 한 줄 설명</strong><small>제시어를 너무 쉽게 말하면 라이어가 눈치채요</small></div>
+      <div><span>🗳️</span><strong>토론하고 투표</strong><small>가장 많이 찍힌 사람이 라이어로 지목돼요</small></div>
+      <div><span>🎯</span><strong>라이어의 역전 기회</strong><small>잡힌 라이어가 제시어를 맞히면 라이어 승리!</small></div>
+    </aside>
+  </main>
+
+  <dialog id="createDialog" class="music-lobby-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">새로운 게임</p><h2>방 만들기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="title">방 제목</label><input id="title" maxlength="30" value="라이어를 찾아라!"></div>
+    <div class="field"><span class="wc-field-label">모드</span>
+      <div class="wc-dict-choice" role="radiogroup" aria-label="모드 선택">
+        <label><input type="radio" name="mode" value="normal" checked><span><b>일반 모드</b><small>라이어는 주제만 알고, 자기가 라이어인 걸 알아요</small></span></label>
+        <label><input type="radio" name="mode" value="fool"><span><b>바보 모드</b><small>라이어도 비슷한 다른 제시어를 받아서 자기가 라이어인 줄 몰라요</small></span></label>
+      </div>
+    </div>
+    <div class="field"><label for="topic">주제</label><select id="topic"><option value="random">🎲 무작위</option></select></div>
+    <div class="field-row">
+      <div class="field"><label for="maxPlayers">최대 인원</label>
+        <select id="maxPlayers"><option value="3">3명</option><option value="4">4명</option><option value="5">5명</option><option value="6">6명</option><option value="8" selected>8명</option><option value="10">10명</option></select></div>
+      <div class="field"><label for="hintTime">설명 시간(1명)</label>
+        <select id="hintTime"><option value="20">20초</option><option value="30" selected>30초</option><option value="45">45초</option><option value="60">60초</option><option value="0">제한 없음</option></select></div>
+      <div class="field"><label for="talkTime">토론 시간</label>
+        <select id="talkTime"><option value="60">1분</option><option value="90">1분 30초</option><option value="120" selected>2분</option><option value="180">3분</option></select></div>
+    </div>
+    <div class="songcatch-toggle-list">
+      <label><input id="isPublic" type="checkbox" checked><span>공개 방</span></label>
+    </div>
+    <button id="create" class="primary wide">방 만들고 입장</button>
+  </dialog>
+
+  <dialog id="roomsDialog" class="music-lobby-modal music-rooms-modal">
+    <div class="music-modal-heading"><div><p class="eyebrow">함께할 방</p><h2>공개 방 찾기</h2></div><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="music-room-filters">
+      <input id="roomSearch" placeholder="방 제목 검색" aria-label="방 제목 검색">
+      <select id="roomSort" aria-label="방 정렬"><option value="new">최신순</option><option value="players">인원 많은 순</option></select>
+      <label class="music-check-inline"><input id="joinableOnly" type="checkbox"> 입장 가능한 방만</label>
+      <button id="refresh" class="secondary music-compact">↻ 새로고침</button>
+    </div>
+    <div id="rooms" class="music-public-rooms" aria-live="polite"></div>
+  </dialog>
+
+  <dialog id="codeDialog" class="music-lobby-modal music-code-modal">
+    <div class="music-modal-heading"><h2>방 코드로 입장</h2><button class="music-modal-close" type="button" aria-label="닫기">×</button></div>
+    <div class="field"><label for="code">6자리 방 코드</label><input id="code" maxlength="6" autocomplete="off" placeholder="A7K3P2"></div>
+    <button id="join" class="primary wide">입장하기</button>
+  </dialog>
+
+  <div id="notice" class="notice songcatch-lobby-notice hidden" role="alert"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/liar-lobby.js"></script>
+</body>
+</html>
