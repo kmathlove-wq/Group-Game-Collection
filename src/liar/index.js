@@ -20,6 +20,12 @@ const CHAT_LIMIT = 100;
 function text(value, maxLength) {
   return Array.from(String(value ?? '').replace(/\p{Cc}/gu, '').trim()).slice(0, maxLength).join('');
 }
+// 마지막 글자에 받침이 있는지(한글이 아니면 없다고 본다). 받침에 따라 '이에요/예요', '을/를'을 고른다.
+function hasBatchim(word) {
+  const code = String(word).charCodeAt(String(word).length - 1) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0;
+}
+const was = (word) => `'${word}'${hasBatchim(word) ? '이었어요' : '였어요'}`;
 const topicCode = (value) => (value === 'random' || Object.hasOwn(TOPICS, value) ? value : 'random');
 const pick = (list) => list[crypto.randomInt(list.length)];
 
@@ -181,7 +187,7 @@ function setupLiarGame({ app, io, rootDir, secondMs = 1000 }) {
     Object.assign(game, { phase: 'result', endsAt: null, phaseSeconds: null });
     room.state = 'finished';
     const title = winner === 'liar' ? '🤥 라이어 승리!' : winner === 'citizens' ? '🙌 시민 승리!' : '게임이 끝났어요.';
-    addChat(room, { type: 'system', text: `${title} ${reason} 라이어는 ${game.liarNickname}님, 제시어는 '${game.word}'였어요.` });
+    addChat(room, { type: 'system', text: `${title} ${reason} 라이어는 ${game.liarNickname}님, 제시어는 ${was(game.word)}.` });
     emitState(room); // 바뀐 점수를 먼저 보내야 결과 창의 누적 점수가 맞게 나온다
     io.to(channel(room)).emit('liar:game:finished', game.result);
   }
@@ -200,7 +206,7 @@ function setupLiarGame({ app, io, rootDir, secondMs = 1000 }) {
       hints: [], votes: new Map(), accusedId: null, guess: null, result: null, phase: 'hint', endsAt: null, phaseSeconds: null };
     room.state = 'playing';
     for (const player of room.players.values()) sendSecret(room, player);
-    addChat(room, { type: 'system', text: `게임 시작! 주제는 '${topic}'이에요. 차례대로 제시어를 한 줄로 설명해 주세요.${room.mode === 'fool' ? ' (바보 모드: 라이어도 제시어를 받아요!)' : ''}` });
+    addChat(room, { type: 'system', text: `게임 시작! 주제는 '${topic}'${hasBatchim(topic) ? '이에요' : '예요'}. 차례대로 제시어를 한 줄로 설명해 주세요.${room.mode === 'fool' ? ' (바보 모드: 라이어도 제시어를 받아요!)' : ''}` });
     nextHint(room);
     emitState(room);
   }
@@ -357,8 +363,8 @@ function setupLiarGame({ app, io, rootDir, secondMs = 1000 }) {
       if (!value) return ack({ ok: false, message: '제시어를 입력해 주세요.' });
       game.guess = value;
       ack({ ok: true });
-      if (isCorrectGuess(value, game.word)) finishGame(room, 'liar', `라이어가 제시어 '${value}'를 맞혀 역전했어요!`);
-      else finishGame(room, 'citizens', `라이어의 답 '${value}'는 틀렸어요.`);
+      if (isCorrectGuess(value, game.word)) finishGame(room, 'liar', `라이어가 제시어 '${value}'${hasBatchim(value) ? '을' : '를'} 맞혀 역전했어요!`);
+      else finishGame(room, 'citizens', `라이어의 답 '${value}'${hasBatchim(value) ? '은' : '는'} 틀렸어요.`);
     });
 
     socket.on('liar:chat:send', (raw, ack = () => {}) => {

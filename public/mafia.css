@@ -1,0 +1,87 @@
+/* 마피아 게임 전용 스타일. 화면 틀(헤더·상태 막대·3열·참가자·채팅·결과 창)은 word-chain.css의 wc- 클래스를 빌려 쓰고 색만 바꾼다.
+   밤(body.mafia-night)에는 화면 전체가 어두워진다. */
+:root { --wc: #4f46e5; --wc2: #e11d48; --music: #4f46e5; --music2: #e11d48; }
+
+.mafia-page {
+  background: radial-gradient(circle at 15% 20%, #e0e7ff 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #ffe4e6 0 22%, transparent 23%),
+    linear-gradient(135deg, #eef2ff, #fff1f2);
+}
+.mafia-page .wc-logo { font-size: 50px; background: linear-gradient(135deg, #1e1b4b, #4f46e5); box-shadow: 0 14px 32px #4f46e544; }
+.mafia-page .field-row { grid-template-columns: repeat(3, 1fr); }
+.mafia-create-help { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.mafia-play-page { background: linear-gradient(135deg, #eef2ff, #fff1f2); transition: background .6s; }
+.mafia-play-page .wc-brand span { font-size: 18px; background: linear-gradient(135deg, #1e1b4b, #4f46e5); }
+.mafia-play-page #copyCode { border-color: #c7d2fe; background: #eef2ff; }
+.mafia-play-page .wc-dict-badge { background: #eef2ff; color: #3730a3; }
+
+/* 내 직업 카드 */
+.mafia-role {
+  display: flex; gap: 16px; align-items: center; margin: 12px 0; padding: 16px 18px; border-radius: 20px;
+  background: #f5f7ff; border: 2px solid #c7d2fe;
+}
+.mafia-role > span { font-size: 52px; line-height: 1; }
+.mafia-role small { display: block; color: var(--muted); font-weight: 800; }
+.mafia-role strong { display: block; font-size: 30px; }
+.mafia-role p { margin: 4px 0 0; color: #555b70; font-size: 14px; line-height: 1.5; }
+.mafia-role[data-role="mafia"] { background: #fff1f2; border-color: #fda4af; }
+.mafia-role[data-role="mafia"] strong { color: #e11d48; }
+.mafia-role[data-role="doctor"] strong { color: #059669; }
+.mafia-role[data-role="police"] strong { color: #2563eb; }
+
+.mafia-action-help { margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: #fef3c7; color: #92400e; font-weight: 700; line-height: 1.5; }
+.mafia-buttons { display: flex; gap: 8px; justify-content: center; }
+.mafia-buttons button:not(.hidden) { margin-bottom: 10px; }
+
+/* 마을 소식(최신이 위) */
+.mafia-news-title { margin: 6px 0 8px; font-size: 15px; text-align: left; }
+.mafia-news { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 34vh; overflow-y: auto; }
+.mafia-news li { padding: 9px 12px; border-radius: 12px; background: #f6f6fa; font-size: 14px; line-height: 1.45; }
+.mafia-news li:first-child { font-weight: 800; animation: wc-pop .25s ease-out; }
+.mafia-news-dead { background: #fff1f2 !important; color: #9f1239; }
+.mafia-news-save { background: #ecfdf5 !important; color: #047857; }
+.mafia-news-night { background: #e0e7ff !important; color: #3730a3; }
+.mafia-news-end { background: #fef3c7 !important; color: #92400e; font-size: 16px !important; }
+
+/* 참가자 줄의 할 일 단추 */
+.wc-player .mafia-act-button {
+  grid-column: 3; grid-row: 1 / span 2; padding: 6px 10px; border: 0; border-radius: 10px;
+  background: var(--wc); color: #fff; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.wc-player .mafia-act-button:hover { filter: brightness(1.1); }
+.wc-player.mafia-picked { border-color: #e11d48; background: #fff1f2; }
+.wc-player.mafia-picked .mafia-act-button { background: #e11d48; }
+.wc-player.out i { background: #cbd5e1; font-size: 12px; }
+
+/* 채팅 채널 */
+.wc-chat-panel .chat p.mafia-chat-mafia { background: #fff1f2; color: #9f1239; }
+.wc-chat-panel .chat p.mafia-chat-dead { background: #f1f5f9; color: #475569; font-style: italic; }
+.wc-chat-panel .chat p.mafia-pick { font-weight: 800; }
+.wc-chat-panel h2 span { font-size: 13px; }
+
+/* ── 밤 ── */
+.mafia-play-page.mafia-night { background: linear-gradient(160deg, #0f0c29, #1e1b4b 55%, #302b63); }
+.mafia-night .panel, .mafia-night .wc-header, .mafia-night .wc-status { background: #1f1d3d; border-color: #3b3870; color: #e5e7ff; }
+.mafia-night .wc-player { background: #2a2752; }
+.mafia-night .wc-player small, .mafia-night .wc-status small { color: #a5a8d6; }
+.mafia-night .mafia-role { background: #2a2752; border-color: #4c4891; }
+.mafia-night .mafia-role p { color: #c7c9ec; }
+.mafia-night .mafia-news li { background: #2a2752; color: #e5e7ff; }
+.mafia-night .mafia-news-night { background: #3730a3 !important; color: #fff; }
+.mafia-night .wc-chat-panel .chat p { color: #e5e7ff; }
+.mafia-night .wc-chat-panel .chat p.mafia-chat-mafia { background: #4c0519; color: #ffe4e6; }
+.mafia-night .wc-chat-panel .chat p.system { color: #a5a8d6; }
+.mafia-night input { background: #2a2752; color: #fff; border-color: #4c4891; }
+.mafia-night .wc-timebar { background: #2a2752; }
+.mafia-night .wc-player.mafia-picked { background: #4c0519; }
+.mafia-night #copyCode { background: #2a2752; border-color: #4c4891; }
+.mafia-night .wc-dict-badge { background: #2a2752; color: #c7d2fe; }
+
+@media (max-width: 760px) {
+  .mafia-page .field-row { grid-template-columns: 1fr; }
+  .mafia-role > span { font-size: 40px; }
+  .mafia-role strong { font-size: 24px; }
+  /* 단추 자리가 필요해서 2칸 대신 한 줄에 한 명씩 */
+  .mafia-play-page .wc-player-list:has(.mafia-act-button) { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .mafia-news li:first-child { animation: none; } .mafia-play-page { transition: none; } }

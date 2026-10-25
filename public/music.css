@@ -5,3 +5,5 @@
 .omok-card,.baduk-card{background:linear-gradient(145deg,#fff,#fbf1e2)}.omok-card .game-emoji,.baduk-card .game-emoji,.chess-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;font-size:32px}.omok-card .game-emoji{background:#dcb06b}.baduk-card .game-emoji{background:#3d2f1f}.chess-card{background:linear-gradient(145deg,#fff,#eaf6f0)}.chess-card .game-emoji{background:linear-gradient(135deg,#6cc3a6,#2f6f5e);color:#fff;font-family:"Segoe UI Symbol","DejaVu Sans",sans-serif}
 .liar-card{background:linear-gradient(145deg,#fff,#f5f0ff)}
 .liar-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#8b5cf6,#f97316);font-size:32px}
+.mafia-card{background:linear-gradient(145deg,#fff,#eef0ff)}
+.mafia-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#1e1b4b,#4f46e5);font-size:32px}
