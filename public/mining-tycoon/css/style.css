@@ -142,9 +142,10 @@ button, input { font: inherit; }
 /* 👫 친구와 함께 */
 .mt-multi-card .mt-secondary.mt-wide { width: 100%; margin-top: 10px; }
 .mt-multi-or { margin: 16px 0 8px; }
-.mt-multi-join { display: flex; gap: 8px; align-items: stretch; }
-.mt-multi-join input { flex: 1; min-width: 0; margin: 0; text-transform: uppercase; letter-spacing: .3em; text-align: center; font-weight: 800; }
-.mt-multi-join .mt-primary { flex: none; }
+/* 코드 칸은 위에 크게, 놀러 가기 단추는 아래에(옆에 두면 .mt-card .mt-primary의 width: 100% 때문에 칸이 손톱만 해져 쓴 글자가 안 보였음) */
+.mt-multi-join { display: grid; gap: 10px; }
+.mt-multi-join input { width: 100%; margin: 0; padding: 12px; font-size: 28px; font-weight: 900; letter-spacing: .3em; text-align: center; text-transform: uppercase; }
+.mt-multi-join input::placeholder { font-size: 18px; font-weight: 700; letter-spacing: .1em; color: #b8ad9c; }
 .mt-multi-code-label { margin: 0; font-weight: 800; color: var(--mt-muted); }
 .mt-multi-code { margin: 2px 0 8px; font-size: 44px; font-weight: 900; letter-spacing: .25em; user-select: all; }
 .mt-multi-players { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; }
