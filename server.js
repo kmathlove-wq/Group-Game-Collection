@@ -134,6 +134,7 @@ registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 registerScoreboard('dino', DINO_SCORE_MAX, { top: 50 }); // 🦖 공룡 달리기(상위 50 모두 공개)
 // 🎤 아이돌 초성퀴즈: 15문제 × (100 + 15초 × 10) = 3,750점이 최고.
 registerScoreboard('idol-quiz', IDOL_QUIZ.QUESTION_COUNT * (100 + IDOL_QUIZ.SECONDS * 10), { top: 50 });
+registerScoreboard('bird-find', 999_999, { top: 50 }); // 🐦 새 찾기
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });

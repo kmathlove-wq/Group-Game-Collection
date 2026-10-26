@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-새 찾기</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button" aria-pressed="false">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <div class="hud" aria-live="polite">
+      <span class="pill" id="levelLabel">1단계</span>
+      <span id="leftLabel" class="left">🐦 남은 새 0</span>
+      <span id="timeLabel" class="time">⏱ 60</span>
+      <span id="scoreLabel" class="score">0점</span>
+    </div>
+    <div class="timer" aria-hidden="true"><i id="timerBar"></i></div>
+    <div id="viewport" class="viewport">
+      <canvas id="game" width="960" height="640" aria-label="새가 숨어 있는 숲 그림. 새를 찾아 누르세요."></canvas>
+    </div>
+    <div class="tools">
+      <button id="hintBtn" type="button">💡 힌트 (<span id="hintLeft">1</span>)</button>
+      <button id="zoomBtn" type="button" aria-pressed="false">🔍 크게 보기</button>
+      <button id="pauseBtn" type="button">⏸ 멈춤</button>
+    </div>
+    <p class="hint-text">숲 속에 숨은 새를 모두 찾아 누르면 다음 단계! 엉뚱한 곳을 누르면 2초가 줄어요.</p>
+  </main>
+
+  <div id="overlay" class="overlay">
+    <div class="overlay-card">
+      <div id="ovEmoji" class="ov-emoji">🐦</div>
+      <h1 id="ovTitle">새 찾기</h1>
+      <p id="ovText" class="ov-text">숲 속 어딘가에 새들이 숨어 있어요.<br>제한 시간 안에 모두 찾아보세요!</p>
+      <p id="ovBest" class="ov-best"></p>
+      <button id="ovBtn" type="button" class="primary">시작하기</button>
+      <button id="ovRank" type="button" class="ghost" hidden>🏆 순위에 올리기</button>
+    </div>
+  </div>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
