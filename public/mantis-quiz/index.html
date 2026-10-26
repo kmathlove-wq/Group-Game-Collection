@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-사마귀 종류 맞히기</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <button id="dexBtn" type="button">📗 사마귀 도감</button>
+  </nav>
+
+  <main class="shell">
+    <!-- 시작 -->
+    <section id="startScreen" class="card">
+      <h1>🦗 사마귀 종류 맞히기</h1>
+      <p class="lead">사진을 보고 어떤 사마귀인지 맞혀요!<br>모두 <b id="qCount"></b>문제, 맞힌 사마귀는 도감에 모여요.</p>
+      <p id="bestLine" class="best"></p>
+      <p id="dexLine" class="dex-line"></p>
+      <button id="startBtn" type="button" class="primary big">시작하기</button>
+      <p class="small">힌트 없이 맞히면 10점, 힌트를 볼 때마다 3점씩 줄어요.</p>
+    </section>
+
+    <!-- 문제 -->
+    <section id="playScreen" class="card" hidden>
+      <div class="top-row">
+        <span id="qNo" class="pill"></span>
+        <span id="scoreNow" class="score">0점</span>
+      </div>
+      <figure class="photo">
+        <img id="photo" alt="문제 사마귀 사진" hidden>
+        <div id="noPhoto" class="no-photo" hidden><span>🦗</span><b>사진 준비 중</b><small>힌트를 보고 맞혀 보세요!</small></div>
+        <figcaption id="credit" class="credit"></figcaption>
+      </figure>
+      <ul id="hints" class="hints"></ul>
+      <div id="choices" class="choices"></div>
+      <p id="feedback" class="feedback" aria-live="polite"></p>
+      <div class="tools">
+        <button id="hintBtn" type="button">💡 힌트 보기</button>
+        <button id="nextBtn" type="button" class="primary" hidden>다음 문제 →</button>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section id="endScreen" class="card" hidden>
+      <h2>🎉 끝!</h2>
+      <p class="final"><b id="finalScore"></b>점 <small>/ <span id="finalMax"></span>점</small></p>
+      <p id="finalLine" class="lead"></p>
+      <div class="end-actions">
+        <button id="againBtn" type="button" class="primary">다시 하기</button>
+        <button id="endDexBtn" type="button">📗 도감 보기</button>
+      </div>
+    </section>
+
+    <!-- 도감 -->
+    <section id="dexScreen" hidden>
+      <div class="dex-head">
+        <h2>📗 사마귀 도감 <small id="dexCount"></small></h2>
+        <button id="dexBack" type="button">← 돌아가기</button>
+      </div>
+      <p class="small">문제에서 맞힌 사마귀가 여기에 모여요. 카드를 누르면 자세히 볼 수 있어요.</p>
+      <div id="dexGrid" class="dex-grid"></div>
+    </section>
+  </main>
+
+  <div id="dexDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="dexName" hidden>
+    <div class="dialog-card">
+      <div class="dialog-photo" id="dexPhotoBox"></div>
+      <h3 id="dexName"></h3>
+      <p id="dexSci" class="sci"></p>
+      <ul id="dexHints" class="hints open"></ul>
+      <button id="dexClose" type="button" class="primary">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/species.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
