@@ -60,7 +60,8 @@
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.scale(b.dir * s, s);
-    var body = b.color, dark = shade(b.color, -0.35), light = shade(b.color, 0.45);
+    // 숨는 새는 배·날개 색 차이를 줄이고 부리도 수수하게(밝은 배와 주황 부리가 눈에 확 띄었음)
+    var body = b.color, dark = shade(b.color, b.camo ? -0.15 : -0.35), light = shade(b.color, b.camo ? 0.1 : 0.45);
     // 다리
     if (b.pose !== 'fly') {
       ctx.strokeStyle = '#6b4f2a'; ctx.lineWidth = 2;
@@ -77,11 +78,11 @@
     // 머리
     circle(ctx, 13, -8, 8.5, body);
     // 부리
-    ctx.fillStyle = '#f2a541';
+    ctx.fillStyle = b.camo ? shade(b.color, -0.3) : '#f2a541';
     ctx.beginPath(); ctx.moveTo(20, -10); ctx.lineTo(28, -7); ctx.lineTo(20, -5); ctx.closePath(); ctx.fill();
     // 눈
     circle(ctx, 15.5, -10, 2.3, '#111');
-    circle(ctx, 16.2, -10.7, 0.8, '#fff');
+    if (!b.camo) circle(ctx, 16.2, -10.7, 0.8, '#fff');
     // 날개
     ctx.fillStyle = dark;
     ctx.beginPath();

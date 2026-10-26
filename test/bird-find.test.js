@@ -30,10 +30,11 @@ test('모든 단계에서 새가 정해진 수만큼, 화면 안에, 서로 떨�
 
 test('단계가 오를수록 새가 많아지고 작아진다', () => {
   assert.equal(S.levelInfo(1).birds, 4);
-  assert.equal(S.levelInfo(20).birds, 10);
+  assert.equal(S.levelInfo(20).birds, 12);
   assert.ok(S.levelInfo(1).size > S.levelInfo(8).size);
-  assert.equal(S.levelInfo(1).camo, 0);
-  assert.equal(S.levelInfo(30).camo, 1);
+  assert.equal(S.levelInfo(30).size, 14);
+  assert.equal(S.levelInfo(1).camo, 0.5);
+  assert.equal(S.levelInfo(4).camo, 1);
 });
 
 test('판정: 새 근처를 누르면 그 새, 멀리 누르면 없음, 찾은 새는 다시 안 잡힘', () => {

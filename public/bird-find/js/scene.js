@@ -5,9 +5,9 @@
   'use strict';
 
   var W = 960, H = 640;
-  var LEVEL_SECONDS = 60;
-  var WRONG_PENALTY = 2;          // 엉뚱한 곳을 누르면 2초 빠짐
-  var HIT_SCALE = 1.5;            // 새 크기의 1.5배 안을 누르면 찾은 것으로 침(손가락 배려)
+  var LEVEL_SECONDS = 45;
+  var WRONG_PENALTY = 3;          // 엉뚱한 곳을 누르면 3초 빠짐
+  var HIT_SCALE = 1.2;            // 새 크기의 1.2배 안을 누르면 찾은 것으로 침
   var SCORE_MAX = 999999;
 
   // 씨앗으로 늘 같은 순서의 무작위 수(0~1)를 만든다.
@@ -26,17 +26,26 @@
   var BRIGHT = ['#e63946', '#ffd60a', '#1e88e5', '#ff8c00', '#9b59b6', '#00b4d8', '#ff5fa2'];
   var CAMO = ['#4c8c3a', '#5f8f2e', '#7a5c3a', '#8a7f4a', '#3f7a35', '#6b5636'];
 
-  // 단계별 난이도: 새 수·크기·숨김 정도
+  // 단계별 난이도: 새 수·크기·숨김 정도. 사용자 결정(2026-10-26): 처음 만든 판은 너무 쉬웠음 → 1단계부터 절반은 숨는 색.
   function levelInfo(level) {
-    var d = Math.min(1, (level - 1) / 7);                 // 0(쉬움) ~ 1(어려움)
+    var d = Math.min(1, (level - 1) / 3);                 // 0(1단계) ~ 1(4단계부터)
     return {
-      birds: Math.min(10, 3 + level),
-      size: Math.round(34 - d * 14),                        // 34 → 20
-      camo: d,                                              // 숨는 색일 확률
-      hidden: level >= 3 ? Math.min(0.6, (level - 2) * 0.12) : 0, // 잎에 살짝 가려질 확률
+      birds: Math.min(12, 3 + level),
+      size: Math.max(14, Math.round(28 - (level - 1) * 2)), // 28 → 14
+      camo: 0.5 + d * 0.5,                                  // 앉은 자리 색으로 숨을 확률(1단계 50% → 4단계부터 100%)
+      hidden: Math.min(0.8, 0.2 + level * 0.12),            // 잎에 살짝 가려질 확률
       trees: Math.min(10, 4 + level),
-      decoys: level >= 4 ? Math.min(30, (level - 3) * 5) : 0 // 새 색깔을 닮은 잎사귀
+      decoys: level >= 2 ? Math.min(50, (level - 1) * 8) : 0 // 새를 닮은 잎사귀
     };
+  }
+
+  // 숨는 새 색: 앉은 자리 색을 아주 조금만 밝게/어둡게
+  function tint(hex, amount) {
+    var n = parseInt(hex.slice(1), 16);
+    var c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(function (v) {
+      return Math.max(0, Math.min(255, Math.round(v * (1 + amount))));
+    });
+    return '#' + c.map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
   }
 
   function pick(list, r) { return list[Math.floor(r() * list.length)]; }
@@ -84,16 +93,16 @@
       if (kind < 0.5 && scene.trees.length) {
         var tree = pick(scene.trees, r), blob = pick(tree.blobs, r);
         var a = r() * Math.PI * 2, d = r() * blob.r * 0.8;
-        return { x: blob.x + Math.cos(a) * d, y: blob.y + Math.sin(a) * d, pose: 'perch' };
+        return { x: blob.x + Math.cos(a) * d, y: blob.y + Math.sin(a) * d, pose: 'perch', under: blob.color };
       }
       if (kind < 0.72) {
         var bush = pick(scene.bushes, r), part = pick(bush.parts, r);
-        return { x: part.x + (r() - 0.5) * part.r, y: part.y - r() * part.r * 0.6, pose: 'perch' };
+        return { x: part.x + (r() - 0.5) * part.r, y: part.y - r() * part.r * 0.6, pose: 'perch', under: part.color };
       }
       if (kind < 0.9 || level < 2) {
-        return { x: r() * W, y: horizon + 30 + r() * (H - horizon - 40), pose: 'ground' };
+        return { x: r() * W, y: horizon + 30 + r() * (H - horizon - 40), pose: 'ground', under: '#6fbb52' };
       }
-      return { x: r() * W, y: 40 + r() * (horizon - 80), pose: 'fly' };
+      return { x: r() * W, y: 40 + r() * (horizon - 80), pose: 'fly', under: '#a9dcf5' };
     }
     var size = info.size;
     var margin = size * 1.2;
@@ -103,20 +112,20 @@
       var near = scene.birds.some(function (o) { return Math.hypot(o.x - s.x, o.y - s.y) < size * 3.2; });
       if (near) continue;
       var camo = r() < info.camo;
-      var bird = { x: Math.round(s.x), y: Math.round(s.y), size: size, pose: s.pose, dir: r() < 0.5 ? -1 : 1,
-        color: camo ? pick(CAMO, r) : pick(BRIGHT, r), found: false };
+      var bird = { x: Math.round(s.x), y: Math.round(s.y), size: size, pose: s.pose, dir: r() < 0.5 ? -1 : 1, camo: camo,
+        color: camo ? tint(s.under, (r() - 0.5) * 0.24) : pick(BRIGHT, r), found: false };
       scene.birds.push(bird);
       // 잎 하나가 새의 가장자리를 살짝 가린다(한가운데는 늘 보이게 새 크기만큼 떨어뜨림)
       if (s.pose !== 'fly' && r() < info.hidden) {
         var ca = r() * Math.PI * 2;
-        scene.covers.push({ x: bird.x + Math.cos(ca) * size * 1.05, y: bird.y + Math.sin(ca) * size * 0.8, r: size * 0.6, color: pick(LEAF, r) });
+        scene.covers.push({ x: bird.x + Math.cos(ca) * size * 0.95, y: bird.y + Math.sin(ca) * size * 0.75, r: size * 0.7, color: s.under === '#a9dcf5' ? pick(LEAF, r) : s.under });
       }
     }
     // 새 색깔을 닮은 잎사귀(헷갈리게) — 새와 너무 가까우면 빼서 판정이 헷갈리지 않게
     for (var k = 0; scene.decoys.length < info.decoys && k < 500; k++) {
       var ds = spot();
       if (scene.birds.some(function (o) { return Math.hypot(o.x - ds.x, o.y - ds.y) < size * 2; })) continue;
-      scene.decoys.push({ x: ds.x, y: ds.y, r: size * (0.35 + r() * 0.25), rot: r() * Math.PI, color: r() < 0.5 ? pick(BRIGHT, r) : pick(CAMO, r) });
+      scene.decoys.push({ x: ds.x, y: ds.y, r: size * (0.35 + r() * 0.25), rot: r() * Math.PI, color: r() < 0.25 ? pick(BRIGHT, r) : (ds.under ? tint(ds.under, (r() - 0.5) * 0.3) : pick(CAMO, r)) });
     }
     return scene;
   }
