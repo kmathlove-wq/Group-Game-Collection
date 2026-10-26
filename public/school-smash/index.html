@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-학교 뿌시기</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <div class="hud" aria-live="polite">
+      <span id="percent" class="pill">🏫 0% 부숨</span>
+      <span id="time" class="time" hidden>⏱ 60</span>
+      <span id="score" class="score">0점</span>
+    </div>
+    <div class="meter-track" aria-hidden="true"><i id="meter"></i></div>
+    <div class="stage">
+      <canvas id="game" aria-label="부술 학교 건물. 누르거나 끌어서 부수세요."></canvas>
+    </div>
+    <div class="tools" role="toolbar" aria-label="도구">
+      <button type="button" class="tool" data-tool="hammer" aria-pressed="true"><span class="ico">🔨</span><b>망치</b><span class="count">∞</span></button>
+      <button type="button" class="tool" data-tool="bomb" aria-pressed="false"><span class="ico">💣</span><b>폭탄</b><span class="count">∞</span></button>
+      <button type="button" class="tool" data-tool="meteor" aria-pressed="false"><span class="ico">☄️</span><b>운석</b><span class="count">∞</span></button>
+      <button type="button" class="tool" data-tool="quake" aria-pressed="false"><span class="ico">🌋</span><b>지진</b><span class="count">∞</span></button>
+    </div>
+    <div class="actions">
+      <button id="rebuildBtn" type="button" hidden>🏗️ 다시 짓기</button>
+      <button id="endBtn" type="button" hidden>🏁 그만하고 점수 보기</button>
+    </div>
+    <p class="help">도구를 고르고 학교를 누르세요. 망치는 누른 채로 끌면 계속 때려요. 숫자 키 1~4로도 도구를 바꿀 수 있어요. (지진은 아무 곳이나 누르면 시작해요)</p>
+  </main>
+
+  <div id="overlay" class="overlay">
+    <div class="overlay-card">
+      <div id="ovEmoji" class="ov-emoji">🏫</div>
+      <h1 id="ovTitle">학교 뿌시기</h1>
+      <p id="ovText" class="ov-text"></p>
+      <p id="ovBest" class="ov-best"></p>
+      <button id="modeChallenge" type="button" class="primary">⏱ 60초 도전 <small>(도구 개수 제한 · 순위)</small></button>
+      <button id="modeFree" type="button" class="ghost">🧸 마음껏 부수기 <small>(시간·도구 무제한)</small></button>
+      <button id="ovRank" type="button" class="ghost" hidden>🏆 순위에 올리기</button>
+    </div>
+  </div>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
