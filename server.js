@@ -31,6 +31,7 @@ const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('.
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
 const DINO_SCORE_MAX = 999_999;
+const IDOL_QUIZ = require('./public/idol-quiz/js/rules.js');
 // 광질 타이쿤 순위 상한: 번 돈 1조 원, 보물 시간 10년(초). 사용자 결정(2026-10)으로 그 밖의 부정 검사는 하지 않는다.
 const MINING_MONEY_MAX = 1_000_000_000_000;
 const MINING_TIME_MAX = 315_360_000;
@@ -131,6 +132,8 @@ function registerScoreboard(slug, scoreMax, options = {}) {
 registerScoreboard('geometry-dash', SCORE_MAX);
 registerScoreboard('bubble-bobble', BUBBLE_BOBBLE_SCORE_MAX);
 registerScoreboard('dino', DINO_SCORE_MAX, { top: 50 }); // 🦖 공룡 달리기(상위 50 모두 공개)
+// 🎤 아이돌 초성퀴즈: 15문제 × (100 + 15초 × 10) = 3,750점이 최고.
+registerScoreboard('idol-quiz', IDOL_QUIZ.QUESTION_COUNT * (100 + IDOL_QUIZ.SECONDS * 10), { top: 50 });
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });

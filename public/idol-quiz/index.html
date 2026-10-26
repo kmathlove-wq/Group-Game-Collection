@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-아이돌 초성퀴즈</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <button id="rankBtn" type="button">🏆 순위</button>
+  </nav>
+
+  <main class="shell">
+    <!-- 시작 -->
+    <section id="startScreen" class="card">
+      <h1>🎤 아이돌 초성퀴즈</h1>
+      <p class="lead">초성을 보고 아이돌 그룹 이름을 맞혀요!<br>문제는 <b id="qCount"></b>개, 한 문제에 <b id="qSec"></b>초예요.</p>
+      <div class="example" aria-hidden="true"><span>ㅂㄹㅍㅋ</span> → 블랙핑크</div>
+      <div class="kind-row" role="radiogroup" aria-label="어떤 그룹으로 할까요?">
+        <button type="button" class="kind-btn" data-kind="all" aria-pressed="true">전체</button>
+        <button type="button" class="kind-btn" data-kind="girl" aria-pressed="false">걸그룹</button>
+        <button type="button" class="kind-btn" data-kind="boy" aria-pressed="false">보이그룹</button>
+      </div>
+      <button id="startBtn" type="button" class="primary big">시작하기</button>
+      <p class="small">빨리 맞힐수록 점수가 높아요. 힌트를 쓰면 30점씩 줄어요.<br>영어 이름(BTS)이나 줄임말(스키즈)도 정답이에요.</p>
+    </section>
+
+    <!-- 문제 -->
+    <section id="playScreen" class="card" hidden>
+      <div class="top-row">
+        <span id="qNo" class="pill"></span>
+        <span id="scoreNow" class="score">0점</span>
+      </div>
+      <div class="timer" aria-hidden="true"><i id="timerBar"></i></div>
+      <p id="secLeft" class="sec-left"></p>
+      <p id="chosung" class="chosung" aria-live="polite"></p>
+      <p id="hint" class="hint-line"></p>
+      <form id="answerForm" class="answer-row" autocomplete="off">
+        <input id="answer" type="text" maxlength="30" placeholder="그룹 이름을 써요" aria-label="정답 입력" enterkeyhint="done">
+        <button type="submit" class="primary">확인</button>
+      </form>
+      <p id="feedback" class="feedback" aria-live="polite"></p>
+      <div class="tools">
+        <button id="hintBtn" type="button">💡 힌트</button>
+        <button id="skipBtn" type="button">⏭ 넘기기</button>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section id="endScreen" class="card" hidden>
+      <h2>🎉 끝!</h2>
+      <p class="final"><b id="finalScore"></b>점</p>
+      <p id="finalLine" class="lead"></p>
+      <div class="end-actions">
+        <button id="againBtn" type="button" class="primary">다시 하기</button>
+        <button id="endRankBtn" type="button">🏆 순위에 올리기</button>
+      </div>
+      <h3>문제 돌아보기</h3>
+      <ol id="review" class="review"></ol>
+    </section>
+  </main>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
