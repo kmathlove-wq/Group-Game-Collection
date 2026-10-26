@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-이상형 월드컵</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <button id="homeBtn" type="button" hidden>주제 다시 고르기</button>
+  </nav>
+
+  <main class="shell">
+    <!-- 1) 주제 고르기 -->
+    <section id="pickScreen">
+      <h1>💘 이상형 월드컵</h1>
+      <p class="lead">둘 중 더 좋은 쪽을 계속 고르면 마지막에 나의 1위가 남아요.</p>
+      <div class="size-row" role="radiogroup" aria-label="몇 강으로 할까요?">
+        <button type="button" class="size-btn" data-size="8" aria-pressed="false">8강 (짧게)</button>
+        <button type="button" class="size-btn" data-size="16" aria-pressed="true">16강 (전부)</button>
+      </div>
+      <div id="topicGrid" class="topic-grid"></div>
+    </section>
+
+    <!-- 2) 대결 -->
+    <section id="matchScreen" hidden>
+      <p id="roundLabel" class="round-label"></p>
+      <h2 id="question" class="question"></h2>
+      <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+      <div class="versus">
+        <button type="button" class="pick" id="pickA"><span class="emoji"></span><span class="name"></span></button>
+        <b class="vs" aria-hidden="true">VS</b>
+        <button type="button" class="pick" id="pickB"><span class="emoji"></span><span class="name"></span></button>
+      </div>
+      <p class="hint">카드를 누르거나 ← → 키로 골라요. <button type="button" id="undoBtn" class="link-btn">↩ 한 번 되돌리기</button></p>
+    </section>
+
+    <!-- 3) 결과 -->
+    <section id="resultScreen" hidden>
+      <p class="round-label">🏆 나의 1위</p>
+      <div class="winner">
+        <span id="winnerEmoji" class="emoji"></span>
+        <h2 id="winnerName"></h2>
+        <p id="runnerUp" class="runner-up"></p>
+      </div>
+      <p id="share" class="share" aria-live="polite"></p>
+      <div class="result-actions">
+        <button type="button" id="againBtn" class="primary">같은 주제 한 번 더</button>
+        <button type="button" id="otherBtn">다른 주제 고르기</button>
+      </div>
+      <h3 class="stats-title">🌏 모두의 1위 순위 <small id="playCount"></small></h3>
+      <ol id="statsList" class="stats-list"></ol>
+    </section>
+  </main>
+
+  <script src="js/topics.js"></script>
+  <script src="js/bracket.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

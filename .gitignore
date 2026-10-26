@@ -19,3 +19,5 @@ uploads/images/*
 data/board.json*
 data/game-requests.json*
 data/mining-tycoon-worlds.json*
+data/*-scores.json
+data/worldcup-stats.json*
