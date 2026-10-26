@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-초이스 게임</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="listBtn" type="button">📜 엔딩 모음</button>
+      <button id="soundBtn" type="button">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <h1>🕹️ 초이스 게임 <small>막대맨 우주 대탈출</small></h1>
+    <p id="progress" class="progress"></p>
+    <div class="stage-wrap">
+      <canvas id="stage" aria-label="이야기 장면 그림"></canvas>
+      <div id="card" class="card" role="dialog" aria-modal="false" aria-labelledby="cardTitle" hidden>
+        <p id="cardTag" class="card-tag"></p>
+        <h2 id="cardTitle"></h2>
+        <p id="cardText"></p>
+        <p id="cardNew" class="card-new"></p>
+        <div class="card-actions">
+          <button id="retryBtn" type="button" class="primary">↩ 다시 하기</button>
+          <button id="restartBtn" type="button">처음부터</button>
+          <button id="cardList" type="button">📜 모음</button>
+        </div>
+      </div>
+    </div>
+    <div id="timer" class="timer" hidden><span>⚡ 빨리!</span><div class="track"><i id="timerBar"></i></div></div>
+    <p id="story" class="story" aria-live="polite"></p>
+    <div id="choices" class="choices"></div>
+    <p class="help">선택지를 누르거나 숫자 키(1, 2, 3…)로 골라요. 잘못 고르면 웃긴 실패 장면이 나오고, 그 자리부터 다시 할 수 있어요.</p>
+  </main>
+
+  <div id="collectionDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="collectionTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="collectionTitle">📜 엔딩 · 실패 모음</h2>
+      <ul id="collection" class="collection"></ul>
+      <button id="collectionClose" type="button" class="primary">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/story.js"></script>
+  <script src="js/scenes.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
