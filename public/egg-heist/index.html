@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-계란 훔치기</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="guideBtn" type="button" aria-label="설명 보기">❓</button>
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <div class="hud" aria-live="polite">
+      <span id="money" class="money">💰 0원</span>
+      <span id="income" class="income">+0원/초</span>
+      <span id="carry" class="carry">🥚 0/1</span>
+      <span class="spacer"></span>
+      <button id="lockBtn" type="button" hidden>🔒 잠그기</button>
+      <button id="shopBtn" type="button" class="shop-btn">🛒 상점</button>
+    </div>
+    <div class="stage">
+      <canvas id="game" aria-label="계란 훔치기 지도. 방향키나 손가락으로 움직여요."></canvas>
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+    <p class="help">⬆⬇⬅➡ / WASD로 움직이고, 휴대폰은 화면을 누른 채 끌어요. 알에 닿으면 줍고, 내 기지에 들어가면 우리에 넣어요. B = 상점, L = 기지 잠그기</p>
+  </main>
+
+  <div id="shop" class="dialog" role="dialog" aria-modal="true" aria-labelledby="shopTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="shopTitle">🛒 상점</h2>
+      <p id="shopWhere" class="where"></p>
+      <h3>업그레이드</h3>
+      <div id="upgrades" class="list"></div>
+      <h3>내 우리 (펫 팔기)</h3>
+      <div id="pens" class="list"></div>
+      <button id="shopClose" type="button" class="primary">닫기</button>
+      <button id="resetBtn" type="button" class="danger">처음부터 다시 하기</button>
+    </div>
+  </div>
+
+  <div id="guide" class="dialog" role="dialog" aria-modal="true" aria-labelledby="guideTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="guideTitle">🥚 계란 훔치기</h2>
+      <ol class="guide">
+        <li>위쪽 땅에 떨어진 <b>알</b>에 닿으면 주워요. 위로 갈수록 귀한 알이에요.<br><small>풀밭 일반 → 사막 희귀 → 눈밭 에픽 → 화산 전설 → 우주 신화</small></li>
+        <li>알을 들고 <b>내 기지</b>(왼쪽 아래 파란 울타리)에 들어가면 우리에 쏙! 시간이 지나면 <b>펫</b>으로 깨어나 1초마다 돈을 벌어요.</li>
+        <li>땅마다 <b>지킴이 동물</b>(🐓🦂🐻‍❄️🦖👾)이 있어요. 알을 든 채 잡히면 알을 놓쳐요!</li>
+        <li>빨강봇·초록봇이 <b>내 알을 훔치러</b> 와요. 알을 든 봇에게 몸으로 부딪히면 떨어뜨려요. 나도 봇 기지 우리의 알을 훔칠 수 있어요. 😎</li>
+        <li>돈으로 🛒 상점에서 신발·우리 칸·가방·부화기·🔒 기지 잠금을 사요. 우리가 꽉 차면 펫을 팔아요.</li>
+      </ol>
+      <p class="small">게임은 이 기기에 자동 저장돼요. 🏆 순위에 이름을 등록하면 번 돈이 20초마다 순위에 올라가요.</p>
+      <button id="guideClose" type="button" class="primary">시작하기!</button>
+    </div>
+  </div>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

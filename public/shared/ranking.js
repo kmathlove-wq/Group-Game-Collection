@@ -2,6 +2,7 @@
 // 여러 1인용 게임이 함께 쓰는 🏆 전체 순위 창. 창 모양(DOM)은 스스로 만들고, 꾸미기는 shared/ranking.css.
 // 서버 /api/<slug>/scores(registerScoreboard)에 저장·조회한다. 이름은 localStorage '<slug>:nickname'(20자).
 // 쓰는 법: var rank = GroupRanking.create({ slug: 'idol-quiz', unit: '점', top: 50 });
+// playerId: 함수를 주면 그 값을 함께 보낸다(서버 perPlayer 순위 — 한 사람(한 판)은 가장 좋은 기록 한 줄).
 //          rank.show(점수, 닫힌 뒤 할 일)  — 점수가 0이면 순위만 본다.
 // 사용자가 쓴 글은 모두 textContent로만 넣는다.
 (function (root) {
@@ -83,7 +84,9 @@
     }
 
     function post(name, score) {
-      return fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, score: score }) })
+      var body = { name: name, score: score };
+      if (options.playerId) body.playerId = options.playerId();
+      return fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d && d.error); return d; }); });
     }
 
@@ -141,7 +144,12 @@
       if (e.key === 'Escape') close();
     });
 
-    return { show: show, close: close, isOpen: function () { return open; } };
+    return {
+      show: show, close: close, isOpen: function () { return open; },
+      hasName: function () { return !!(get(nameKey) || '').trim(); },
+      // 이름이 있으면 창 없이 조용히 올린다(계속 늘어나는 기록용). 결과 약속(Promise)을 돌려준다.
+      quietSubmit: function (score) { return post((get(nameKey) || '').trim().slice(0, 20) || '이름없음', score); }
+    };
   }
 
   root.GroupRanking = { create: create };
