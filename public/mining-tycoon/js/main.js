@@ -140,7 +140,7 @@
   // 지구가 부서진 판은 다시 저장하지 않는다. soon이면(팔기·사기) 연동된 월드를 곧 서버에도 올린다.
   function saveNow(soon) {
     if (state && state.destroyedTime == null) {
-      Save.save(state);
+      Save.save(multi.savable(state));
       Link.markDirty();
       if (soon) syncTimer = Math.max(syncTimer, SYNC_EVERY - 2);
     }
@@ -181,6 +181,7 @@
     Link.clear();
     updateLinkButton();
     if (reason === 'expired') { toast('📱 30일 동안 아무 기기에서도 안 해서 연동이 끝났어요. 이 기기에서 혼자 계속해요.', 5000); return; }
+    multi.leave(true);
     Save.clear();
     state = null;
     closePanel();
@@ -190,6 +191,7 @@
 
   // 서버 것으로 바꿔 끼운다.
   function replaceState(s, rev) {
+    multi.leave(true); // 친구와 하던 중이면 먼저 끝낸다(땅이 통째로 바뀌므로)
     state = s;
     Link.adopt(rev);
     renderer.cam = null;
@@ -201,7 +203,7 @@
     if (!state || !Link.get() || syncing) return;
     syncing = true;
     syncTimer = 0;
-    Link.sync(state, force, keepalive).then(function (result) {
+    Link.sync(multi.savable(state), force, keepalive).then(function (result) {
       syncing = false;
       if (result.gone) handleGone(result.gone);
       else if (result.taken) showTaken(result.summary, '다른 기기에서 이 월드를 열었어요');
@@ -358,7 +360,7 @@
     var b = $('mtLinkSubmit');
     b.disabled = true;
     saveNow();
-    (linked ? Link.setPassword(password) : Link.create(state, password)).then(function (result) {
+    (linked ? Link.setPassword(password) : Link.create(multi.savable(state), password)).then(function (result) {
       b.disabled = false;
       if (result.gone) { handleGone(result.gone); return; }
       if (!result.ok) { error(result.error); return; }
@@ -378,6 +380,117 @@
           toast('✂️ 연동을 끊었어요. 이제 이 기기에서만 하는 월드예요.', 4000);
         });
       });
+    });
+  });
+
+  // ---------- 👫 친구와 함께 ----------
+  var multi = new MT.Multi({
+    getState: function () { return state; },
+    renderer: renderer,
+    toast: toast,
+    onEvents: function (events) { handle(events); },
+    onChange: function () { updateMultiButton(); if (modal === 'mtMultiModal') renderMulti(); },
+    onEnd: function (reason) {
+      renderer.cam = null;
+      updateMultiButton();
+      if (modal === 'mtMultiModal') renderMulti();
+      if (!state) return;
+      saveNow();
+      var text = {
+        'host-left': '🏠 방장이 방을 닫아서 내 땅으로 돌아왔어요.',
+        'host-gone': '📶 방장의 연결이 끊겨서 내 땅으로 돌아왔어요.',
+        lost: '📶 서버와 연결이 끊겨서 다시 혼자 해요.',
+        'closed-by-me': '🚪 방을 닫았어요. 다시 혼자 해요.',
+        'left-by-me': '🏠 내 땅으로 돌아왔어요!'
+      }[reason];
+      if (text) toast(text, 4000);
+    }
+  });
+
+  function updateMultiButton() {
+    $('mtMultiButton').textContent = multi.active() ? '👫 함께 ' + multi.count() + '명' : '👫 친구와 함께';
+  }
+  function multiError(text) {
+    $('mtMultiError').textContent = text || '';
+    $('mtMultiError').classList.toggle('hidden', !text);
+  }
+  function openMulti() {
+    if (!state) { notice('👫 게임을 시작한 다음 눌러 주세요.'); return; }
+    if (modal && modal !== 'mtMultiModal') return;
+    multiError('');
+    $('mtMultiCode').value = '';
+    renderMulti();
+    openModal('mtMultiModal');
+  }
+  function renderMulti() {
+    var on = multi.active();
+    $('mtMultiIdle').classList.toggle('hidden', on);
+    $('mtMultiRoom').classList.toggle('hidden', !on);
+    $('mtMultiTitle').textContent = !on ? '친구와 함께' : multi.role === 'host' ? '🏠 내 땅에 친구를 불렀어요' : '🚪 친구 땅에 놀러 왔어요';
+    if (!on) return;
+    $('mtMultiCodeShow').textContent = multi.code;
+    $('mtMultiRoomDesc').textContent = multi.role === 'host'
+      ? '친구에게 이 코드를 알려 주세요. 친구는 👫 단추에서 코드를 넣으면 내 땅에 들어와요. (최대 4명)'
+      : '같은 땅을 함께 파요. 캔 광석·돈은 내 것이고, 집으로 돌아가면 내 땅에서 이어 해요.';
+    $('mtMultiLeave').textContent = multi.role === 'host' ? '🚪 방 닫기 (친구들은 집으로 돌아가요)' : '🏠 집으로 돌아가기';
+    var list = $('mtMultiPlayers');
+    list.textContent = '';
+    multi.players.forEach(function (p) {
+      var li = el('li');
+      var dot = el('i');
+      dot.style.background = p.id === multi.you ? '#f5c518' : p.color; // 내 화면에서 내 차는 늘 노란색
+      li.append(dot, el('span', null, (p.host ? '👑 ' : '') + p.name + (p.id === multi.you ? ' (나)' : '')));
+      if (p.online === false) li.append(el('small', null, '📶 연결 끊김'));
+      list.append(li);
+    });
+  }
+  function multiBlocked() {
+    if (state.inCore) return '⭐ 지구의 중심에서는 친구와 함께 할 수 없어요.';
+    return '';
+  }
+  $('mtMultiButton').addEventListener('click', openMulti);
+  $('mtMultiClose').addEventListener('click', function () { closeModal('mtMultiModal'); });
+  $('mtMultiHost').addEventListener('click', function () {
+    var blocked = multiBlocked();
+    if (blocked) { multiError(blocked); return; }
+    var b = this;
+    b.disabled = true;
+    multiError('');
+    saveNow();
+    multi.host(state).then(function (r) {
+      b.disabled = false;
+      if (!r.ok) { multiError(r.message); return; }
+      updateMultiButton();
+      renderMulti();
+      sound.buy();
+    });
+  });
+  $('mtMultiJoinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = $('mtMultiCode').value.trim().toUpperCase();
+    if (code.length !== 4) { multiError('방 코드 4글자를 넣어 주세요.'); return; }
+    var blocked = multiBlocked();
+    if (blocked) { multiError(blocked); return; }
+    var b = $('mtMultiJoin');
+    b.disabled = true;
+    multiError('');
+    saveNow(); // 떠나기 전에 내 땅을 저장해 둔다
+    multi.join(state, code).then(function (r) {
+      b.disabled = false;
+      if (!r.ok) { multiError(r.message); return; }
+      closePanel();
+      renderer.cam = null;
+      updateMultiButton();
+      closeModal('mtMultiModal');
+      sound.recall();
+      toast('🚪 친구 땅에 놀러 왔어요! 캔 광석은 내 가방에 들어가요.', 4000);
+    });
+  });
+  $('mtMultiLeave').addEventListener('click', function () {
+    var host = multi.role === 'host';
+    askConfirm(host ? '🚪 방을 닫을까요?' : '🏠 집으로 돌아갈까요?', host ? '놀러 온 친구들은 모두 자기 땅으로 돌아가요.' : '내 땅 지상으로 돌아가요. 여기서 번 돈·광석은 그대로 내 것이에요.', function () {
+      closePanel();
+      multi.leave();
     });
   });
 
@@ -540,7 +653,9 @@
       var block = Game.ticketBlock(state);
       if (state.ticket > 0) {
         shopRow(body, '🎫 지구 핵 입장권 (가지고 있어요)', '쓰면 바로 지구의 중심으로 가요. 한 번 나가면 다시 사야 해요', '지금 가기', function () {
-          if (Game.useTicket(state).ok) { closePanel(); sound.recall(); renderer.cam = null; toast('⭐ 지구의 중심에 왔어요… 저 빨간 버튼은 뭘까요?', 4000); saveNow(); }
+          var used = Game.useTicket(state);
+          if (used.ok) { closePanel(); sound.recall(); renderer.cam = null; toast('⭐ 지구의 중심에 왔어요… 저 빨간 버튼은 뭘까요?', 4000); saveNow(); }
+          else failBuy(used.reason);
         }, false);
       } else {
         shopRow(body, '🎫 지구 핵 입장권', block === 'heat' ? '🔥 열보호 5단계가 있어야 살 수 있어요 · 지구의 중심으로 가는 표예요' : '지구의 중심으로 바로 가는 표예요', fmt.money(Rules.TICKET_PRICE), function () {
@@ -550,6 +665,7 @@
     }
     renderGacha(body, open);
     body.append(button('🔄 처음부터 다시', 'mt-reset', function () {
+      if (multi.active()) { failBuy('multi'); return; }
       askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.' + linkedWarning(), function () {
         askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
           endLinkedWorld(function () { Save.clear(); state = null; closePanel(); showStart(false); updateLinkButton(); });
@@ -620,7 +736,8 @@
       heat: '🔥 열보호 5단계가 있어야 살 수 있어요.',
       have: '🎫 이미 입장권을 가지고 있어요.',
       ended: '🎰 일반 뽑기는 보물을 찾기 전까지만 할 수 있어요.',
-      bag: '🎒 가방이 가득 찼어요. 먼저 팔고 오세요!'
+      bag: '🎒 가방이 가득 찼어요. 먼저 팔고 오세요!',
+      multi: '👫 친구와 함께 하는 동안은 할 수 없어요. 👫 단추에서 먼저 끝내 주세요.'
     }[reason] || '이미 최고 단계예요.');
   }
 
@@ -746,6 +863,7 @@
           else if (e.reason === 'seal') toast('🪨 아주아주 단단한 바닥이에요… 전설의 보물을 찾으면 무슨 일이 생길지도?', 3500);
           else if (e.reason === 'lava') toast('🌋 용암은 팔 수 없어요. 닿으면 뜨거우니 돌아가세요!');
           else if (e.reason === 'no-fuel') toast('⛽ 연료가 없어요. 주유소에서 채워요.');
+          else if (e.reason === 'guest-treasure') toast('🏆 이 보물은 방장 것이라 캘 수 없어요. 내 땅의 보물을 찾아보세요!', 3500);
           break;
         case 'hurt':
           if (e.cause === 'fall') { sound.hurt(); renderer.shake = 0.3; renderer.floatText('-' + Math.round(e.amount), state.car.x, state.car.y - 0.8, '#ff6b6b'); }
@@ -961,6 +1079,7 @@
       if (modal === 'mtPauseModal') { closeModal('mtPauseModal'); return; }
       if (modal === 'mtConfirmModal') { $('mtConfirmNo').click(); return; }
       if (modal === 'mtWarpModal') { closeModal('mtWarpModal'); return; }
+      if (modal === 'mtMultiModal') { closeModal('mtMultiModal'); return; }
       if (modal === 'mtEndingModal') { $('mtEndingContinue').click(); return; }
       if (modal === 'mtHiddenModal') { $('mtHiddenContinue').click(); return; }
       if (modal === 'mtGuideModal') { closeGuide(); return; }
@@ -1028,6 +1147,7 @@
       if (panelKey) renderPanelThrottled(dt);
     }
     if (state) {
+      multi.tick(dt); // 👫 멈춤 창이 떠 있어도 친구 차·땅은 계속 받는다
       renderer.render(state, now, running ? dt : 0);
       updateHud();
     } else {

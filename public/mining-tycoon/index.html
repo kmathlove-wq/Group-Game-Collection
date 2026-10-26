@@ -13,6 +13,7 @@
     <a href="/">← 그룹 게임 컬렉션</a>
     <div class="mt-toolbar-actions">
       <button id="mtGuideButton" type="button">❓ 설명</button>
+      <button id="mtMultiButton" type="button">👫 친구와 함께</button>
       <button id="mtLinkButton" type="button">📱 다른 기기</button>
       <button id="mtRankButton" type="button">🏆 순위</button>
       <button id="mtSoundButton" type="button" aria-pressed="true">🔊 소리 켜짐</button>
@@ -167,6 +168,12 @@
         <li>📍 지정 워프석: 원하는 곳에서 위치를 한 번 저장하면, 그 뒤로는 어디서든 몇 번이든 그 자리로 순간이동해요</li>
         <li>휴대폰은 화면의 ◀ ▲ ▼ ▶ 💥 🌀 📍 💸 단추를 눌러요</li>
       </ul>
+      <h3>👫 친구와 함께</h3>
+      <ul class="mt-guide-list">
+        <li>위의 <b>👫 친구와 함께</b> → <b>내 땅에 친구 부르기</b>를 누르면 방 코드 4글자가 나와요. 친구에게 알려 주세요</li>
+        <li>친구는 같은 단추에서 코드를 넣고 <b>놀러 가기</b>를 누르면 내 땅에 들어와요 (최대 4명)</li>
+        <li>땅은 같이 파고, 캔 광석·돈·업그레이드는 각자 것이에요. 놀러 간 땅의 보물은 방장 것이라 못 캐요</li>
+      </ul>
       <h3>⚠️ 조심할 것</h3>
       <ul class="mt-guide-list">
         <li>⛽ 연료가 0이 되면 구조대가 끌어올리고 돈을 받아요(모자라면 빚)</li>
@@ -265,6 +272,32 @@
     </div>
   </div>
 
+  <!-- 👫 친구와 함께: 방 만들기·코드로 놀러 가기·함께 하는 사람 -->
+  <div class="mt-modal hidden" id="mtMultiModal">
+    <div class="mt-card mt-multi-card">
+      <div class="mt-card-emoji" aria-hidden="true">👫</div>
+      <h2 id="mtMultiTitle">친구와 함께</h2>
+      <div id="mtMultiIdle">
+        <p>같은 땅을 친구와 함께 파요! 돈·차·업그레이드는 각자 것이에요. (최대 4명)</p>
+        <button class="mt-primary mt-wide" id="mtMultiHost" type="button">🏠 내 땅에 친구 부르기</button>
+        <p class="mt-muted mt-multi-or">또는 친구가 알려 준 방 코드를 넣어요</p>
+        <form id="mtMultiJoinForm" class="mt-multi-join">
+          <input id="mtMultiCode" type="text" maxlength="4" placeholder="예: K7QM" autocomplete="off" autocapitalize="characters" aria-label="방 코드">
+          <button class="mt-primary" id="mtMultiJoin" type="submit">🚪 놀러 가기</button>
+        </form>
+      </div>
+      <div id="mtMultiRoom" class="hidden">
+        <p class="mt-multi-code-label">방 코드</p>
+        <p class="mt-multi-code" id="mtMultiCodeShow">----</p>
+        <p id="mtMultiRoomDesc"></p>
+        <ul class="mt-multi-players" id="mtMultiPlayers"></ul>
+        <button class="mt-secondary mt-wide" id="mtMultiLeave" type="button">🏠 집으로 돌아가기</button>
+      </div>
+      <p class="mt-notice hidden" id="mtMultiError"></p>
+      <button class="mt-secondary mt-wide" id="mtMultiClose" type="button">닫기</button>
+    </div>
+  </div>
+
   <!-- 순위 -->
   <div class="mt-modal hidden" id="mtRankModal">
     <div class="mt-card mt-rank-card">
@@ -280,6 +313,7 @@
     </div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/world.js"></script>
   <script src="js/game.js"></script>
@@ -288,6 +322,7 @@
   <script src="js/draw.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/ranking.js"></script>
+  <script src="js/multi.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

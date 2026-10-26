@@ -24,6 +24,7 @@ const { createGameRequestStore } = require('./lib/game-request-store');
 const { setupBoard } = require('./src/board');
 const { createMiningLinkStore } = require('./lib/mining-link-store');
 const { setupMiningTycoon } = require('./src/mining-tycoon');
+const { setupMiningMulti } = require('./src/mining-tycoon/multi');
 const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -137,8 +138,9 @@ setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__
 // 광질 타이쿤 📱 다른 기기 연동 보관함(30일 안 하면 지움, Gist `mining-tycoon-worlds.json`에도 보관).
 const miningLinkStore = createMiningLinkStore(process.env.MINING_LINK_PATH || path.join(__dirname, 'data', 'mining-tycoon-worlds.json'), { remote: gistSync });
 setupMiningTycoon({ app, store: miningLinkStore });
+const miningMulti = setupMiningMulti({ io }); // 👫 친구와 함께(같은 땅, 돈·차는 각자)
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size,
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size, miningRooms: miningMulti.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
 
 function cleanText(value, maxLength) {

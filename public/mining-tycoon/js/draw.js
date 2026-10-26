@@ -68,6 +68,7 @@
     this.floaters = [];
     this.shake = 0;
     this.destroyAt = null; // 지구 파괴 연출 시작 시각
+    this.friends = []; // 👫 같은 땅에 있는 친구 차들 { name, color, x, y, f, d, t, l, h } (main.js의 Multi가 채움)
   }
 
   Renderer.prototype.tileColor = function (tile) { return TILE_COLOR[tile] || '#000'; };
@@ -136,6 +137,7 @@
     }
     if (skyBottom > -T) this.drawBuildings(ctx, s, ox, oy);
     this.drawAutos(ctx, s, ox, oy, now);
+    this.drawFriends(ctx, ox, oy, now);
     this.drawCar(ctx, s, ox + s.car.x * T, oy + s.car.y * T, now);
     this.drawEffects(ctx, ox, oy, dt);
     this.drawDarkness(ctx, s, ox + s.car.x * T, oy + s.car.y * T, W, H);
@@ -306,7 +308,25 @@
     }
   };
 
-  Renderer.prototype.drawCar = function (ctx, s, cx, cy, now) {
+  // 👫 친구 차: 내 차와 같은 모양에 몸통 색만 다르고, 위에 이름표를 단다.
+  Renderer.prototype.drawFriends = function (ctx, ox, oy, now) {
+    for (var i = 0; i < this.friends.length; i++) {
+      var f = this.friends[i];
+      var cx = ox + f.x * T, cy = oy + f.y * T;
+      if (cx < -T * 2 || cy < -T * 2 || cx > this.canvas.width + T * 2 || cy > this.canvas.height + T * 2) continue;
+      var look = { dig: f.d ? { dx: f.d === 2 ? f.f : 0, dy: f.d === 1 ? 1 : 0 } : null, car: { face: f.f }, thrusting: !!f.t, levels: { drill: f.l, heat: f.h } };
+      this.drawCar(ctx, look, cx, cy, now, f.color);
+      ctx.font = '800 12px ' + FONT;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)';
+      ctx.strokeText(f.name, cx, cy - Rules.CAR_SIZE * T / 2 - 4);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.name, cx, cy - Rules.CAR_SIZE * T / 2 - 4);
+    }
+  };
+
+  // body: 몸통 색(친구 차). 없으면 내 차 노란색.
+  Renderer.prototype.drawCar = function (ctx, s, cx, cy, now, body) {
     var size = Rules.CAR_SIZE * T;
     var x = cx - size / 2, y = cy - size / 2;
     var d = s.dig;
@@ -325,9 +345,9 @@
     this.drawDrillTip(ctx, size, s.levels.drill, spin, now);
     ctx.restore();
     // 몸통
-    ctx.fillStyle = '#f5c518';
+    ctx.fillStyle = body || '#f5c518';
     roundRect(ctx, x, y + 3, size, size - 9, 5); ctx.fill();
-    ctx.fillStyle = '#d9a400'; ctx.fillRect(x, y + size - 10, size, 4);
+    ctx.fillStyle = body ? shade(body, -40) : '#d9a400'; ctx.fillRect(x, y + size - 10, size, 4);
     // 열보호를 사면 몸통에 파란 보호막 줄
     if (s.levels.heat > 0) { ctx.fillStyle = 'rgba(79,140,255,' + (0.25 + s.levels.heat * 0.12) + ')'; ctx.fillRect(x, y + 3, size, 3); }
     // 창문(앞쪽)
@@ -450,6 +470,12 @@
     for (var k = 0; k < s.autos.length; k++) { // 자동 드릴은 파란 점
       var ay = s.autos[k].y - top;
       if (ay >= 0 && ay < rows) { ctx.fillStyle = '#4f8cff'; ctx.fillRect(mx + s.autos[k].x * cell, my + ay * cell, cell, cell); }
+    }
+    for (var q = 0; q < this.friends.length; q++) { // 👫 친구는 자기 색 점
+      var fr = this.friends[q], fy = Math.floor(fr.y) - top;
+      ctx.fillStyle = fr.color;
+      if (fy >= 0 && fy < rows) ctx.fillRect(mx + fr.x * cell - 2, my + fy * cell - 2, 4, 4);
+      else ctx.fillRect(mx + fr.x * cell - 2, fy < 0 ? my - 3 : my + mh + 1, 4, 2);
     }
     var carY = s.car.y - top;
     if (carY >= 0 && carY < rows && Math.floor(now / 300) % 2 === 0) {

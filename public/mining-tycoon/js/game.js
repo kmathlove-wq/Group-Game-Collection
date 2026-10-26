@@ -94,7 +94,9 @@
       burnTimer: 0,
       heatTimer: 0,
       coreTimer: 0,
-      thrusting: false
+      thrusting: false,
+      multi: false, // 👫 친구와 함께 하는 중(방장·친구 모두)
+      guest: false // 👫 친구 땅에 놀러 와 있음(그 땅의 보물·히든 엔딩은 방장 것)
     };
     Rules.UPGRADE_ORDER.forEach(function (key) { s.levels[key] = 0; });
     s.fuel = fuelCap(s);
@@ -170,7 +172,9 @@
         var x = dx ? col + a : col + c;
         var y = dx ? row + c : row + a;
         if (y < 0 || y >= s.world.h || x < 0 || x >= w) continue;
-        if (canDrill(s, s.world.tiles[y * w + x])) cells.push(y * w + x);
+        var t = s.world.tiles[y * w + x];
+        if (s.guest && t === TILE.TREASURE) continue; // 놀러 온 친구는 넓게 파도 남의 보물은 건드리지 않는다
+        if (canDrill(s, t)) cells.push(y * w + x);
       }
     }
     return cells;
@@ -197,6 +201,7 @@
     var tile = World.tileAt(world(s), col, row);
     if (tile === TILE.EMPTY) return false;
     if (tile === TILE.LAVA) { events.push({ type: 'blocked', reason: 'lava' }); return false; }
+    if (s.guest && tile === TILE.TREASURE) { events.push({ type: 'blocked', reason: 'guest-treasure' }); return false; }
     if (!canDrill(s, tile)) {
       var need = Rules.DRILL_NEED[tile];
       if (need != null) events.push({ type: 'blocked', reason: 'too-hard', need: need + 1 });
@@ -283,6 +288,7 @@
   // 칸을 비울 때는 꼭 이걸 거친다(남은 수를 줄이고 히든 엔딩을 확인한다).
   function clearTile(s, idx, events) {
     var w = s.world;
+    if (s.guest) { w.tiles[idx] = TILE.EMPTY; return; } // 남의 땅에서는 히든 엔딩을 세지 않는다
     if (diggable(w.tiles[idx])) {
       var left = leftCounts(s);
       left.all--;
@@ -298,6 +304,15 @@
       s.hidden2Time = Math.round(s.time);
       events.push({ type: 'hidden', n: 2, time: s.hidden2Time });
     }
+  }
+
+  // 👫 친구가 바꾼 칸을 내 땅에 적는다. 비게 되는 칸은 clearTile을 거쳐 히든 엔딩 수를 맞춘다(방장이면 함께 판 칸도 셈).
+  function applyTile(s, idx, tile, ore, events) {
+    var w = s.world;
+    if (!(idx >= 0 && idx < w.tiles.length)) return;
+    if (tile === TILE.EMPTY && w.tiles[idx] !== TILE.EMPTY) clearTile(s, idx, events);
+    else if (w.tiles[idx] !== tile) { w.tiles[idx] = tile; s.left = null; } // 지각 바닥이 열리는 등 다른 변화는 다시 센다
+    w.ores[idx] = ore;
   }
 
   // ---------- 🤖 자동 드릴 ----------
@@ -700,6 +715,7 @@
   }
   function useTicket(s) {
     if (s.ticket <= 0) return { ok: false, reason: 'none' };
+    if (s.multi) return { ok: false, reason: 'multi' }; // 지구 핵 방은 혼자 가는 곳(친구와 함께 하는 동안은 못 감)
     s.ticket = 0; // 들어가면 없어진다(나갔다가 다시 오려면 또 사야 함)
     s.inCore = true;
     s.dig = null;
@@ -744,6 +760,7 @@
     gachaBlock: gachaBlock,
     rollGacha: rollGacha,
     leftCounts: leftCounts,
+    applyTile: applyTile,
     buyTicket: buyTicket,
     ticketBlock: ticketBlock,
     useTicket: useTicket,
