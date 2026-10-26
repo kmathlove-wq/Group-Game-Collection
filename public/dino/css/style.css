@@ -1,0 +1,42 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #f7f7f7; color: #535353; font-family: system-ui, "Malgun Gothic", sans-serif; }
+body { min-height: 100vh; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #ddd; }
+.bar a { color: #535353; text-decoration: none; font-weight: 700; }
+.bar a, .bar button { white-space: nowrap; } /* 휴대폰에서 "순/위"처럼 글자가 두 줄로 깨지지 않게 */
+.bar-actions { display: flex; gap: 8px; }
+@media (max-width: 480px) {
+  .bar { padding: 8px 12px; font-size: 14px; }
+  .bar-actions { gap: 6px; }
+  .bar button { padding: 5px 8px; }
+}
+button { font: inherit; cursor: pointer; border: 1px solid #535353; background: #fff; color: #535353; border-radius: 8px; padding: 6px 12px; }
+button.primary { background: #535353; color: #fff; }
+button[hidden] { display: none; }
+
+.shell { max-width: 960px; margin: 0 auto; padding: 8px 16px 32px; text-align: center; }
+h1 { font-size: 1.4rem; margin: 12px 0; }
+
+.stage { width: 100%; aspect-ratio: 4 / 1; background: #f7f7f7; border: 1px solid #e2e2e2; touch-action: none; cursor: pointer; }
+.stage canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; touch-action: none; }
+
+.banner { min-height: 1.6em; margin: 10px 0 0; font-size: 1.2rem; font-weight: 800; color: #d17a00; }
+.status { min-height: 1.4em; margin: 2px 0; }
+.hint { margin: 6px 0 0; font-size: 0.95rem; color: #6b6b6b; }
+
+.dialog { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); padding: 16px; z-index: 10; }
+.dialog[hidden] { display: none; }
+.dialog-card { width: 100%; max-width: 420px; max-height: 90vh; overflow: auto; background: #fff; border-radius: 12px; padding: 16px; text-align: left; -webkit-user-select: text; user-select: text; }
+.dialog-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.rank-score { margin: 0 0 8px; font-weight: 700; }
+.rank-label { display: block; font-size: 0.9rem; margin-bottom: 4px; }
+.rank-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.rank-row input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid #999; border-radius: 8px; }
+.rank-result { min-height: 1.3em; margin: 8px 0; font-weight: 700; }
+.rank-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 40vh; overflow: auto; }
+.rank-list li { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid #eee; }
+.rank-no { width: 3em; font-weight: 700; }
+.rank-nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-sc { font-variant-numeric: tabular-nums; }
+.rank-empty { color: #888; }

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-공룡 달리기</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button" aria-pressed="false">🔊 소리 켜짐</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <h1>🦖 공룡 달리기</h1>
+    <div id="stage" class="stage">
+      <canvas id="game" width="600" height="150" aria-label="공룡 달리기 게임 화면"></canvas>
+    </div>
+    <p id="banner" class="banner" aria-live="polite"></p>
+    <p id="status" class="status" aria-live="polite"></p>
+    <p id="hint" class="hint"></p>
+  </main>
+
+  <div id="rankDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="rankTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="rankTitle">🏆 전체 순위</h2>
+      <p id="rankScoreLine" class="rank-score"></p>
+      <label class="rank-label" for="rankName">내 이름 (20자까지)</label>
+      <div class="rank-row">
+        <input id="rankName" type="text" maxlength="20" autocomplete="off" placeholder="이름을 써 주세요">
+        <button id="rankSaveName" type="button" class="ghost">이름 저장</button>
+      </div>
+      <button id="rankSubmit" type="button" class="primary" hidden>순위에 올리기</button>
+      <p id="rankResult" class="rank-result" aria-live="polite"></p>
+      <ol id="rankList" class="rank-list"></ol>
+      <button id="rankClose" type="button" class="ghost">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/rules.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/ranking.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
