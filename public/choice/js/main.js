@@ -91,7 +91,7 @@
       btn.className = 'choice';
       var icon = document.createElement('span'); icon.className = 'icon'; icon.textContent = c.icon;
       var label = document.createElement('span'); label.className = 'label'; label.textContent = c.label;
-      var key = document.createElement('kbd'); key.textContent = String(i + 1);
+      var key = document.createElement('kbd'); key.textContent = i < 9 ? String(i + 1) : i === 9 ? '0' : ''; // 10번째는 0 키
       btn.appendChild(key); btn.appendChild(icon); btn.appendChild(label);
       btn.addEventListener('click', function () { pick(i); });
       box.appendChild(btn);
@@ -100,7 +100,7 @@
 
   function pick(i) {
     var node = Story.current(game);
-    if (node.type !== 'choice' || !shownChoices) return;
+    if (node.type !== 'choice' || !shownChoices || !node.choices[i]) return;
     beep([660]);
     Story.choose(game, i);
     enter();
@@ -183,7 +183,8 @@
     if (e.key === 'Escape') $('collectionDialog').hidden = true;
     if (!$('collectionDialog').hidden) return;
     var n = Number(e.key);
-    if (n >= 1 && n <= 9) pick(n - 1);
+    if (e.key >= '1' && e.key <= '9') pick(n - 1);
+    if (e.key === '0') pick(9);
     if (e.key === ' ' && Story.current(game).choices && Story.current(game).choices.length === 1) { e.preventDefault(); pick(0); }
   });
   // 휴대폰에서 선택지가 하나뿐인 빨리 누르기 장면은 그림을 눌러도 된다

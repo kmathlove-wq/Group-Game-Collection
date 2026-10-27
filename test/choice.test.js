@@ -26,8 +26,10 @@ test('이야기 지도: 모든 길이 있는 장면으로 이어지고, 처음�
     }
   }
   assert.deepEqual([...seen].sort(), Object.keys(NODES).sort(), '못 가는 장면이 있음');
-  assert.ok(Story.ENDING_IDS.length >= 5);
-  assert.ok(Story.FAIL_IDS.length >= 10);
+  assert.ok(Story.ENDING_IDS.length >= 12);
+  assert.ok(Story.FAIL_IDS.length >= 45);
+  const choiceCount = Object.values(NODES).filter((n) => n.type === 'choice').reduce((sum, n) => sum + n.choices.length, 0);
+  assert.ok(choiceCount >= 70, `선택지 ${choiceCount}개`);
 });
 
 test('진행: 고르기·시간 초과·실패 뒤 다시 하기는 마지막 선택 장면으로', () => {

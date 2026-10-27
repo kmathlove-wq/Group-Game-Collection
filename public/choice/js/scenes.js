@@ -504,6 +504,193 @@
     }
   };
 
+  // ---------- 그림 설명표로 그리는 장면(2026-10-27 선택지 늘리기) ----------
+  // 새 배경
+  function cargoBg(ctx) {
+    metalRoom(ctx, '#5a5048', '#3d362f');
+    [[60, 250, 120, 110, '#c58b4e'], [200, 280, 90, 80, '#b0743c'], [600, 230, 140, 130, '#c58b4e'], [640, 150, 90, 80, '#d39a5c'], [470, 300, 80, 60, '#a86b35']].forEach(function (b) {
+      rect(ctx, b[0], b[1], b[2], b[3], b[4]); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(b[0], b[1], b[2], b[3]);
+      ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[0] + b[2], b[1] + b[3]); ctx.moveTo(b[0] + b[2], b[1]); ctx.lineTo(b[0], b[1] + b[3]); ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.stroke();
+    });
+  }
+  function ventBg(ctx) {
+    rect(ctx, 0, 0, W, H, '#6d7486');
+    ctx.fillStyle = '#4a5061'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(160, 90); ctx.lineTo(640, 90); ctx.lineTo(W, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(160, 360); ctx.lineTo(640, 360); ctx.lineTo(W, H); ctx.fill();
+    rect(ctx, 160, 90, 480, 270, '#2b2f3a');
+    for (var i = 0; i < 12; i++) circle(ctx, 60 + i * 62, 420 - (i % 3) * 8, 6, 'rgba(200,200,200,0.35)');
+  }
+  function gardenBg(ctx) {
+    var sky = ctx.createLinearGradient(0, 0, 0, 330); sky.addColorStop(0, '#2b1055'); sky.addColorStop(1, '#7597de');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    rect(ctx, 0, 340, W, 110, '#3d9970');
+    [[90, '#ff6bd6'], [210, '#7cf5ff'], [560, '#ffe066'], [700, '#b388ff']].forEach(function (pl, i) {
+      ctx.strokeStyle = '#2e7d32'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(pl[0], 345); ctx.quadraticCurveTo(pl[0] + 20, 260, pl[0] - 5, 200 + i * 15); ctx.stroke();
+      circle(ctx, pl[0] - 5, 195 + i * 15, 26, pl[1], INK, 3);
+    });
+  }
+  function engineBg(ctx, t) {
+    metalRoom(ctx, '#3b3f52', '#262a38');
+    for (var i = 0; i < 4; i++) rect(ctx, 0, 60 + i * 50, W, 14, '#59607a');
+    var glow = 0.6 + Math.sin(t * 6) * 0.2;
+    circle(ctx, 610, 230, 95, 'rgba(0,229,255,' + (glow * 0.35) + ')');
+    circle(ctx, 610, 230, 60, '#00e5ff', INK, 4);
+    circle(ctx, 610, 230, 30, '#e0ffff');
+  }
+  function warpBg(ctx, t) {
+    rect(ctx, 0, 0, W, H, '#05051a');
+    for (var i = 0; i < 60; i++) {
+      var a = i * 2.4, d = ((t * 300 + i * 37) % 450);
+      ctx.strokeStyle = 'rgba(160,220,255,' + (d / 450) + ')'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(400 + Math.cos(a) * d, 225 + Math.sin(a) * d * 0.6); ctx.lineTo(400 + Math.cos(a) * (d + 30), 225 + Math.sin(a) * (d + 30) * 0.6); ctx.stroke();
+    }
+  }
+  function candyBg(ctx) {
+    var sky = ctx.createLinearGradient(0, 0, 0, 330); sky.addColorStop(0, '#ffc4e1'); sky.addColorStop(1, '#fff0f6');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#6d3b1f'; ctx.beginPath(); ctx.moveTo(0, 340); ctx.lineTo(180, 180); ctx.lineTo(360, 340); ctx.fill();
+    ctx.fillStyle = '#8b4c26'; ctx.beginPath(); ctx.moveTo(300, 340); ctx.lineTo(520, 150); ctx.lineTo(760, 340); ctx.fill();
+    rect(ctx, 0, 340, W, 110, '#ff8fab');
+  }
+  function bedroomBg(ctx) {
+    rect(ctx, 0, 0, W, H, '#ffe8cc');
+    rect(ctx, 0, 340, W, 110, '#c08457');
+    rect(ctx, 500, 260, 260, 90, '#4dabf7'); rect(ctx, 500, 240, 70, 30, '#fff');
+    rect(ctx, 90, 70, 160, 120, '#bde0fe'); ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.strokeRect(90, 70, 160, 120);
+  }
+  var BG = {
+    cell: cellBg, hall: hallBg, kitchen: kitchenBg, cargo: cargoBg, vent: ventBg, garden: gardenBg, candy: candyBg, bedroom: bedroomBg, home: homeBg,
+    control: function (ctx, t) { controlBg(ctx); panelButtons(ctx, t); },
+    pod: function (ctx) { podBg(ctx, false); },
+    space: function (ctx) { spaceBg(ctx, 9); earth(ctx, 650, 120, 45); },
+    engine: engineBg, warp: warpBg,
+    dark: function (ctx) { rect(ctx, 0, 0, W, H, '#07070c'); }
+  };
+
+  // 설명표 한 줄 = { bg 배경, who 상대('alien'|'guard'|'robot'|'baby'|'captain'), mood 상대 표정,
+  //   face 막대맨 표정, fx 막대맨 움직임(bounce·spin·fall·shake·float·grow·tiny·run·fly·hide), hat,
+  //   big 큰 그림 글자(이모지), bigFx('drop'|'wobble'|'spin'|'grow'|'rain'), say 말풍선, sayWho('me'|'them') }
+  var GAGS = {
+    // 선택 장면
+    cargo: { bg: 'cargo', face: 'normal', fx: 'look', big: '📦', bigX: 450, bigY: 330, say: '이 상자들은 뭐지?', sayWho: 'me' },
+    bike: { bg: 'cargo', face: 'scared', fx: 'bike', big: '🛵', bigFx: 'shake', say: '문이 닫힌다!', sayWho: 'me' },
+    vent: { bg: 'vent', face: 'normal', fx: 'crawl', big: '🕸️', bigX: 600, bigY: 140, say: '먼지가 너무 많아…', sayWho: 'me' },
+    garden: { bg: 'garden', face: 'happy', fx: 'look', big: '✨', bigFx: 'wobble', say: '우와, 반짝반짝!', sayWho: 'me' },
+    engine: { bg: 'engine', face: 'scared', fx: 'look', big: '⚙️', bigX: 250, bigY: 150, bigFx: 'spin', say: '부우우웅…', sayWho: 'me' },
+    warp: { bg: 'warp', face: 'scared', fx: 'float', big: '🌀', bigFx: 'spin', say: '어디로 갈까?', sayWho: 'me' },
+    // 실패 장면
+    f_song: { bg: 'cell', who: 'guard', mood: 'happy', face: 'sad', fx: 'float', big: '😭', bigFx: 'wobble', rain: '💧', say: '흐어엉… 너무 슬퍼!', sayWho: 'them', fail: true },
+    f_pizza: { bg: 'cell', face: 'sad', fx: 'look', big: '🍕', bigFx: 'wobble', say: '1000년 뒤 도착 예정', sayWho: 'me', fail: true },
+    f_mummy: { bg: 'cell', who: 'guard', mood: 'happy', face: 'sleep', fx: 'stiff', big: '🧻', bigFx: 'spin', say: '한 칸 더 감아 줄게~', sayWho: 'them', fail: true },
+    f_mop: { bg: 'hall', who: 'robot', face: 'sad', fx: 'shake', big: '🧹', bigFx: 'wobble', say: '화장실 342개 청소!', sayWho: 'them', fail: true },
+    f_banana2: { bg: 'hall', who: 'robot', face: 'dizzy', fx: 'fall', big: '🍌', bigFx: 'spin', fail: true },
+    f_radio: { bg: 'control', face: 'dizzy', fx: 'bounce', big: '🎶', bigFx: 'wobble', rain: '🎵', say: '♪ 우주 최고 아이돌 ♪', sayWho: 'me', fail: true },
+    f_donut: { bg: 'control', who: 'captain', mood: 'angry', face: 'scared', fx: 'shake', big: '🍩', say: '내… 도넛…', sayWho: 'them', fail: true },
+    f_gravity: { bg: 'control', face: 'dizzy', fx: 'float', big: '🫧', rain: '🫧', fail: true },
+    f_search: { bg: 'control', who: 'guard', mood: 'angry', face: 'scared', fx: 'look', big: '🔍', bigFx: 'wobble', say: '혹시 지구 과자를 찾으셨나요?', sayWho: 'me', fail: true },
+    f_up: { bg: 'space', face: 'scared', fx: 'look', big: '🚓', bigFx: 'grow', say: '면허증 보여 주세요', sayWho: 'me', fail: true },
+    f_down: { bg: 'space', face: 'dizzy', fx: 'stretch', big: '🕳️', bigFx: 'spin', fail: true },
+    f_snack: { bg: 'pod', face: 'happy', fx: 'grow', big: '🍔', rain: '🍟', say: '꺼억~', sayWho: 'me', fail: true },
+    f_pet: { bg: 'pod', face: 'scared', fx: 'shake', big: '🐶', bigFx: 'wobble', say: '멍멍! (냠냠)', sayWho: 'me', fail: true },
+    f_selfie: { bg: 'pod', who: 'guard', mood: 'happy', face: 'happy', fx: 'look', big: '📸', bigFx: 'grow', say: '브이~', sayWho: 'them', fail: true, flash: true },
+    f_egg: { bg: 'kitchen', face: 'scared', fx: 'run', big: '🦖', bigFx: 'grow', say: '내 알 어디 갔어!', sayWho: 'me', fail: true, hat: 'chef' },
+    f_cake: { bg: 'kitchen', face: 'dizzy', fx: 'fall', big: '🧁', bigFx: 'grow', rain: '🍦', fail: true, hat: 'chef' },
+    f_karaoke: { bg: 'kitchen', who: 'alien', mood: 'happy', face: 'happy', fx: 'bounce', big: '🎤', rain: '⭐', say: '앵콜! 앵콜!', sayWho: 'them', fail: true },
+    f_trash: { bg: 'space', face: 'sad', fx: 'float', big: '🗑️', bigFx: 'spin', rain: '🍌', fail: true },
+    f_photo: { bg: 'kitchen', who: 'captain', mood: 'slip', face: 'scared', fx: 'look', big: '📸', fail: true, flash: true },
+    f_jelly: { bg: 'cargo', face: 'happy', fx: 'jelly', big: '🍮', bigFx: 'wobble', fail: true },
+    f_dino: { bg: 'cargo', face: 'scared', fx: 'shake', big: '🦕', bigFx: 'grow', say: '하아아암~', sayWho: 'me', fail: true },
+    f_freezer: { bg: 'cargo', face: 'sad', fx: 'stiff', big: '🧊', rain: '❄️', fail: true, tint: 'rgba(160,220,255,0.35)' },
+    f_closed: { bg: 'cargo', face: 'dizzy', fx: 'squash', big: '🚪', fail: true },
+    f_brake: { bg: 'cargo', face: 'scared', fx: 'fly', big: '🛵', bigX: 250, bigY: 330, fail: true },
+    f_horn: { bg: 'cargo', who: 'guard', mood: 'happy', face: 'scared', fx: 'look', big: '📯', bigFx: 'wobble', say: '경비병 모여라!', sayWho: 'them', fail: true },
+    f_fan: { bg: 'vent', face: 'dizzy', fx: 'spin', big: '🌀', bigFx: 'spin', fail: true },
+    f_sneeze: { bg: 'vent', face: 'scared', fx: 'shake', big: '🤧', bigFx: 'grow', say: '에취이이이!', sayWho: 'me', fail: true },
+    f_mouse: { bg: 'vent', face: 'happy', fx: 'bounce', big: '🐭', rain: '🧀', say: '이장님 만세!', sayWho: 'me', fail: true },
+    f_flower: { bg: 'garden', face: 'scared', fx: 'shake', big: '🌸', bigFx: 'grow', rain: '🎶', say: '꺄아아악!', sayWho: 'me', fail: true },
+    f_mushroom: { bg: 'garden', face: 'dizzy', fx: 'balloon', big: '🍄', fail: true },
+    f_water: { bg: 'garden', who: 'giant', face: 'scared', fx: 'look', big: '💦', rain: '💧', fail: true },
+    f_pot: { bg: 'garden', face: 'happy', fx: 'sprout', big: '🪴', fail: true },
+    f_wrench: { bg: 'engine', face: 'happy', fx: 'look', big: '🔧', bigFx: 'spin', say: '어? 반대 방향인데?', sayWho: 'me', fail: true },
+    f_dark: { bg: 'dark', face: 'scared', fx: 'look', big: '🖐️', bigFx: 'wobble', say: '안녕?', sayWho: 'me', fail: true, eyes: true },
+    f_cola: { bg: 'engine', face: 'dizzy', fx: 'shake', big: '🥤', rain: '🫧', say: '꺼어억!', sayWho: 'me', fail: true },
+    f_hamster: { bg: 'engine', face: 'sad', fx: 'run', big: '🐹', bigX: 640, bigY: 150, say: '하루에 3만 바퀴…', sayWho: 'me', fail: true },
+    f_dino_age: { bg: 'home', face: 'scared', fx: 'run', big: '🦖', bigFx: 'grow', rain: '🌋', fail: true },
+    // 엔딩
+    e_parcel: { bg: 'home', face: 'happy', fx: 'pop', big: '📦', bigX: 330, bigY: 330, say: '착불입니다~', sayWho: 'me' },
+    e_bike: { bg: 'space', face: 'happy', fx: 'bike', big: '🛵', rain: '⭐', say: '배달 왔습니다!', sayWho: 'me' },
+    e_tree: { bg: 'home', face: 'happy', fx: 'float', big: '🌼', bigFx: 'wobble', say: '둥실둥실~', sayWho: 'me' },
+    e_warp: { bg: 'bedroom', face: 'happy', fx: 'look', big: '⏰', bigFx: 'shake', say: '꿈이었나?', sayWho: 'me' },
+    e_candy: { bg: 'candy', face: 'happy', fx: 'bounce', big: '🍭', rain: '🍬', say: '과자 행성 만세!', sayWho: 'me', hat: 'crown' },
+    e_captain: { bg: 'control', who: 'alien', mood: 'happy', face: 'happy', fx: 'bounce', big: '👑', bigFx: 'wobble', say: '모두 지구로!', sayWho: 'me', hat: 'crown' },
+    e_homework: { bg: 'bedroom', face: 'happy', fx: 'bounce', big: '📚', rain: '💯', say: '숙제 끝!', sayWho: 'me' }
+  };
+
+  function gag(spec) {
+    return function (ctx, t) {
+      (BG[spec.bg] || BG.cell)(ctx, t);
+      if (spec.tint) rect(ctx, 0, 0, W, H, spec.tint);
+      // 상대
+      if (spec.who === 'alien' || spec.who === 'guard') alien(ctx, 610, 400, { hat: spec.who === 'guard' ? 'guard' : null, mood: spec.mood, s: 1 });
+      if (spec.who === 'captain') alien(ctx, 610, 400, { hat: 'captain', mood: spec.mood, s: 1.1, color: '#9b59b6' });
+      if (spec.who === 'giant') alien(ctx, 600, 440, { mood: 'happy', s: 1 + ease(t / 1.4) * 1.3 });
+      if (spec.who === 'robot') robot(ctx, 610, 390, t, { dance: spec.mood === 'dance' });
+      if (spec.who === 'baby') baby(ctx, 600, 380, t);
+      // 막대맨
+      var x = 300, y = 390, o = { face: spec.face, hat: spec.hat === 'crown' ? null : spec.hat };
+      var fx = spec.fx;
+      if (fx === 'bounce') y -= Math.abs(Math.sin(t * 6)) * 24;
+      if (fx === 'shake') x += Math.sin(t * 40) * 4;
+      if (fx === 'spin') { o.rot = t * 5; y -= 60; }
+      if (fx === 'fall') o.rot = ease(t / 0.8) * 1.45;
+      if (fx === 'float') y -= ease(t / 1.6) * 110 + Math.sin(t * 2) * 8;
+      if (fx === 'grow' || fx === 'balloon') o.s = 1 + ease(t / 1.2) * (fx === 'balloon' ? 1.1 : 0.6);
+      if (fx === 'balloon') y -= ease(t / 1.6) * 150;
+      if (fx === 'run') { x += Math.sin(t * 3) * 120; o.legL = Math.sin(t * 14) * 0.7; o.legR = -Math.sin(t * 14) * 0.7; o.armL = -Math.sin(t * 14) * 0.8; o.armR = Math.sin(t * 14) * 0.8; o.lean = 0.25; }
+      if (fx === 'fly') { x += ease(t / 0.9) * 280; y -= Math.sin(clamp01(t / 0.9) * Math.PI) * 120; o.rot = t * 6; }
+      if (fx === 'stiff') { o.armL = 0; o.armR = 0; o.legL = -0.05; o.legR = 0.05; }
+      if (fx === 'crawl') { o.rot = 1.2; y -= 10; o.armR = 1.4; o.legL = -0.6; }
+      if (fx === 'stretch') { o.s = 1 + ease(t / 1.2) * 0.4; o.rot = Math.sin(t * 2) * 0.3; }
+      if (fx === 'squash') { ctx.save(); ctx.translate(x, y); ctx.scale(1 + ease(t / 0.5) * 0.6, 1 - ease(t / 0.5) * 0.55); ctx.translate(-x, -y); }
+      if (fx === 'jelly') { o.s = 0.8; }
+      if (fx === 'pop') y -= Math.max(0, Math.sin(clamp01(t / 0.8) * Math.PI)) * 160 + 40;
+      if (fx === 'bike') { x += Math.sin(t * 2) * 30; o.legL = 0.9; o.legR = 0.5; o.armL = 1.3; o.armR = 1.3; o.lean = 0.3; }
+      if (fx === 'look') { o.armR = 1.2 + Math.sin(t * 3) * 0.2; }
+      stick(ctx, x, y, o);
+      if (fx === 'squash') ctx.restore();
+      if (spec.hat === 'crown') text(ctx, '👑', x + (o.rot ? 0 : 0), y - 150 * (o.s || 1), 34);
+      if (fx === 'jelly') { ctx.fillStyle = 'rgba(255,170,60,0.55)'; ctx.beginPath(); ctx.ellipse(x, y - 60, 90 + Math.sin(t * 5) * 8, 110 - Math.sin(t * 5) * 8, 0, 0, Math.PI * 2); ctx.fill(); }
+      if (fx === 'sprout') text(ctx, '🌱', x, y - 140 - ease(t / 1.2) * 20, 40);
+      if (fx === 'bike') text(ctx, '🛵', x + 10, y - 20, 70);
+      // 큰 그림 글자
+      if (spec.big && fx !== 'bike') {
+        var bx = spec.bigX || 520, by = spec.bigY || 210, size = 90;
+        ctx.save(); ctx.translate(bx, by);
+        if (spec.bigFx === 'wobble') ctx.rotate(Math.sin(t * 5) * 0.2);
+        if (spec.bigFx === 'spin') ctx.rotate(t * 4);
+        if (spec.bigFx === 'shake') ctx.translate(Math.sin(t * 50) * 5, 0);
+        if (spec.bigFx === 'grow') ctx.scale(0.4 + ease(t / 1) * 0.9, 0.4 + ease(t / 1) * 0.9);
+        if (spec.bigFx === 'drop') ctx.translate(0, -200 * (1 - ease(t / 0.8)));
+        text(ctx, spec.big, 0, 0, size);
+        ctx.restore();
+      }
+      // 쏟아지는 것들
+      if (spec.rain) for (var i = 0; i < 14; i++) {
+        var rx = (i * 97 + 40) % W, ry = ((t * 160 + i * 61) % (H + 60)) - 30;
+        text(ctx, spec.rain, rx, ry, 26);
+      }
+      if (spec.eyes) { circle(ctx, 560, 200, 10, '#ffd60a'); circle(ctx, 600, 200, 10, '#ffd60a'); }
+      if (spec.flash) { var fl = Math.max(0, 1 - Math.abs(t - 0.5) * 4); if (fl > 0) rect(ctx, 0, 0, W, H, 'rgba(255,255,255,' + fl + ')'); }
+      // 말풍선(0.4초 뒤)
+      if (spec.say && t > 0.4) {
+        if (spec.sayWho === 'them' && spec.who) bubble(ctx, spec.say, 610, 220, 17);
+        else bubble(ctx, spec.say, Math.max(150, Math.min(650, x)), Math.max(60, y - 170 * (o.s || 1)), 17);
+      }
+      if (spec.fail) failStamp(ctx, t);
+    };
+  }
+  Object.keys(GAGS).forEach(function (name) { if (!ART[name]) ART[name] = gag(GAGS[name]); });
+
   // 엔딩 장면에 공통으로 덧그리는 "엔딩" 글자
   function endingStamp(ctx, t) {
     var v = ease((t - 1.2) / 0.4);
