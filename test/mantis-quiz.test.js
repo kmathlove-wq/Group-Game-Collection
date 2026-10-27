@@ -3,7 +3,13 @@ const assert = require('node:assert/strict');
 const M = require('../public/mantis-quiz/js/species.js');
 
 test('사마귀 목록: id·사진 파일 이름이 겹치지 않고 힌트가 3개씩', () => {
-  assert.equal(M.SPECIES.length, 14);
+  assert.ok(M.SPECIES.length >= 100, `사마귀 ${M.SPECIES.length}종`);
+  const fs = require('fs'), path = require('path');
+  for (const s of M.SPECIES) {
+    // 새로 넣은 종은 사진이 꼭 있고, 위키미디어 사진은 출처를 밝힌다
+    if (s.credit) assert.match(s.credit, /위키미디어 공용$/, s.name);
+    assert.ok(M.EXTENSIONS.some((e) => fs.existsSync(path.join(__dirname, '../public/mantis-quiz/img', s.file + '.' + e))), `${s.name} 사진 없음`);
+  }
   assert.equal(new Set(M.SPECIES.map((s) => s.id)).size, M.SPECIES.length);
   assert.equal(new Set(M.SPECIES.map((s) => s.file)).size, M.SPECIES.length);
   assert.equal(new Set(M.SPECIES.map((s) => s.name)).size, M.SPECIES.length);
