@@ -33,7 +33,7 @@
       <button id="zoomBtn" type="button" aria-pressed="false">🔍 크게 보기</button>
       <button id="pauseBtn" type="button">⏸ 멈춤</button>
     </div>
-    <p class="hint-text">숲 속에 숨은 새를 모두 찾아 누르면 다음 단계! 엉뚱한 곳을 누르면 3초가 줄어요.</p>
+    <p class="hint-text" id="rulesText">숲 속에 숨은 새를 모두 찾아 누르면 다음 단계! 엉뚱한 곳을 누르면 3초가 줄어요.</p>
   </main>
 
   <div id="overlay" class="overlay">
@@ -43,6 +43,7 @@
       <p id="ovText" class="ov-text">숲 속 어딘가에 새들이 숨어 있어요.<br>제한 시간 안에 모두 찾아보세요!</p>
       <p id="ovBest" class="ov-best"></p>
       <button id="ovBtn" type="button" class="primary">시작하기</button>
+      <button id="ovHard" type="button" class="primary hard" hidden>🔥 어려움으로 시작</button>
       <button id="ovRank" type="button" class="ghost" hidden>🏆 순위에 올리기</button>
     </div>
   </div>

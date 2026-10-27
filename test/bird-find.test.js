@@ -37,6 +37,36 @@ test('단계가 오를수록 새가 많아지고 작아진다', () => {
   assert.equal(S.levelInfo(4).camo, 1);
 });
 
+test('어려움: 새가 작고 많으며, 가짜 새·가림 잎이 진짜 새 판정을 망치지 않는다', () => {
+  assert.equal(S.MODES.hard.seconds, 30);
+  assert.equal(S.MODES.hard.hints, 0);
+  assert.ok(S.levelInfo(1, 'hard').size < S.levelInfo(1).size);
+  assert.equal(S.levelInfo(30, 'hard').size, 8);
+  for (let level = 1; level <= 12; level++) {
+    const info = S.levelInfo(level, 'hard');
+    for (let seed = 1; seed <= 25; seed++) {
+      const sc = S.build(level, seed * 104729, 'hard');
+      assert.equal(sc.birds.length, info.birds, `어려움 ${level}단계 씨앗 ${seed}`);
+      assert.ok(sc.fakes.length > 0 && sc.litter.length > 300);
+      for (const b of sc.birds) {
+        assert.ok(b.subtle && b.camo);
+        assert.ok(b.x >= b.size && b.x <= S.W - b.size && b.y >= b.size && b.y <= S.H - b.size, '화면 밖');
+        for (const o of sc.birds) if (o !== b) assert.ok(Math.hypot(o.x - b.x, o.y - b.y) >= b.size * S.HIT_SCALE * 2);
+        for (const f of sc.fakes) assert.ok(Math.hypot(f.x - b.x, f.y - b.y) >= b.size * S.HIT_SCALE * 2, '가짜 새가 너무 가까움');
+      }
+      assert.equal(sc.covers.length, sc.birds.length * 2);
+      for (const c of sc.covers) for (const b of sc.birds) assert.ok(Math.hypot(c.x - b.x, c.y - b.y) > c.r);
+    }
+  }
+});
+
+test('쉬움은 원래 판 그대로', () => {
+  assert.deepEqual(S.levelInfo(3, 'easy'), S.levelInfo(3));
+  const sc = S.build(3, 42);
+  assert.equal(sc.fakes.length, 0);
+  assert.equal(sc.litter.length, 0);
+});
+
 test('판정: 새 근처를 누르면 그 새, 멀리 누르면 없음, 찾은 새는 다시 안 잡힘', () => {
   const sc = S.build(2, 99);
   const b = sc.birds[0];
@@ -68,4 +98,8 @@ test('새 찾기 순위 API', async (t) => {
   const ok = await post({ name: '새박사', score: 1234 });
   assert.equal(ok.status, 200);
   assert.equal((await ok.json()).rank, 1);
+  // 어려움 순위는 따로
+  const hard = await fetch(`${url}/api/bird-find-hard/scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '새박사', score: 99 }) });
+  assert.equal(hard.status, 200);
+  assert.equal((await hard.json()).rank, 1);
 });

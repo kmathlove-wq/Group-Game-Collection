@@ -1,11 +1,12 @@
 // ===== main.js =====
 // 새 찾기 진행: 단계마다 새 숲(무작위 씨앗) → 제한 시간 안에 새를 모두 누르면 다음 단계, 시간이 끝나면 게임 끝.
-// localStorage: 'bird-find:best'(최고 점수), 'bird-find:sound'('off'면 소리 끔). 글은 textContent로만 넣는다.
+// 난이도 쉬움/어려움(S.MODES)은 시작할 때 고르고, 최고 점수·순위는 따로 센다.
+// localStorage: 'bird-find:best'(쉬움 최고 점수), 'bird-find:best-hard'(어려움), 'bird-find:sound'('off'면 소리 끔). 글은 textContent로만 넣는다.
 (function (BF) {
   'use strict';
   var S = BF.Scene, D = BF.Draw;
   var $ = function (id) { return document.getElementById(id); };
-  var BEST_KEY = 'bird-find:best', SOUND_KEY = 'bird-find:sound';
+  var BEST_KEYS = { easy: 'bird-find:best', hard: 'bird-find:best-hard' }, SOUND_KEY = 'bird-find:sound';
   var RES = 2; // 캔버스 화소 = 논리 크기 × 2(확대해도 선명하게)
 
   var canvas = $('game');
@@ -14,13 +15,20 @@
   var bg = document.createElement('canvas');
   bg.width = canvas.width; bg.height = canvas.height;
   var bgCtx = bg.getContext('2d');
-  var ranking = window.GroupRanking.create({ slug: 'bird-find', unit: '점', top: 50 });
+  var rankings = {
+    easy: window.GroupRanking.create({ slug: 'bird-find', unit: '점', top: 50 }),
+    hard: window.GroupRanking.create({ slug: 'bird-find-hard', unit: '점', top: 50 })
+  };
 
   var state = {
     phase: 'ready',   // ready · playing · paused · cleared · over
+    mode: 'easy',     // easy · hard
     level: 1, score: 0, timeLeft: S.LEVEL_SECONDS, scene: null,
     hintsLeft: 1, hint: null, misses: [], now: 0, submitted: false
   };
+
+  function mode() { return S.MODES[state.mode]; }
+  function bestKey() { return BEST_KEYS[state.mode]; }
 
   function get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function set(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* 무시 */ } }
@@ -60,26 +68,32 @@
 
   // ----- 화면 표시 -----
   function hud() {
-    $('levelLabel').textContent = state.level + '단계';
+    $('levelLabel').textContent = (state.mode === 'hard' ? '🔥 ' : '') + state.level + '단계';
     $('leftLabel').textContent = '🐦 남은 새 ' + (state.scene ? S.remaining(state.scene) : 0);
     $('timeLabel').textContent = '⏱ ' + Math.ceil(state.timeLeft);
     $('timeLabel').classList.toggle('low', state.timeLeft <= 10);
     $('scoreLabel').textContent = state.score.toLocaleString('ko-KR') + '점';
-    $('timerBar').style.width = (state.timeLeft / S.LEVEL_SECONDS * 100) + '%';
+    $('timerBar').style.width = (state.timeLeft / mode().seconds * 100) + '%';
     $('hintLeft').textContent = state.hintsLeft;
     $('hintBtn').disabled = state.phase !== 'playing' || state.hintsLeft <= 0;
     $('pauseBtn').textContent = state.phase === 'paused' ? '▶ 계속' : '⏸ 멈춤';
     $('pauseBtn').disabled = state.phase !== 'playing' && state.phase !== 'paused';
   }
 
+  // 처음·게임 끝 화면에서는 쉬움/어려움 두 단추를 보여 준다.
   function overlay(emoji, title, text, button, showRank) {
+    var choose = state.phase === 'ready' || state.phase === 'over';
     $('ovEmoji').textContent = emoji;
     $('ovTitle').textContent = title;
     $('ovText').textContent = text;
-    $('ovBtn').textContent = button;
+    $('ovBtn').textContent = choose ? '🙂 쉬움으로 시작' : button;
+    $('ovHard').hidden = !choose;
     $('ovRank').hidden = !showRank;
-    var best = Number(get(BEST_KEY)) || 0;
-    $('ovBest').textContent = best ? '🏅 내 최고 점수 ' + best.toLocaleString('ko-KR') + '점' : '';
+    var easyBest = Number(get(BEST_KEYS.easy)) || 0, hardBest = Number(get(BEST_KEYS.hard)) || 0;
+    var bests = [];
+    if (easyBest) bests.push('🙂 ' + easyBest.toLocaleString('ko-KR') + '점');
+    if (hardBest) bests.push('🔥 ' + hardBest.toLocaleString('ko-KR') + '점');
+    $('ovBest').textContent = bests.length ? '🏅 내 최고 점수 ' + bests.join(' · ') : '';
     $('overlay').hidden = false;
     $('ovBtn').focus();
   }
@@ -96,9 +110,9 @@
   // ----- 진행 -----
   function startLevel() {
     var seed = (Math.random() * 4294967296) >>> 0;
-    state.scene = S.build(state.level, seed);
-    state.timeLeft = S.LEVEL_SECONDS;
-    state.hintsLeft = 1;
+    state.scene = S.build(state.level, seed, state.mode);
+    state.timeLeft = mode().seconds;
+    state.hintsLeft = mode().hints;
     state.hint = null;
     state.misses = [];
     bgCtx.setTransform(RES, 0, 0, RES, 0, 0);
@@ -109,7 +123,11 @@
     render();
   }
 
-  function newGame() {
+  function newGame(m) {
+    state.mode = m === 'hard' ? 'hard' : 'easy';
+    $('rulesText').textContent = state.mode === 'hard'
+      ? '🔥 어려움: 아주 작은 새가 앉은 자리와 거의 같은 색으로 숨어 있어요. 눈 없는 가짜 새도 있어요! 30초, 힌트 없음, 엉뚱한 곳은 5초 줄어요.'
+      : '숲 속에 숨은 새를 모두 찾아 누르면 다음 단계! 엉뚱한 곳을 누르면 3초가 줄어요.';
     state.level = 1; state.score = 0; state.submitted = false;
     startLevel();
   }
@@ -121,7 +139,7 @@
     sound.clear();
     hud();
     setTimeout(function () {
-      overlay('🎉', state.level + '단계 성공!', '남은 시간 보너스 +' + bonus + '점\n다음 단계는 새가 ' + S.levelInfo(state.level + 1).birds + '마리, 더 꼭꼭 숨어 있어요!', '다음 단계 →', false);
+      overlay('🎉', state.level + '단계 성공!', '남은 시간 보너스 +' + bonus + '점\n다음 단계는 새가 ' + S.levelInfo(state.level + 1, state.mode).birds + '마리, 더 꼭꼭 숨어 있어요!', '다음 단계 →', false);
     }, 600);
   }
 
@@ -130,14 +148,14 @@
     sound.over();
     state.misses = [];
     state.hint = null;
-    var best = Number(get(BEST_KEY)) || 0;
+    var best = Number(get(bestKey())) || 0;
     var record = state.score > best;
-    if (record) set(BEST_KEY, String(state.score));
+    if (record) set(bestKey(), String(state.score));
     hud();
     render();
     drawMissed();
     setTimeout(function () {
-      overlay('⏰', '시간 끝!', state.level + '단계까지 와서 ' + state.score.toLocaleString('ko-KR') + '점을 얻었어요.' + (record ? '\n🏅 최고 점수 새 기록!' : '') + '\n노란 동그라미가 못 찾은 새예요.', '처음부터 다시', state.score > 0);
+      overlay('⏰', '시간 끝!', (state.mode === 'hard' ? '🔥 어려움 ' : '') + state.level + '단계까지 와서 ' + state.score.toLocaleString('ko-KR') + '점을 얻었어요.' + (record ? '\n🏅 최고 점수 새 기록!' : '') + '\n노란 동그라미가 못 찾은 새예요.', '처음부터 다시', state.score > 0);
     }, 1400);
   }
 
@@ -164,7 +182,7 @@
       sound.found();
       if (S.remaining(state.scene) === 0) levelCleared();
     } else {
-      state.timeLeft = Math.max(0, state.timeLeft - S.WRONG_PENALTY);
+      state.timeLeft = Math.max(0, state.timeLeft - mode().penalty);
       state.misses.push({ x: x, y: y, at: performance.now() });
       sound.wrong();
     }
@@ -192,19 +210,22 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden && state.phase === 'playing') togglePause(); });
 
   $('ovBtn').addEventListener('click', function () {
-    if (state.phase === 'ready' || state.phase === 'over') newGame();
+    if (state.phase === 'ready' || state.phase === 'over') newGame('easy');
     else if (state.phase === 'cleared') { state.level++; startLevel(); }
     else if (state.phase === 'paused') togglePause();
   });
+  $('ovHard').addEventListener('click', function () {
+    if (state.phase === 'ready' || state.phase === 'over') newGame('hard');
+  });
   $('ovRank').addEventListener('click', function () {
-    if (state.submitted) return ranking.show(0);
+    if (state.submitted) return rankings[state.mode].show(0);
     state.submitted = true;
     $('ovRank').hidden = true;
-    ranking.show(state.score);
+    rankings[state.mode].show(state.score);
   });
   $('rankBtn').addEventListener('click', function () {
     if (state.phase === 'playing') togglePause();
-    ranking.show(0);
+    rankings[state.mode].show(0);
   });
   $('soundBtn').addEventListener('click', function () {
     muted = !muted;
@@ -242,5 +263,5 @@
   D.scene(bgCtx, state.scene);
   render();
   hud();
-  overlay('🐦', '새 찾기', '숲 속 어딘가에 새들이 숨어 있어요.\n제한 시간 ' + S.LEVEL_SECONDS + '초 안에 모두 찾아보세요!', '시작하기', false);
+  overlay('🐦', '새 찾기', '숲 속 어딘가에 새들이 숨어 있어요.\n🙂 쉬움: ' + S.MODES.easy.seconds + '초 · 힌트 1번\n🔥 어려움: ' + S.MODES.hard.seconds + '초 · 힌트 없음 · 정말 정말 어려워요!', '시작하기', false);
 })(window.BirdFind);

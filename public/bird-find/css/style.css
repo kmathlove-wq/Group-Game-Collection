@@ -38,6 +38,7 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .ov-best { font-weight: 800; margin: 6px 0 12px; }
 .ov-best:empty { display: none; }
 .primary { width: 100%; border: 0; border-radius: 14px; padding: 14px; font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(135deg, #40c057, var(--sky)); }
+.primary.hard { margin-top: 8px; background: linear-gradient(135deg, #e8590c, #c92a2a); }
 .ghost { width: 100%; margin-top: 8px; border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 12px; font-weight: 800; }
 
 @media (max-width: 480px) { .hud { gap: 6px; font-size: 14px; } .tools button { padding: 8px 10px; font-size: 14px; } }

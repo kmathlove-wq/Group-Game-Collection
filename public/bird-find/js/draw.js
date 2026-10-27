@@ -61,10 +61,12 @@
     ctx.translate(b.x, b.y);
     ctx.scale(b.dir * s, s);
     // 숨는 새는 배·날개 색 차이를 줄이고 부리도 수수하게(밝은 배와 주황 부리가 눈에 확 띄었음)
-    var body = b.color, dark = shade(b.color, b.camo ? -0.15 : -0.35), light = shade(b.color, b.camo ? 0.1 : 0.45);
+    // 어려움(subtle)은 무늬 차이를 더 줄이고 다리·눈도 둘레 색에 가깝게
+    var body = b.color;
+    var dark = shade(b.color, b.subtle ? -0.06 : b.camo ? -0.15 : -0.35), light = shade(b.color, b.subtle ? 0.04 : b.camo ? 0.1 : 0.45);
     // 다리
     if (b.pose !== 'fly') {
-      ctx.strokeStyle = '#6b4f2a'; ctx.lineWidth = 2;
+      ctx.strokeStyle = b.subtle ? shade(b.color, -0.25) : '#6b4f2a'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(-3, 10); ctx.lineTo(-4, 18); ctx.moveTo(3, 10); ctx.lineTo(4, 18); ctx.stroke();
     }
     // 꼬리
@@ -78,10 +80,11 @@
     // 머리
     circle(ctx, 13, -8, 8.5, body);
     // 부리
-    ctx.fillStyle = b.camo ? shade(b.color, -0.3) : '#f2a541';
+    ctx.fillStyle = b.subtle ? shade(b.color, -0.1) : b.camo ? shade(b.color, -0.3) : '#f2a541';
     ctx.beginPath(); ctx.moveTo(20, -10); ctx.lineTo(28, -7); ctx.lineTo(20, -5); ctx.closePath(); ctx.fill();
     // 눈
-    circle(ctx, 15.5, -10, 2.3, '#111');
+    // 가짜 새(fake)는 눈이 없다 — 어려움에서 진짜를 가려낼 유일한 단서
+    if (!b.fake) circle(ctx, 15.5, -10, b.subtle ? 2 : 2.3, b.subtle ? shade(b.color, -0.55) : '#111');
     if (!b.camo) circle(ctx, 16.2, -10.7, 0.8, '#fff');
     // 날개
     ctx.fillStyle = dark;
@@ -119,7 +122,10 @@
     sc.bushes.forEach(function (bu) {
       bu.parts.forEach(function (p) { circle(ctx, p.x, p.y, p.r, p.color); circle(ctx, p.x - p.r * 0.2, p.y - p.r * 0.3, p.r * 0.4, shade(p.color, 0.12)); });
     });
+    (sc.litter || []).forEach(function (l) { leaf(ctx, l.x, l.y, l.r, l.rot, l.color); });
+    (sc.spots || []).forEach(function (d) { circle(ctx, d.x, d.y, d.r, d.color); });
     sc.decoys.forEach(function (d) { leaf(ctx, d.x, d.y, d.r * 1.3, d.rot, d.color); });
+    (sc.fakes || []).forEach(function (f) { bird(ctx, f); });
     sc.birds.forEach(function (b) { bird(ctx, b); });
     sc.covers.forEach(function (c) { circle(ctx, c.x, c.y, c.r, c.color); });
   }
