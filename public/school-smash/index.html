@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>그룹 게임 컬렉션-학교 뿌시기</title>
+  <title>그룹 게임 컬렉션-학교 부수기</title>
   <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
   <link rel="stylesheet" href="../shared/ranking.css">
   <link rel="stylesheet" href="css/style.css">
@@ -27,27 +27,27 @@
     <div class="stage">
       <canvas id="game" aria-label="부술 학교 건물. 누르거나 끌어서 부수세요."></canvas>
     </div>
-    <div class="tools" role="toolbar" aria-label="도구">
-      <button type="button" class="tool" data-tool="hammer" aria-pressed="true"><span class="ico">🔨</span><b>망치</b><span class="count">∞</span></button>
-      <button type="button" class="tool" data-tool="bomb" aria-pressed="false"><span class="ico">💣</span><b>폭탄</b><span class="count">∞</span></button>
-      <button type="button" class="tool" data-tool="meteor" aria-pressed="false"><span class="ico">☄️</span><b>운석</b><span class="count">∞</span></button>
-      <button type="button" class="tool" data-tool="quake" aria-pressed="false"><span class="ico">🌋</span><b>지진</b><span class="count">∞</span></button>
-    </div>
+    <p id="toolNow" class="tool-now"></p>
+    <div id="groupTabs" class="group-tabs" role="tablist" aria-label="무기 묶음"></div>
+    <div id="toolGrid" class="tools" role="toolbar" aria-label="무기"></div>
     <div class="actions">
       <button id="rebuildBtn" type="button" hidden>🏗️ 다시 짓기</button>
+      <button id="schoolBtn" type="button" hidden>🏫 다른 학교</button>
       <button id="endBtn" type="button" hidden>🏁 그만하고 점수 보기</button>
     </div>
-    <p class="help">도구를 고르고 학교를 누르세요. 망치는 누른 채로 끌면 계속 때려요. 숫자 키 1~4로도 도구를 바꿀 수 있어요. (지진은 아무 곳이나 누르면 시작해요)</p>
+    <p class="help">묶음을 고르고 무기를 골라 학교를 누르세요. 망치·톱·레이저 같은 무기는 누른 채로 끌면 계속 부숴요. 숫자 키 1~9로 지금 묶음의 무기를 바꿀 수 있어요. (지진·개미 떼·쓰나미 같은 무기는 아무 곳이나 눌러도 돼요)</p>
   </main>
 
   <div id="overlay" class="overlay">
     <div class="overlay-card">
       <div id="ovEmoji" class="ov-emoji">🏫</div>
-      <h1 id="ovTitle">학교 뿌시기</h1>
+      <h1 id="ovTitle">학교 부수기</h1>
       <p id="ovText" class="ov-text"></p>
       <p id="ovBest" class="ov-best"></p>
-      <button id="modeChallenge" type="button" class="primary">⏱ 60초 도전 <small>(도구 개수 제한 · 순위)</small></button>
-      <button id="modeFree" type="button" class="ghost">🧸 마음껏 부수기 <small>(시간·도구 무제한)</small></button>
+      <p class="school-title">🏫 부술 학교 고르기</p>
+      <div id="schoolGrid" class="school-grid"></div>
+      <button id="modeChallenge" type="button" class="primary">⏱ 60초 도전 <small>(무기 개수 제한 · 순위)</small></button>
+      <button id="modeFree" type="button" class="ghost">🧸 마음껏 부수기 <small>(시간·무기 무제한)</small></button>
       <button id="ovRank" type="button" class="ghost" hidden>🏆 순위에 올리기</button>
     </div>
   </div>
