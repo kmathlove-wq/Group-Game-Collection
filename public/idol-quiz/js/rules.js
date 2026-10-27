@@ -57,6 +57,84 @@
     피프티피프티|girl|2022|fiftyfifty
     트리플에스|girl|2023|triples
     엔시티위시|boy|2024|nctwish
+    지오디|boy|1999|god
+    에이치오티|boy|1996|hot
+    젝스키스|boy|1997|젝키,sechskies
+    신화|boy|1998|shinhwa
+    비스트|boy|2009|beast
+    인피니트|boy|2010|infinite
+    블락비|boy|2011|blockb
+    빅스|boy|2012|vixx
+    갓세븐|boy|2014|got7
+    아스트로|boy|2016|astro
+    펜타곤|boy|2016|pentagon
+    엔시티|boy|2016|nct
+    워너원|boy|2017|wannaone
+    골든차일드|boy|2017|goldenchild
+    에이비식스|boy|2019|ab6ix
+    크래비티|boy|2020|cravity
+    피원하모니|boy|2020|p1harmony
+    싸이커스|boy|2023|xikers
+    앤팀|boy|2022|andteam
+    원어스|boy|2019|oneus
+    베리베리|boy|2019|verivery
+    온앤오프|boy|2017|onf
+    위아이|boy|2020|wei
+    비원에이포|boy|2011|b1a4
+    틴탑|boy|2010|teentop
+    엠블랙|boy|2009|mblaq
+    씨엔블루|boy|2010|cnblue
+    에프티아일랜드|boy|2007|ftisland
+    엔플라잉|boy|2015|nflying
+    뉴이스트|boy|2012|nuest
+    유키스|boy|2008|ukiss
+    에이티비오|boy|2022|atbo
+    템페스트|boy|2022|tempest
+    플레이브|boy|2023|plave
+    웨이션브이|boy|2019|wayv
+    투피엠|boy|2008|2pm
+    투에이엠|boy|2008|2am
+    엑스원|boy|2019|x1
+    넥스지|boy|2024|nexz
+    아홉|boy|2025|ahof
+    클로즈유어아이즈|boy|2024|클유아,closeyoureyes
+    핑클|girl|1998|finkl
+    에스이에스|girl|1997|ses
+    베이비복스|girl|1997|babyvox
+    쥬얼리|girl|2001|jewelry
+    브라운아이드걸스|girl|2006|브아걸,browneyedgirls
+    씨스타|girl|2010|sistar
+    미쓰에이|girl|2010|missa
+    애프터스쿨|girl|2009|afterschool
+    포미닛|girl|2009|4minute
+    티아라|girl|2009|tara
+    걸스데이|girl|2010|girlsday
+    러블리즈|girl|2014|lovelyz
+    아이오아이|girl|2016|ioi
+    구구단|girl|2016|gugudan
+    위키미키|girl|2017|weki meki,wekimeki
+    이달의소녀|girl|2018|이달소,loona
+    드림캐쳐|girl|2017|드림캐처,dreamcatcher
+    에버글로우|girl|2019|everglow
+    위클리|girl|2020|weeekly
+    브레이브걸스|girl|2011|bravegirls
+    클라씨|girl|2022|classy
+    하이키|girl|2022|h1key
+    빌리|girl|2021|billlie
+    퍼플키스|girl|2021|purplekiss
+    라잇썸|girl|2021|lightsum
+    이세계아이돌|girl|2021|이세돌
+    영파씨|girl|2023|youngposse
+    미야오|girl|2024|meovv
+    키키|girl|2025|kiiikiii
+    하츠투하츠|girl|2025|heartstohearts
+    이즈나|girl|2024|izna
+    유니스|girl|2024|unis
+    아이즈원|girl|2018|izone
+    시크릿|girl|2009|secret
+    달샤벳|girl|2011|dalshabet
+    라붐|girl|2014|laboum
+    에프엑스|girl|2009|fx
   `.trim().split('\n').map(function (line) {
     var p = line.trim().split('|');
     return { name: p[0], type: p[1], year: Number(p[2]), aliases: p[3] ? p[3].split(',') : [] };
