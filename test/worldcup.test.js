@@ -10,21 +10,36 @@ const { TOPICS, SIZES } = require('../public/worldcup/js/topics.js');
 const Bracket = require('../public/worldcup/js/bracket.js');
 const { createWorldcupStore } = require('../lib/worldcup-store');
 
-test('주제마다 후보가 16개이고 id가 겹치지 않는다', () => {
+test('주제마다 후보가 450개 넘고 id·이름이 겹치지 않는다', () => {
   const topicIds = new Set();
   for (const t of TOPICS) {
     assert.ok(/^[a-z]+$/.test(t.id), t.id);
     assert.ok(!topicIds.has(t.id), `주제 ${t.id} 중복`);
     topicIds.add(t.id);
-    assert.equal(t.items.length, 16, `${t.title} 후보 수`);
+    assert.ok(t.items.length >= 450, `${t.title} 후보 수 ${t.items.length}`);
     const ids = new Set(t.items.map((i) => i.id));
-    assert.equal(ids.size, 16, `${t.title} 후보 id 중복`);
+    assert.equal(ids.size, t.items.length, `${t.title} 후보 id 중복`);
+    const names = new Set(t.items.map((i) => i.name.replace(/\s/g, '')));
+    assert.equal(names.size, t.items.length, `${t.title} 후보 이름 중복`);
+    // 처음 16개는 통계 열쇠가 영문 id인 원래 후보
+    for (const item of t.items.slice(0, 16)) assert.ok(/^[a-z]+$/.test(item.id), `${t.title} ${item.id}`);
     for (const item of t.items) {
-      assert.ok(/^[a-z]+$/.test(item.id), `${t.title} ${item.id}`);
-      assert.ok(item.emoji && item.name, `${t.title} ${item.id} 비었음`);
+      assert.ok(item.emoji && item.name && item.name.length <= 20, `${t.title} ${item.id}`);
     }
   }
   assert.deepEqual(SIZES, [8, 16]);
+});
+
+test('한 판은 전체 후보 중 무작위 16개라 판마다 달라진다', () => {
+  const items = TOPICS[0].items;
+  const a = Bracket.create(items, 16).round.map((i) => i.id);
+  assert.equal(new Set(a).size, 16);
+  let differs = false;
+  for (let k = 0; k < 5 && !differs; k++) {
+    const b = Bracket.create(items, 16).round.map((i) => i.id);
+    differs = b.some((id) => !a.includes(id));
+  }
+  assert.ok(differs);
 });
 
 test('대진표: size-1번 고르면 1위가 정해지고, 되돌리기가 된다', () => {

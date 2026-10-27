@@ -5,6 +5,7 @@
   'use strict';
   var Bracket = W.Bracket;
   var SIZE_KEY = 'worldcup:size';
+  var STATS_TOP = 20;
 
   var $ = function (id) { return document.getElementById(id); };
   var screens = { pick: $('pickScreen'), match: $('matchScreen'), result: $('resultScreen') };
@@ -52,7 +53,7 @@
     var em = document.createElement('span'); em.className = 'emoji'; em.textContent = t.emoji;
     var title = document.createElement('b'); title.textContent = t.title;
     var sample = document.createElement('small');
-    sample.textContent = t.items.slice(0, 4).map(function (i) { return i.emoji; }).join(' ') + ' …';
+    sample.textContent = '후보 ' + t.items.length + '개 중 무작위';
     btn.appendChild(em); btn.appendChild(title); btn.appendChild(sample);
     btn.addEventListener('click', function () { start(t); });
     grid.appendChild(btn);
@@ -143,10 +144,14 @@
     $('share').textContent = plays
       ? josa(mine.name, '을', '를') + ' 1위로 뽑은 사람은 전체의 ' + Math.round(myWins / plays * 100) + '%예요!'
       : '';
-    var rows = t.items.slice().sort(function (a, b) { return (wins[b.id] || 0) - (wins[a.id] || 0); });
+    // 후보가 500개쯤이라 1위를 한 번이라도 한 것 중 위 20개만, 내 1위는 순위 밖이어도 끝에 붙인다.
+    var ranked = t.items.slice().sort(function (a, b) { return (wins[b.id] || 0) - (wins[a.id] || 0); });
+    var rows = ranked.filter(function (item) { return wins[item.id]; }).slice(0, STATS_TOP);
+    if (rows.indexOf(mine) < 0) rows.push(mine);
     var list = $('statsList');
     list.textContent = '';
-    rows.forEach(function (item, i) {
+    rows.forEach(function (item) {
+      var i = ranked.indexOf(item);
       var n = wins[item.id] || 0;
       var pct = plays ? n / plays * 100 : 0;
       var li = document.createElement('li');
