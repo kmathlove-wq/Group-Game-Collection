@@ -295,8 +295,17 @@
 
   $('boardAdminCancel').addEventListener('click', closeAdminModal);
   modal.addEventListener('click', (event) => { if (event.target === modal) closeAdminModal(); });
+  // 서버의 비밀번호 확인은 일부러 느린 계산이라 1~2초 걸릴 수 있다. 그동안 단추를 잠그고 "확인하는 중…"을 보여 준다
+  // (예전엔 아무 표시가 없어 여러 번 누르게 됐고, 겹친 요청 때문에 더 느려졌음).
+  const adminSubmit = $('boardAdminForm').querySelector('button[type="submit"]');
+  let checking = false;
   $('boardAdminForm').addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (checking) return;
+    checking = true;
+    adminSubmit.disabled = true;
+    adminSubmit.textContent = '확인하는 중…';
+    adminError.classList.add('hidden');
     try {
       const { token } = await api('/api/board/admin/login', { method: 'POST', body: { password: passwordInput.value } });
       closeAdminModal();
@@ -306,6 +315,10 @@
       adminError.textContent = error.message;
       adminError.classList.remove('hidden');
       passwordInput.select();
+    } finally {
+      checking = false;
+      adminSubmit.disabled = false;
+      adminSubmit.textContent = '확인';
     }
   });
   $('boardAdminExit').addEventListener('click', () => {

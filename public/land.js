@@ -20,6 +20,10 @@
   let scores = [];
   let camera = null;              // 화면 가운데(칸 좌표)
   let miniImage = mctx.createImageData(size, size);
+  // 작은 지도는 숨은 그림판에 바뀔 때만 찍어 두고, 매 장면엔 그걸 통째로 옮겨 그린다(매번 13만 칸을 찍으면 휴대폰이 느려짐).
+  const miniBase = document.createElement('canvas');
+  const miniBaseCtx = miniBase.getContext('2d');
+  let miniDirty = true; let miniAt = 0;
 
   // ── 색: 서버가 hsl(색상 72% 52%)을 주면 땅·꼬리·머리용으로 밝기를 바꿔 쓴다 ──
   function hslToRgb(h, s, l) {
@@ -105,14 +109,17 @@
     for (const [id, x, y, angle, safe, outside] of snap.players) heads.set(id, { x, y, px: x, py: y, angle, pangle: angle, safe, outside });
     for (const [id, points] of snap.trails) trails.set(id, points.slice());
     if (mini.width !== size) { mini.width = size; mini.height = size; }
+    miniBase.width = size; miniBase.height = size;
     miniImage = mctx.createImageData(size, size);
     for (let c = 0; c < owner.length; c += 1) miniPixel(c);
+    resetChunks();
   }
   function miniPixel(c) {
     const id = owner[c];
     const rgb = id ? look(id).rgb : [234, 243, 251];
     const i = c * 4;
     miniImage.data[i] = rgb[0]; miniImage.data[i + 1] = rgb[1]; miniImage.data[i + 2] = rgb[2]; miniImage.data[i + 3] = 255;
+    miniDirty = true;
   }
   function setRoster(list) {
     roster.clear();
@@ -126,6 +133,7 @@
     for (let i = 0; i < o.length; i += 3) {
       const end = o[i] + o[i + 1];
       for (let c = o[i]; c < end; c += 1) { owner[c] = o[i + 2]; miniPixel(c); }
+      markChanged(o[i], end - 1);
     }
     const alive = new Set();
     for (const [id, x, y, angle, safe, outside] of p) {
@@ -278,8 +286,10 @@
     const pos = position(h, Math.min(1, (performance.now() - lastTickAt) / tickMs));
     return { x: view.ox + pos.x * view.cell, y: view.oy + pos.y * view.cell };
   }
+  // 화면이 아주 선명한 휴대폰(배율 3)은 그림판이 너무 커져 느려지므로 최대 2배까지만 쓴다.
+  const pixelRatio = () => Math.min(2, window.devicePixelRatio || 1);
   function resize() {
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = pixelRatio();
     canvas.width = Math.round(innerWidth * ratio); canvas.height = Math.round(innerHeight * ratio);
   }
   addEventListener('resize', resize); resize();
@@ -294,7 +304,9 @@
   // 칸 가운데 4점을 한 묶음으로 보아(마칭 스퀘어) 그 값이 0.5가 되는 자리를 비율로 찾아 잇는다.
   // 45°로만 깎던 예전 방식은 완만한 비탈이 계단처럼 울퉁불퉁했다.
   const SMOOTH = [1, 2, 1, 2, 4, 2, 1, 2, 1];
-  function landPaths(x0, y0, x1, y1, ox, oy, cell) {
+  // 좌표는 칸 단위(1칸 = 1)로 만든다. 그릴 때 화면 배율을 곱한다.
+  function landPaths(x0, y0, x1, y1) {
+    const ox = 0; const oy = 0; const cell = 1;
     const paths = new Map();
     const at = (x, y) => (x < 0 || y < 0 || x >= size || y >= size ? 0 : owner[y * size + x]);
     const pathOf = (id) => { let p = paths.get(id); if (!p) { p = new Path2D(); paths.set(id, p); } return p; };
@@ -303,11 +315,11 @@
       for (let k = 0; k < 9; k += 1) if (at(x + (k % 3) - 1, y + Math.floor(k / 3) - 1) === id) sum += SMOOTH[k];
       return sum / 16;
     };
-    for (let y = y0 - 1; y <= y1; y += 1) {
+    for (let y = y0; y <= y1; y += 1) {
       const sy = oy + (y + 0.5) * cell;
       let runId = 0; let runStart = 0;
-      const flush = (x) => { if (runId) pathOf(runId).rect(ox + (runStart + 0.5) * cell, sy, (x - runStart) * cell + 0.6, cell + 0.6); runId = 0; };
-      for (let x = x0 - 1; x <= x1; x += 1) {
+      const flush = (x) => { if (runId) pathOf(runId).rect(ox + (runStart + 0.5) * cell, sy, (x - runStart) * cell + 0.06, cell + 0.06); runId = 0; };
+      for (let x = x0; x <= x1; x += 1) {
         // 둘레까지 4×4칸이 모두 같은 주인이면 경계가 없으니 한 줄 직사각형으로 묶는다
         const a = at(x, y); let same = true;
         for (let k = 0; k < 16 && same; k += 1) same = at(x - 1 + (k % 4), y - 1 + (k >> 2)) === a;
@@ -340,9 +352,36 @@
     return paths;
   }
 
+  // ── 땅 모양 기억하기(렉 줄이기, 2026-10-28) ──
+  // 예전엔 매 장면(1초 60번)마다 보이는 칸 전부의 땅 모양을 새로 계산해서 휴대폰이 버벅였다.
+  // 판을 CHUNK×CHUNK칸 조각으로 나눠 조각마다 모양(Path2D)을 한 번만 만들고, 그 조각 땅이 바뀌었을 때만 다시 만든다.
+  // 조각 (cx, cy)는 칸 사각형 x = cx*CHUNK-1 … cx*CHUNK+CHUNK-2 를 맡는다(예전 그리기 범위가 x0-1부터였던 것과 같음).
+  const CHUNK = 24;
+  let chunkCols = Math.ceil((size + 1) / CHUNK);
+  let chunks = new Map(); // 조각 번호 → Map(주인 → Path2D)
+  function resetChunks() { chunkCols = Math.ceil((size + 1) / CHUNK); chunks = new Map(); }
+  // 칸 c 하나가 바뀌면 둘레 사각형 x-2 … x+1 (y도 같음)의 모양이 달라진다.
+  function markChanged(from, to) {
+    const ya = Math.floor(from / size); const yb = Math.floor(to / size);
+    const xa = ya === yb ? from % size : 0; const xb = ya === yb ? to % size : size - 1;
+    const c0 = Math.floor((xa - 2 + 1) / CHUNK); const c1 = Math.floor((xb + 1 + 1) / CHUNK);
+    const r0 = Math.floor((ya - 2 + 1) / CHUNK); const r1 = Math.floor((yb + 1 + 1) / CHUNK);
+    for (let r = Math.max(0, r0); r <= r1; r += 1) for (let c = Math.max(0, c0); c <= c1; c += 1) chunks.delete(r * chunkCols + c);
+  }
+  function chunkPaths(cx, cy) {
+    const key = cy * chunkCols + cx;
+    let paths = chunks.get(key);
+    if (!paths) {
+      const x0 = cx * CHUNK - 1; const y0 = cy * CHUNK - 1;
+      paths = landPaths(x0, y0, Math.min(size - 1, x0 + CHUNK - 1), Math.min(size - 1, y0 + CHUNK - 1));
+      chunks.set(key, paths);
+    }
+    return paths;
+  }
+
   function draw(now) {
     requestAnimationFrame(draw);
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = pixelRatio();
     const w = canvas.width / ratio; const hgt = canvas.height / ratio;
     const cell = Math.max(6, Math.min(16, Math.min(w, hgt) / 70));
     const t = Math.min(1, (now - lastTickAt) / tickMs);
@@ -368,14 +407,18 @@
     ctx.stroke();
 
     // 땅: 진한 색을 조금 아래에 먼저 칠해 종이를 쌓은 듯한 두께를 낸다
-    const paths = landPaths(x0, y0, x1, y1, ox, oy, cell);
+    const visible = [];
+    for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor((y1 + 1) / CHUNK); cy += 1) {
+      for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor((x1 + 1) / CHUNK); cx += 1) visible.push(chunkPaths(cx, cy));
+    }
     // 비스듬히 깎은 경계를 둥근 붓으로 한 번 더 덧칠해 계단 모양을 부드럽게 만든다
     const depth = Math.max(3, cell * 0.45);
-    ctx.lineJoin = 'round'; ctx.lineWidth = cell * 1.1;
-    ctx.save(); ctx.translate(0, depth);
-    for (const [id, path] of paths) { ctx.fillStyle = ctx.strokeStyle = look(id).edge; ctx.fill(path); ctx.stroke(path); }
-    ctx.restore();
-    for (const [id, path] of paths) { ctx.fillStyle = ctx.strokeStyle = look(id).land; ctx.fill(path); ctx.stroke(path); }
+    ctx.lineJoin = 'round'; ctx.lineWidth = 1.1; // 칸 단위(아래에서 배율을 곱함)
+    for (const [shade, dy] of [['edge', depth], ['land', 0]]) {
+      ctx.setTransform(ratio * cell, 0, 0, ratio * cell, ratio * ox, ratio * (oy + dy));
+      for (const paths of visible) for (const [id, path] of paths) { ctx.fillStyle = ctx.strokeStyle = look(id)[shade]; ctx.fill(path); ctx.stroke(path); }
+    }
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
     // 꼬리: 지나간 자리를 굵고 둥근 선으로 이어 그리고, 끝은 지금 머리까지 잇는다
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = brush * 2 * cell;
@@ -410,7 +453,8 @@
     }
 
     // 작은 지도: 판 전체 + 지금 보이는 곳 네모 + 내 위치
-    mctx.putImageData(miniImage, 0, 0);
+    if (miniDirty && now - miniAt > 200) { miniBaseCtx.putImageData(miniImage, 0, 0); miniDirty = false; miniAt = now; } // 0.2초에 한 번까지만
+    mctx.drawImage(miniBase, 0, 0);
     mctx.strokeStyle = '#111827'; mctx.lineWidth = 2;
     mctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     const me = heads.get(you);

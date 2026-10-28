@@ -62,6 +62,7 @@
   refreshSound();
 
   // ----- 장면 바꾸기 -----
+  var lead = ''; // 방금 고른 선택지의 들어가는 말(story.js의 lead)
   function enter() {
     var node = Story.current(game);
     startedAt = performance.now();
@@ -70,7 +71,8 @@
     $('card').hidden = true;
     $('choices').textContent = '';
     $('timer').hidden = true;
-    $('story').textContent = node.type === 'choice' ? node.text : '';
+    $('story').textContent = node.type === 'choice' ? (lead ? lead + ' ' : '') + node.text : '';
+    lead = ''; // 들어가는 말은 이번 한 번만(다시 하기·시간 초과 땐 없음)
     deadline = node.type === 'choice' && node.timer ? startedAt + node.timer * 1000 : 0;
     if (deadline) { showChoices(); $('timer').hidden = false; beep([880, 880], 'square'); }
     if (node.type === 'fail') beep([300, 240, 180], 'sawtooth');
@@ -102,6 +104,7 @@
     var node = Story.current(game);
     if (node.type !== 'choice' || !shownChoices || !node.choices[i]) return;
     beep([660]);
+    lead = node.choices[i].lead || '';
     Story.choose(game, i);
     enter();
   }

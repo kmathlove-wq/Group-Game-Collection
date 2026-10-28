@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>그룹 게임 컬렉션-송캐치 노래 추가</title>
+  <link rel="icon" href="/assets/songcatch-logo.png">
+  <link rel="stylesheet" href="/music.css">
+</head>
+<body>
+  <header class="music-header"><a href="/music" class="mini-brand">← 송캐치</a></header>
+  <main class="solo-layout">
+    <form id="addForm" class="panel form-shell">
+      <h1>🎵 노래 추가하기</h1>
+      <p>누구나 노래를 올릴 수 있어요. 올린 노래는 <b>모든 사람</b>의 개인 모드·단체 모드 문제로 바로 나와요. <span id="songCount"></span></p>
+      <div class="field"><label for="audio">노래 파일 (mp3·m4a·wav·ogg)</label><input id="audio" name="audio" type="file" accept=".mp3,.m4a,.wav,.ogg,audio/*" required></div>
+      <div class="field-row">
+        <div class="field"><label for="title">노래 제목</label><input id="title" name="title" maxlength="100" required placeholder="예) 밤양갱"></div>
+        <div class="field"><label for="artist">가수</label><input id="artist" name="artist" maxlength="100" required placeholder="예) 비비"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label for="titleAliases">제목 다른 답 (선택, 쉼표로 나눔)</label><input id="titleAliases" name="titleAliases" maxlength="300" placeholder="예) bam yang gang"></div>
+        <div class="field"><label for="artistAliases">가수 다른 답 (선택, 쉼표로 나눔)</label><input id="artistAliases" name="artistAliases" maxlength="300" placeholder="예) BIBI"></div>
+      </div>
+      <div class="field">
+        <label for="startTime">문제로 들려줄 시작 위치 (초)</label>
+        <input id="startTime" name="startTime" type="number" min="0" step="0.1" value="0">
+        <small>여기서부터 3초 → 5초 → 10초를 차례로 들려줘요. 노래에서 가장 유명한 부분(후렴)을 고르면 좋아요.</small>
+        <div class="toolbar"><button id="listen" class="secondary" type="button" disabled>▶ 시작 위치부터 3초 들어 보기</button><button id="useNow" class="secondary" type="button" disabled>⏱ 지금 듣는 곳을 시작 위치로</button></div>
+        <audio id="player" controls class="hidden" style="width:100%"></audio>
+      </div>
+      <div class="field"><label for="uploader">올리는 사람 닉네임</label><input id="uploader" name="uploader" maxlength="20" autocomplete="nickname" required placeholder="자유롭게 닉네임 입력"></div>
+      <label class="check-row"><input id="copyrightConfirmed" type="checkbox" required><span>이 노래를 게임에 써도 되는지 확인했어요. 이상한 노래는 관리자가 지울 수 있어요.</span></label>
+      <div id="notice" class="notice hidden"></div>
+      <button id="submit" class="primary wide" type="submit">노래 올리기</button>
+    </form>
+  </main>
+  <script src="/music-add.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>

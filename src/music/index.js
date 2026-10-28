@@ -9,12 +9,13 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const { createMusicDatabase } = require('./database');
 const { createGroupGame } = require('./group-game');
+const { hasBadWord } = require('../../lib/bad-words');
 const {
   AUDIO_MIMES, AUDIO_EXTENSIONS, IMAGE_MIMES, IMAGE_EXTENSIONS,
   text, boolean, number, parseSong, checkAnswer, shuffle, createTokenStore
 } = require('./service');
 
-function setupMusicGame({ app, io, rootDir }) {
+function setupMusicGame({ app, io, rootDir, nameLock = null }) {
   const dataDir = path.join(rootDir, 'data');
   const uploadRoot = process.env.MUSIC_UPLOAD_DIR || path.join(rootDir, 'uploads');
   const audioDir = path.join(uploadRoot, 'audio');
@@ -133,6 +134,40 @@ function setupMusicGame({ app, io, rootDir }) {
   app.post('/api/admin/songs/:id/preview', adminOnly, (req, res) => {
     const song = database.getSong(Number(req.params.id), true); if (!song) return res.status(404).json({ ok: false });
     res.json({ ok: true, audioToken: tokenStore.issue({ songId: song.id, filename: song.audioFilename, scope: `admin:${req.session.adminId}` }) });
+  });
+
+  // 🎵 누구나 노래 추가(사용자 결정 2026-10-28): 올린 노래는 바로 모든 사람의 개인·단체전에 나온다.
+  // 이상한 노래는 관리자가 관리자 화면에서 지운다(올린 사람 이름이 함께 보임). 도배를 막으려고 같은 IP는 1시간에 10곡까지.
+  const publicUploadLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false,
+    message: { ok: false, message: '노래는 1시간에 10곡까지 올릴 수 있어요. 조금 뒤에 다시 해 주세요.' } });
+  app.get('/api/music/songs/count', (_req, res) => res.json({ total: database.db.prepare('SELECT COUNT(*) count FROM songs WHERE is_active=1').get().count }));
+  app.post('/api/music/songs', (req, res, next) => {
+    // 다른 사이트에서 몰래 올리지 못하게
+    const origin = req.get('origin');
+    try { if (origin && new URL(origin).host !== req.get('host')) return res.status(403).json({ ok: false, message: '허용되지 않은 요청 출처입니다.' }); } catch { return res.status(403).json({ ok: false, message: '요청 출처를 확인할 수 없습니다.' }); }
+    next();
+  }, publicUploadLimiter, runUpload(audioUpload), (req, res) => {
+    const fail = (status, message) => { if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); res.status(status).json({ ok: false, message }); };
+    if (!req.file) return fail(400, '노래 파일을 골라 주세요.');
+    if (!boolean(req.body.copyrightConfirmed, false)) return fail(400, '노래를 써도 되는지 확인하는 칸에 체크해 주세요.');
+    const uploader = text(req.body.uploader, 20);
+    if (!uploader) return fail(400, '올리는 사람 닉네임을 써 주세요.');
+    const lockMessage = nameLock?.check(uploader, req.headers.cookie);
+    if (lockMessage) return fail(403, lockMessage);
+    // 힌트 길이는 3·5·10초로 고정하고, 제목·가수·별명·시작 위치·전체 길이만 받는다(관리자 칸은 기본값).
+    const parsed = parseSong({ title: req.body.title, artist: req.body.artist, titleAliases: req.body.titleAliases, artistAliases: req.body.artistAliases,
+      startTime: req.body.startTime, duration: req.body.duration, firstDuration: 3, secondDuration: 5, thirdDuration: 10 });
+    if (parsed.error) return fail(400, parsed.error.replace('재생 구간이 음원 전체 길이를 벗어납니다.', '시작 위치부터 10초를 들을 수 있어야 해요. 시작 위치를 앞으로 당겨 주세요.'));
+    const words = [parsed.value.title, parsed.value.artist, uploader, ...parsed.value.titleAliases, ...parsed.value.artistAliases];
+    if (words.some(hasBadWord)) return fail(400, '비속어나 욕설이 들어 있어요. 바른 말로 고쳐 주세요.');
+    if (database.hasDuplicate(parsed.value.title, parsed.value.artist)) return fail(409, '같은 제목과 가수의 노래가 이미 있어요.');
+    try {
+      parsed.value.audioFilename = req.file.filename;
+      parsed.value.uploader = uploader;
+      const song = database.insertSong(parsed.value);
+      database.log(null, 'song_public_create', 'song', song.id, `${song.title} - ${song.artist} (올린 사람: ${uploader}, ${req.ip || ''})`);
+      res.status(201).json({ ok: true, song: { id: song.id, title: song.title, artist: song.artist } });
+    } catch { fail(500, '노래 정보를 저장하지 못했어요.'); }
   });
 
   function parseSet(body) {

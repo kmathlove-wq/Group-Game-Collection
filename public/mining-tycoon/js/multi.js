@@ -9,9 +9,11 @@
   var MOVE_KEEPALIVE = 1; // 차가 가만히 있어도 1초마다 한 번은 위치를 보낸다
   var CHUNK = 2000; // 한 번에 보내는 칸 수(서버 한도와 같음)
 
-  // hooks: { getState, renderer, toast, onEvents(events), onChange(), onEnd(reason) }
+  // hooks: { getState, renderer, toast, onEvents(events), onChange(), onEnd(reason), prefix?, onRejoin(r)? }
+  // ⚔️ 팀전(team.js)도 같은 차·땅 주고받기를 쓴다: prefix 'mt:team:'으로 이벤트 이름만 바꾼다.
   function Multi(hooks) {
     this.hooks = hooks;
+    this.ev = hooks.prefix || 'mt:';
     this.socket = null;
     this.role = null; // null · 'host'(내 땅에 부름) · 'guest'(친구 땅에 놀러 감)
     this.code = null;
@@ -41,17 +43,17 @@
     if (this.socket) return this.socket;
     var self = this;
     var socket = this.socket = io();
-    socket.on('mt:move', function (m) {
+    socket.on(self.ev + 'move', function (m) {
       var f = self.friends[m.id];
       if (!f) return;
       if (f.tx == null) { f.x = m.x; f.y = m.y; }
       f.tx = m.x; f.ty = m.y; f.f = m.f; f.d = m.d; f.t = m.t; f.l = m.l; f.h = m.h;
     });
-    socket.on('mt:tiles', function (list) { self.applyTiles(list); });
-    socket.on('mt:roster', function (players) { self.setPlayers(players); });
-    socket.on('mt:joined', function (p) { self.hooks.toast('👋 ' + p.name + '님이 놀러 왔어요!'); });
-    socket.on('mt:left', function (p) { self.hooks.toast(p.reason === 'gone' ? '📶 ' + p.name + '님의 연결이 끊겼어요.' : '👋 ' + p.name + '님이 집으로 돌아갔어요.'); });
-    socket.on('mt:closed', function (d) { self.finish(d.reason); });
+    socket.on(self.ev + 'tiles', function (list) { self.applyTiles(list); });
+    socket.on(self.ev + 'roster', function (players) { self.setPlayers(players); });
+    socket.on(self.ev + 'joined', function (p) { self.hooks.toast('👋 ' + p.name + '님이 놀러 왔어요!'); });
+    socket.on(self.ev + 'left', function (p) { self.hooks.toast(p.reason === 'gone' ? '📶 ' + p.name + '님의 연결이 끊겼어요.' : '👋 ' + p.name + '님이 집으로 돌아갔어요.'); });
+    socket.on(self.ev + 'closed', function (d) { self.finish(d.reason); });
     socket.on('disconnect', function () {
       if (!self.role) return;
       self.offline = true;
@@ -59,12 +61,13 @@
     });
     socket.on('connect', function () {
       if (!self.role || !self.offline) return;
-      socket.emit('mt:rejoin', { code: self.code, key: self.key }, function (r) {
+      socket.emit(self.ev + 'rejoin', { code: self.code, key: self.key }, function (r) {
         if (!self.role) return;
         if (!r || !r.ok) { self.finish('lost'); return; }
         self.offline = false;
         self.setPlayers(r.players);
         self.merge(new Uint8Array(r.tiles), new Uint8Array(r.ores));
+        if (self.hooks.onRejoin) self.hooks.onRejoin(r);
         self.hooks.toast('📶 다시 연결됐어요!');
       });
     });
@@ -127,7 +130,7 @@
   // 👋 그만하기. quiet이면 알림 없이(게임이 끝났을 때 등).
   Multi.prototype.leave = function (quiet) {
     if (!this.role) return;
-    if (this.socket && this.socket.connected) this.socket.emit('mt:leave', {}, function () {});
+    if (this.socket && this.socket.connected) this.socket.emit(this.ev + 'leave', {}, function () {});
     this.finish(quiet ? 'quiet' : this.role === 'host' ? 'closed-by-me' : 'left-by-me');
   };
 
@@ -239,7 +242,7 @@
         so[i] = w.ores[i];
       }
     }
-    for (var j = 0; j < changes.length; j += CHUNK) this.socket.emit('mt:tiles', changes.slice(j, j + CHUNK));
+    for (var j = 0; j < changes.length; j += CHUNK) this.socket.emit(this.ev + 'tiles', changes.slice(j, j + CHUNK));
   };
 
   Multi.prototype.sendMove = function (s) {
@@ -253,7 +256,7 @@
     if (sig === this.lastMove && this.moveTimer < MOVE_KEEPALIVE) return;
     this.lastMove = sig;
     this.moveTimer = 0;
-    this.socket.emit('mt:move', m);
+    this.socket.emit(this.ev + 'move', m);
   };
 
   MT.Multi = Multi;

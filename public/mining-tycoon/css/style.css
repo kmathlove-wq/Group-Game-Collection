@@ -281,3 +281,20 @@ button, input { font: inherit; }
 @media (pointer: coarse) and (max-width: 640px) and (orientation: portrait) {
   .mt-stage { margin-bottom: 214px; }
 }
+
+/* ⚔️ 팀전 */
+.mt-team-open { width: 100%; margin-top: 12px; }
+.mt-team-open small { display: block; font-weight: 600; opacity: .75; }
+.mt-team-label { margin: 12px 0 6px; font-weight: 800; text-align: left; }
+.mt-team-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.mt-team-pick button { flex: 1 1 0; min-width: 72px; padding: 10px 8px; border: 2px solid transparent; border-radius: 12px; background: #f2ebdf; font: inherit; font-weight: 800; cursor: pointer; }
+.mt-team-pick button.on { border-color: var(--team, #6c4ff6); background: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--team, #6c4ff6) 25%, transparent); }
+.mt-team-pick button small { display: block; font-weight: 600; opacity: .7; }
+.mt-team-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; text-align: left; }
+.mt-team-col { padding: 10px; border-radius: 14px; background: #f7f1e7; border-top: 5px solid var(--team); }
+.mt-team-col.mine { background: #fff; box-shadow: 0 0 0 2px var(--team); }
+.mt-team-col h3 { margin: 0 0 6px; font-size: 16px; }
+.mt-team-col ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-weight: 700; font-size: 14px; }
+.mt-team-col li small { opacity: .7; font-weight: 600; }
+.mt-team-col button { width: 100%; padding: 6px; border: 0; border-radius: 10px; background: var(--team); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+.mt-team-card { max-height: 92dvh; overflow: auto; }

@@ -35,7 +35,7 @@
       <a class="game-card idol-card" href="/idol-quiz/"><span class="game-emoji" aria-hidden="true">🎤</span><small>혼자 하기 · 순위 기록</small><h2>아이돌 초성퀴즈</h2><p>ㅂㄹㅍㅋ → 블랙핑크! 초성만 보고 아이돌 그룹 이름을 빨리 맞혀요</p><b>시작하기 →</b></a>
       <a class="game-card mantis-card" href="/mantis-quiz/"><span class="game-emoji" aria-hidden="true">🦗</span><small>혼자 하기 · 도감 모으기</small><h2>사마귀 종류 맞히기</h2><p>사진을 보고 왕사마귀·난초사마귀 같은 사마귀 이름을 맞혀 도감을 채워요</p><b>시작하기 →</b></a>
       <a class="game-card bird-card" href="/bird-find/"><span class="game-emoji" aria-hidden="true">🐦</span><small>혼자 하기 · 순위 기록</small><h2>새 찾기</h2><p>숲 속에 꼭꼭 숨은 새를 제한 시간 안에 모두 찾아요. 단계마다 더 어려워져요</p><b>시작하기 →</b></a>
-      <a class="game-card choice-card" href="/choice/"><span class="game-emoji" aria-hidden="true">🕹️</span><small>혼자 하기 · 엔딩 모으기</small><h2>초이스 게임</h2><p>막대맨 우주 대탈출! 선택 하나로 운명이 바뀌어요. 웃긴 실패와 엔딩 6개를 모아요</p><b>시작하기 →</b></a>
+      <a class="game-card choice-card" href="/choice/"><span class="game-emoji" aria-hidden="true">🕹️</span><small>혼자 하기 · 엔딩 모으기</small><h2>초이스 게임</h2><p>막대맨 우주 대탈출! 선택 하나로 운명이 바뀌어요. 웃긴 실패와 엔딩 <span data-choice-endings>13</span>개를 모아요</p><b>시작하기 →</b></a>
       <a class="game-card smash-card" href="/school-smash/"><span class="game-emoji" aria-hidden="true">🏫</span><small>혼자 하기 · 순위 기록</small><h2>학교 부수기</h2><p>학교 12종을 무기 37개로 와르르! 레이저·블랙홀·공룡 발·쓰나미까지, 60초 동안 얼마나 부술 수 있을까요?</p><b>시작하기 →</b></a>
       <a class="game-card egg-card" href="/egg-heist/"><span class="game-emoji" aria-hidden="true">🥚</span><small>혼자 하기 · 순위 기록</small><h2>계란 훔치기</h2><p>귀한 알을 훔쳐 와 펫으로 부화시키고 돈을 벌어요. 봇들이 내 알을 훔치러 와요!</p><b>시작하기 →</b></a>
     </section>
@@ -56,5 +56,6 @@
   </main>
   <div class="modal hidden" id="boardAdminModal"><form class="panel modal-card board-admin-card" id="boardAdminForm"><h3>🔒 비밀번호</h3><input id="boardAdminPassword" type="password" inputmode="numeric" autocomplete="off" maxlength="100" aria-label="관리자 비밀번호"><p class="notice error hidden" id="boardAdminError"></p><div class="board-form-foot"><button class="secondary" type="button" id="boardAdminCancel">닫기</button><button class="primary" type="submit">확인</button></div></form></div>
   <div class="modal hidden" id="gameRequestModal" role="dialog" aria-modal="true" aria-labelledby="gameRequestTitle"><form class="panel modal-card game-request-card" id="gameRequestForm"><h3 id="gameRequestTitle">🎮 어떤 게임이 있으면 좋겠어요?</h3><p class="board-desc">하고 싶은 게임을 자유롭게 적어 주세요. 다음 게임을 만들 때 참고할게요! <small id="gameRequestUntil"></small></p><textarea id="gameRequestText" maxlength="200" rows="3" placeholder="예: 여럿이 하는 달리기 게임" required></textarea><p class="notice hidden" id="gameRequestMessage" role="status"></p><div class="board-form-foot"><small id="gameRequestCountText">0 / 200</small><button class="secondary" type="button" id="gameRequestClose">닫기</button><button class="primary" type="submit">보내기</button></div></form></div>
-  <script src="/games.js"></script><script src="/board.js"></script>
+  <script src="/choice/js/story.js"></script><script>(function(){try{var n=window.Choice.Story.ENDING_IDS.length;document.querySelectorAll("[data-choice-endings]").forEach(function(e){e.textContent=n;});}catch(e){}})();</script><script src="/games.js"></script><script src="/board.js"></script>
+  <script src="/shared/name-lock.js"></script>
 </body></html>

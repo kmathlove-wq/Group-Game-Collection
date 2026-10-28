@@ -16,6 +16,8 @@ function text(value, maxLength) {
   return [...String(value ?? '').replace(/[<>\p{Cc}]/gu, '').trim()].slice(0, maxLength).join('');
 }
 
+const sameName = (name) => String(name).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+
 function setupLandGame({ app, io, rootDir, tickMs = TICK_MS, botCount = BOT_TARGET, arenaOptions = {} }) {
   app.get('/land', (_req, res) => res.sendFile(path.join(rootDir, 'public', 'land.html')));
 
@@ -160,6 +162,9 @@ function setupLandGame({ app, io, rootDir, tickMs = TICK_MS, botCount = BOT_TARG
       const nickname = text(raw?.nickname, 20);
       if (!nickname) return ack({ ok: false, message: '닉네임을 입력해 주세요.' });
       if (human.playerId) return ack({ ok: true, you: human.playerId });
+      // 같은 닉네임(대소문자·띄어쓰기 무시)은 판에 한 명만. 봇 이름과도 겹치지 않게 한다(사용자 결정 2026-10-28).
+      const key = sameName(nickname);
+      if ([...arena.players.values()].some((p) => sameName(p.nickname) === key)) return ack({ ok: false, message: '판에 같은 닉네임이 있어요. 다른 닉네임을 써 주세요.' });
       if (playing() >= MAX_HUMANS) return ack({ ok: false, message: `판이 꽉 찼어요(최대 ${MAX_HUMANS}명). 잠시 뒤 다시 해 주세요.` });
       const p = arena.addPlayer({ nickname });
       if (!p) return ack({ ok: false, message: '판이 꽉 찼어요.' });

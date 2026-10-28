@@ -139,6 +139,7 @@
 
   // 지구가 부서진 판은 다시 저장하지 않는다. soon이면(팔기·사기) 연동된 월드를 곧 서버에도 올린다.
   function saveNow(soon) {
+    if (state && state.team) { saveTimer = 0; return; } // ⚔️ 팀전 게임은 저장하지 않는다(끝나면 내 게임으로 돌아감)
     if (state && state.destroyedTime == null) {
       Save.save(multi.savable(state));
       Link.markDirty();
@@ -200,7 +201,7 @@
   }
 
   function doSync(force, keepalive) {
-    if (!state || !Link.get() || syncing) return;
+    if (!state || state.team || !Link.get() || syncing) return;
     syncing = true;
     syncTimer = 0;
     Link.sync(multi.savable(state), force, keepalive).then(function (result) {
@@ -408,13 +409,203 @@
   });
 
   function updateMultiButton() {
-    $('mtMultiButton').textContent = multi.active() ? '👫 함께 ' + multi.count() + '명' : '👫 친구와 함께';
+    $('mtMultiButton').textContent = team.active() ? '⚔️ 팀전 ' + team.count() + '명' : multi.active() ? '👫 함께 ' + multi.count() + '명' : '👫 친구와 함께';
   }
+
+  // ---------- ⚔️ 팀전 ----------
+  var homeState = null; // 팀전 하는 동안 맡겨 둔 내 게임(시작 화면에서 왔으면 null)
+  var team = new MT.Team({
+    getState: function () { return state; },
+    renderer: renderer,
+    toast: toast,
+    onEvents: function (events) { handle(events); },
+    onChange: function () { updateMultiButton(); if (modal === 'mtTeamModal') renderTeam(); },
+    onStart: startTeamGame,
+    onEnd: showTeamEnd,
+    onClosed: function (reason) {
+      var text = reason === 'lost' ? '📶 서버와 연결이 끊겨서 팀전에서 나왔어요.' : '⚔️ 팀전 방이 닫혔어요.';
+      if (state && state.team) backFromTeam(text);
+      else { if (modal === 'mtTeamModal') renderTeam(); toast(text, 4000); updateMultiButton(); }
+    }
+  });
+  var teamCountPick = 2, teamCreatePick = 0, teamPeek = null;
+  var TEAM_TEXT = { treasure: '님이 전설의 보물을 캤어요!', alone: '다른 팀이 모두 나가서 이겼어요.' };
+
+  function teamName() { return (state && state.name) || $('mtNameInput').value.trim().slice(0, 20) || Save.getName() || '이름없음'; }
+  function teamError(text) {
+    $('mtTeamError').textContent = text || '';
+    $('mtTeamError').classList.toggle('hidden', !text);
+  }
+  function openTeam() {
+    if (multi.active()) { notice('👫 친구와 함께 하는 중이에요. 먼저 👫 단추에서 끝내 주세요.'); return; }
+    if (state && state.inCore) { notice('⭐ 지구의 중심에서는 팀전을 할 수 없어요.'); return; }
+    if (modal && modal !== 'mtTeamModal' && modal !== 'mtStartModal' && modal !== 'mtMultiModal') return;
+    if (!state) Save.setName(teamName()); // 시작 화면에서 쓴 이름을 기억해 둔다
+    teamError('');
+    teamPeek = null;
+    $('mtTeamCode').value = '';
+    renderTeam();
+    openModal('mtTeamModal');
+  }
+  function teamButton(t, label, on, onClick) {
+    var b = button(label, on ? 'on' : '', onClick);
+    b.style.setProperty('--team', t.color);
+    return b;
+  }
+  function renderTeam() {
+    var on = team.active();
+    $('mtTeamIdle').classList.toggle('hidden', on);
+    $('mtTeamRoom').classList.toggle('hidden', !on);
+    $('mtTeamTitle').textContent = !on ? '⚔️ 팀전' : team.phase === 'waiting' ? '⚔️ 팀전 기다리는 방' : '⚔️ 팀전 중';
+    if (!on) {
+      var count = $('mtTeamCountPick');
+      count.textContent = '';
+      [2, 3, 4].forEach(function (n) {
+        count.append(teamButton({ color: '#6c4ff6' }, n + '팀', n === teamCountPick, function () { teamCountPick = n; if (teamCreatePick >= n) teamCreatePick = 0; renderTeam(); }));
+      });
+      var pick = $('mtTeamCreatePick');
+      pick.textContent = '';
+      MT.Team.TEAMS.slice(0, teamCountPick).forEach(function (t) {
+        pick.append(teamButton(t, t.emoji + ' ' + t.name, t.id === teamCreatePick, function () { teamCreatePick = t.id; renderTeam(); }));
+      });
+      $('mtTeamJoinBox').classList.toggle('hidden', !teamPeek);
+      if (teamPeek) {
+        var join = $('mtTeamJoinPick');
+        join.textContent = '';
+        teamPeek.teams.forEach(function (t) {
+          var n = teamPeek.players.filter(function (p) { return p.team === t.id; }).length;
+          var b = teamButton(t, t.emoji + ' ' + t.name, false, function () { joinTeam(t.id, b); });
+          b.append(el('small', null, n + '명'));
+          join.append(b);
+        });
+      }
+      return;
+    }
+    var lobby = team.lobby;
+    $('mtTeamCodeShow').textContent = team.code;
+    var waiting = team.phase === 'waiting';
+    $('mtTeamRoomDesc').textContent = waiting
+      ? (team.isHost() ? '친구에게 코드를 알려 주세요. 친구는 ⚔️ 팀전 하기에서 코드를 넣고 팀을 골라 들어와요. 인원을 확인하고 시작해요!' : '방장이 시작하기를 기다리는 중이에요. 시작 전에는 팀을 바꿀 수 있어요.')
+      : '보물(300m)을 먼저 캐는 팀이 이겨요! 돈·업그레이드·가방은 우리 팀이 함께 써요.';
+    var board = $('mtTeamBoard');
+    board.textContent = '';
+    lobby.teams.forEach(function (t) {
+      var members = lobby.players.filter(function (p) { return p.team === t.id; });
+      var col = el('div', 'mt-team-col' + (t.id === team.myTeam ? ' mine' : ''));
+      col.style.setProperty('--team', t.color);
+      col.append(el('h3', null, t.emoji + ' ' + t.name + ' (' + members.length + '명)'));
+      var ul = el('ul');
+      members.forEach(function (p) {
+        var li = el('li', null, (p.host ? '👑 ' : '') + p.name + (p.id === team.you ? ' (나)' : ''));
+        if (p.online === false) li.append(el('small', null, ' 📶'));
+        ul.append(li);
+      });
+      if (!members.length) ul.append(el('li', null, '아직 없어요'));
+      col.append(ul);
+      if (waiting && t.id !== team.myTeam) {
+        col.append(button('이 팀으로', '', function () {
+          team.switchTeam(t.id).then(function (r) { if (!r.ok) teamError(r.message); });
+        }));
+      }
+      board.append(col);
+    });
+    $('mtTeamStart').classList.toggle('hidden', !(waiting && team.isHost()));
+    $('mtTeamLeave').textContent = waiting ? '🚪 팀전 나가기' : '🏳️ 팀전 그만하기 (내 게임으로)';
+  }
+  function joinTeam(id, b) {
+    b.disabled = true;
+    teamError('');
+    team.join(teamName(), teamPeek.code, id).then(function (r) {
+      b.disabled = false;
+      if (!r.ok) { teamError(r.message); return; }
+      teamPeek = null;
+      sound.buy();
+      renderTeam();
+    });
+  }
+  $('mtTeamOpenStart').addEventListener('click', openTeam);
+  $('mtTeamOpenMulti').addEventListener('click', openTeam);
+  $('mtTeamClose').addEventListener('click', function () {
+    closeModal('mtTeamModal');
+    if (!state) showStart(false);
+  });
+  $('mtTeamCreate').addEventListener('click', function () {
+    var b = this;
+    b.disabled = true;
+    teamError('');
+    team.create(teamName(), teamCountPick, teamCreatePick).then(function (r) {
+      b.disabled = false;
+      if (!r.ok) { teamError(r.message); return; }
+      sound.buy();
+      renderTeam();
+    });
+  });
+  $('mtTeamJoinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = $('mtTeamCode').value.trim().toUpperCase();
+    if (code.length !== 4) { teamError('방 코드 4글자를 넣어 주세요.'); return; }
+    teamError('');
+    team.peek(code).then(function (r) {
+      if (!r.ok) { teamPeek = null; teamError(r.message); renderTeam(); return; }
+      teamPeek = r.lobby;
+      renderTeam();
+    });
+  });
+  $('mtTeamStart').addEventListener('click', function () {
+    var b = this;
+    b.disabled = true;
+    teamError('');
+    team.begin().then(function (r) { b.disabled = false; if (!r.ok) teamError(r.message); });
+  });
+  $('mtTeamLeave').addEventListener('click', function () {
+    if (team.phase === 'waiting') { team.leave(); updateMultiButton(); renderTeam(); return; }
+    askConfirm('🏳️ 팀전을 그만할까요?', '우리 팀은 남은 사람끼리 계속해요. 나는 내 게임으로 돌아가요.', function () { backFromTeam('🏠 팀전을 그만하고 내 게임으로 돌아왔어요.'); });
+  });
+
+  // 서버가 시작을 알리면: 지금 내 게임을 맡겨 두고, 모두 같은 씨앗으로 만든 새 땅에서 돈 0원부터 시작한다.
+  function startTeamGame(info) {
+    if (state && !state.team) { saveNow(); homeState = state; }
+    var s = Game.newGame({ seed: info.seed, name: teamName() });
+    s.team = true; // 저장·순위·연동 안 함
+    s.multi = true; // 입장권(지구 핵 방)·처음부터 다시 막기
+    state = s;
+    if (modal) closeModal(modal);
+    closePanel();
+    renderer.cam = null;
+    sound.unlock();
+    sound.recall();
+    var t = info.teams[info.team];
+    toast('⚔️ 팀전 시작! 나는 ' + t.emoji + ' ' + t.name + ' · 300m 아래 보물을 먼저 캐는 팀이 이겨요!', 5000);
+    updateMultiButton();
+  }
+  function showTeamEnd(result) {
+    var t = result.teams[result.winner];
+    $('mtTeamEndEmoji').textContent = result.mine ? '🏆' : '😢';
+    $('mtTeamEndTitle').textContent = t.emoji + ' ' + t.name + ' 승리!';
+    $('mtTeamEndText').textContent = (result.reason === 'treasure' ? result.by + TEAM_TEXT.treasure : TEAM_TEXT.alone) + (result.mine ? ' 우리 팀이 이겼어요! 🎉' : ' 아쉽게 졌어요. 다음엔 꼭 이겨요!');
+    if (result.mine) { sound.treasure(); renderer.shake = 0.8; }
+    closePanel();
+    openModal('mtTeamEndModal');
+  }
+  $('mtTeamEndButton').addEventListener('click', function () { closeModal('mtTeamEndModal'); backFromTeam('🏠 내 게임으로 돌아왔어요.'); });
+  function backFromTeam(text) {
+    team.leave();
+    if (state && state.team) { state = homeState; homeState = null; }
+    closePanel();
+    renderer.cam = null;
+    renderer.friends = [];
+    updateMultiButton();
+    if (modal) closeModal(modal);
+    if (!state) { showStart(false); return; }
+    if (text) toast(text, 4000);
+  }
+
   function multiError(text) {
     $('mtMultiError').textContent = text || '';
     $('mtMultiError').classList.toggle('hidden', !text);
   }
   function openMulti() {
+    if (team.active()) { openTeam(); return; }
     if (!state) { notice('👫 게임을 시작한 다음 눌러 주세요.'); return; }
     if (modal && modal !== 'mtMultiModal') return;
     multiError('');
@@ -445,6 +636,7 @@
     });
   }
   function multiBlocked() {
+    if (team.active()) return '⚔️ 팀전 방에 있는 동안은 친구와 함께 할 수 없어요.';
     if (state.inCore) return '⭐ 지구의 중심에서는 친구와 함께 할 수 없어요.';
     return '';
   }
@@ -580,6 +772,7 @@
     body.append(list);
     if (state.debt > 0) body.append(el('p', 'mt-warn', '💳 빚 ' + fmt.money(state.debt) + '은 판 돈에서 먼저 갚아요.'));
     body.append(button('모두 팔기 (' + fmt.money(Game.bagValue(state)) + ')', 'mt-primary mt-wide', function () {
+      if (state.team) { teamSell(); return; }
       var result = Game.sell(state);
       sound.sell();
       renderer.floatText('+' + fmt.money(result.total), state.car.x, state.car.y - 1, '#ffe066');
@@ -588,6 +781,22 @@
       saveNow(true);
       renderPanel();
     }));
+  }
+
+  // ⚔️ 팀전: 팀 가방은 서버가 판다(팀원이 동시에 팔아도 돈이 두 번 생기지 않게).
+  var teamSelling = false;
+  function teamSell(instant) {
+    if (teamSelling) return;
+    teamSelling = true;
+    team.sell().then(function (result) {
+      teamSelling = false;
+      if (!result.ok) { toast(result.message || '팔지 못했어요.'); return; }
+      if (!result.count) { toast('🎒 팀 가방이 비어 있어요.'); return; }
+      sound.sell();
+      renderer.floatText('+' + fmt.money(result.total), state.car.x, state.car.y - 1, '#ffe066');
+      toast((instant ? '💸 즉시 팔기! ' : '💰 ') + '팀 광석 ' + result.count + '개를 ' + fmt.money(result.total) + '에 팔았어요!' + (result.debtPaid ? ' (빚 ' + fmt.money(result.debtPaid) + ' 갚음)' : ''));
+      if (panelKey) renderPanel();
+    });
   }
 
   function renderFill(body, kind) {
@@ -665,7 +874,7 @@
     }
     renderGacha(body, open);
     body.append(button('🔄 처음부터 다시', 'mt-reset', function () {
-      if (multi.active()) { failBuy('multi'); return; }
+      if (multi.active() || state.team) { failBuy(state.team ? 'team' : 'multi'); return; }
       askConfirm('처음부터 다시 할까요?', '땅·돈·업그레이드가 모두 사라지고 새 땅에서 시작해요.' + linkedWarning(), function () {
         askConfirm('정말 지울까요?', '되돌릴 수 없어요. 순위표의 기록은 그대로 남아요.', function () {
           endLinkedWorld(function () { Save.clear(); state = null; closePanel(); showStart(false); updateLinkButton(); });
@@ -737,7 +946,8 @@
       have: '🎫 이미 입장권을 가지고 있어요.',
       ended: '🎰 일반 뽑기는 보물을 찾기 전까지만 할 수 있어요.',
       bag: '🎒 가방이 가득 찼어요. 먼저 팔고 오세요!',
-      multi: '👫 친구와 함께 하는 동안은 할 수 없어요. 👫 단추에서 먼저 끝내 주세요.'
+      multi: state && state.team ? '⚔️ 팀전 중에는 할 수 없어요.' : '👫 친구와 함께 하는 동안은 할 수 없어요. 👫 단추에서 먼저 끝내 주세요.',
+      team: '⚔️ 팀전 중에는 할 수 없어요.'
     }[reason] || '이미 최고 단계예요.');
   }
 
@@ -821,6 +1031,13 @@
   function instantSell() {
     if (!state || modal) return;
     if (!Game.isUnderground(state)) { toast('💸 즉시 팔기는 땅속에서 써요. 지상에서는 판매소에서 팔아요!'); return; }
+    if (state.team) {
+      if (state.instant <= 0) { sound.blocked(); toast('💸 즉시 팔기가 없어요. 상점에서 살 수 있어요.'); return; }
+      if (!Game.bagCount(state)) { sound.blocked(); toast('🎒 가방이 비어 있어요.'); return; }
+      state.instant--;
+      teamSell(true);
+      return;
+    }
     var result = Game.useInstant(state);
     if (!result.ok) { sound.blocked(); toast(result.reason === 'empty' ? '🎒 가방이 비어 있어요.' : '💸 즉시 팔기가 없어요. 상점에서 살 수 있어요.'); return; }
     sound.sell();
@@ -901,9 +1118,11 @@
         case 'treasure':
           sound.treasure();
           renderer.shake = 0.8;
+          if (state.team) { team.treasure(); break; } // ⚔️ 팀전: 서버에 알리면 먼저 캔 팀이 이긴다
           if (e.first) showEnding();
           break;
         case 'hidden':
+          if (state.team) break;
           pendingHidden.push(e.n);
           if (!modal) showHidden();
           break;
@@ -1080,6 +1299,8 @@
       if (modal === 'mtConfirmModal') { $('mtConfirmNo').click(); return; }
       if (modal === 'mtWarpModal') { closeModal('mtWarpModal'); return; }
       if (modal === 'mtMultiModal') { closeModal('mtMultiModal'); return; }
+      if (modal === 'mtTeamModal') { $('mtTeamClose').click(); return; }
+      if (modal === 'mtTeamEndModal') { $('mtTeamEndButton').click(); return; }
       if (modal === 'mtEndingModal') { $('mtEndingContinue').click(); return; }
       if (modal === 'mtHiddenModal') { $('mtHiddenContinue').click(); return; }
       if (modal === 'mtGuideModal') { closeGuide(); return; }
@@ -1148,6 +1369,7 @@
     }
     if (state) {
       multi.tick(dt); // 👫 멈춤 창이 떠 있어도 친구 차·땅은 계속 받는다
+      team.tick(dt); // ⚔️ 팀전: 차·땅·팀 돈
       renderer.render(state, now, running ? dt : 0);
       updateHud();
     } else {

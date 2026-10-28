@@ -594,6 +594,7 @@
     f_pet: { bg: 'pod', face: 'scared', fx: 'shake', big: '🐶', bigFx: 'wobble', say: '멍멍! (냠냠)', sayWho: 'me', fail: true },
     f_selfie: { bg: 'pod', who: 'guard', mood: 'happy', face: 'happy', fx: 'look', big: '📸', bigFx: 'grow', say: '브이~', sayWho: 'them', fail: true, flash: true },
     f_egg: { bg: 'kitchen', face: 'scared', fx: 'run', big: '🦖', bigFx: 'grow', say: '내 알 어디 갔어!', sayWho: 'me', fail: true, hat: 'chef' },
+    f_bingsu: { bg: 'kitchen', who: 'alien', mood: 'slip', face: 'scared', fx: 'look', big: '🍧', bigFx: 'wobble', rain: '❄️', say: '머리가 띵!', sayWho: 'them', fail: true, hat: 'chef' },
     f_cake: { bg: 'kitchen', face: 'dizzy', fx: 'fall', big: '🧁', bigFx: 'grow', rain: '🍦', fail: true, hat: 'chef' },
     f_karaoke: { bg: 'kitchen', who: 'alien', mood: 'happy', face: 'happy', fx: 'bounce', big: '🎤', rain: '⭐', say: '앵콜! 앵콜!', sayWho: 'them', fail: true },
     f_trash: { bg: 'space', face: 'sad', fx: 'float', big: '🗑️', bigFx: 'spin', rain: '🍌', fail: true },

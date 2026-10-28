@@ -7,19 +7,19 @@ const { hasBadWord } = require('../../lib/bad-words');
 const { NAME_MAX_LENGTH, TEXT_MAX_LENGTH } = require('../../lib/board-store');
 const { TEXT_MAX_LENGTH: REQUEST_MAX_LENGTH } = require('../../lib/game-request-store');
 
-const DEFAULT_ADMIN_HASH = '$2b$12$iaJ3D1/Q9nqNoZc4eMhFN.6njgc41KBLejogL/14n/7jNxQYBX2x.';
+// 잠긴 닉네임 비밀번호와 같은 비밀번호. 12단계 해시는 무료 서버에서 너무 느려 '확인'을 여러 번 누르게 돼서 10단계로 바꿈(2026-10-28).
+const { DEFAULT_HASH: DEFAULT_ADMIN_HASH, isLockedName } = require('../../lib/name-lock');
 const POST_COOLDOWN_MS = 20_000; // 같은 사람(IP)은 20초에 한 번 쓰기
 const ADMIN_SESSION_MS = 3 * 60 * 60 * 1000; // 관리자 열쇠는 3시간 유효
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5; // 10분에 5번 틀리면 잠깐 막기
 const CLEANUP_MS = 60 * 60 * 1000;
-const RESERVED_NAME = /관리자|운영자|admin/i; // 관리자인 척 못 하게
 const OWNER_KEY = /^[0-9a-f]{32,64}$/;
 // 게임 추천받기 창은 이때까지만 뜨고 받는다(사용자 결정 2026-10: 10/23부터 10/31 토요일 밤까지, 한국 시간).
 const REQUEST_ENDS_AT = Date.parse('2026-10-31T23:59:59.999+09:00');
 
 function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_AT, adminHash = process.env.BOARD_ADMIN_PASSWORD_HASH || DEFAULT_ADMIN_HASH,
-  cooldownMs = POST_COOLDOWN_MS, now = Date.now, cleanupTimer = true }) {
+  cooldownMs = POST_COOLDOWN_MS, now = Date.now, cleanupTimer = true, nameLock = null }) {
   const lastPostAt = new Map(); // IP → 마지막으로 쓴 때
   const lastRequestAt = new Map(); // IP → 마지막으로 게임 추천을 보낸 때
   const loginFails = new Map(); // IP → [틀린 때들]
@@ -42,12 +42,13 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
   const listFor = (req) => ({ posts: store.list(ownerOf(req)) });
 
   // 닉네임과 내용을 검사한다. 문제가 있으면 { error }.
-  function readEntry(body, admin) {
+  function readEntry(body, admin, req) {
     const name = String(body?.name ?? '').trim().slice(0, NAME_MAX_LENGTH) || '익명';
     const text = String(body?.text ?? '').trim();
     if (!text) return { error: '내용을 적어 주세요.' };
     if ([...text].length > TEXT_MAX_LENGTH) return { error: `내용은 ${TEXT_MAX_LENGTH}자까지 쓸 수 있어요.` };
-    if (!admin && RESERVED_NAME.test(name)) return { error: '그 닉네임은 쓸 수 없어요.' };
+    // 관리자인 척 못 하게: 관리자 모드이거나 🔑 잠긴 닉네임 비밀번호를 넣은 브라우저만
+    if (!admin && isLockedName(name) && !nameLock?.unlocked(req?.headers.cookie)) return { error: '🔑 그 닉네임은 비밀번호가 있어야 쓸 수 있어요.' };
     if (hasBadWord(name) || hasBadWord(text)) return { error: '비속어나 욕설이 들어 있어요. 바른 말로 고쳐 주세요.' };
     return { name, text };
   }
@@ -65,7 +66,7 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
 
   app.post('/api/board/posts', (req, res) => {
     const admin = isAdmin(req);
-    const entry = readEntry(req.body, admin);
+    const entry = readEntry(req.body, admin, req);
     if (entry.error) return res.status(400).json(entry);
     if (tooFast(req, admin)) return res.status(429).json({ error: '조금 뒤에 다시 써 주세요. (20초에 한 번)' });
     store.addPost(entry.name, entry.text, { admin, owner: ownerOf(req) });
@@ -74,7 +75,7 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
 
   app.post('/api/board/posts/:id/replies', (req, res) => {
     const admin = isAdmin(req);
-    const entry = readEntry(req.body, admin);
+    const entry = readEntry(req.body, admin, req);
     if (entry.error) return res.status(400).json(entry);
     if (tooFast(req, admin)) return res.status(429).json({ error: '조금 뒤에 다시 써 주세요. (20초에 한 번)' });
     const result = store.addReply(req.params.id, entry.name, entry.text, { admin, owner: ownerOf(req) });

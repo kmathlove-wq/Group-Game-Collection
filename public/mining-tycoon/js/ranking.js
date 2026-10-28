@@ -35,6 +35,7 @@
 
   // 번 돈 올리기: 잠깐 모았다가 한 번에. 실패하면(너무 빨리 등) 조금 뒤 다시 시도한다.
   Ranking.prototype.queueMoney = function (state) {
+    if (state.team) return; // ⚔️ 팀전 게임은 순위에 올리지 않는다
     var self = this;
     clearTimeout(this.moneyTimer);
     this.moneyTimer = setTimeout(function () {

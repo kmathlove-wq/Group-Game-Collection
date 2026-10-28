@@ -33,6 +33,7 @@ function mapSong(row, { privateFields = false } = {}) {
     useInSolo: Boolean(row.use_in_solo),
     useInGroup: Boolean(row.use_in_group),
     hasImage: Boolean(row.image_filename),
+    uploader: row.uploader || '', // 누가 올렸나(관리자가 올렸으면 빈칸)
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -109,6 +110,10 @@ function createMusicDatabase({ filename, bcrypt, adminUsername, adminPassword })
     );
   `);
 
+  // 누구나 노래 추가(2026-10-28): 올린 사람 이름 칸. 예전 DB에는 없으니 없으면 붙인다.
+  if (!db.prepare('PRAGMA table_info(songs)').all().some((c) => c.name === 'uploader')) {
+    try { db.exec("ALTER TABLE songs ADD COLUMN uploader TEXT NOT NULL DEFAULT ''"); } catch (error) { if (!/duplicate column/i.test(error.message)) throw error; } // 동시에 켜진 다른 서버가 먼저 붙였으면 괜찮음
+  }
   if (adminUsername && adminPassword && !db.prepare('SELECT id FROM admins LIMIT 1').get()) {
     const hash = bcrypt.hashSync(adminPassword, 12);
     db.prepare('INSERT INTO admins(username, password_hash) VALUES (?, ?)').run(adminUsername.trim(), hash);
@@ -148,13 +153,13 @@ function createMusicDatabase({ filename, bcrypt, adminUsername, adminPassword })
     const result = db.prepare(`INSERT INTO songs(
       title, artist, title_aliases, artist_aliases, audio_filename, image_filename,
       start_time, first_duration, second_duration, third_duration, duration,
-      genre, difficulty, release_year, tags, description, is_active, use_in_solo, use_in_group
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      genre, difficulty, release_year, tags, description, is_active, use_in_solo, use_in_group, uploader
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(song.title, song.artist, JSON.stringify(song.titleAliases), JSON.stringify(song.artistAliases),
         song.audioFilename, song.imageFilename || null, song.startTime, song.firstDuration,
         song.secondDuration, song.thirdDuration, song.duration, song.genre, song.difficulty,
         song.releaseYear, JSON.stringify(song.tags), song.description, song.isActive ? 1 : 0,
-        song.useInSolo ? 1 : 0, song.useInGroup ? 1 : 0);
+        song.useInSolo ? 1 : 0, song.useInGroup ? 1 : 0, song.uploader || '');
     return getSong(result.lastInsertRowid, true);
   }
 

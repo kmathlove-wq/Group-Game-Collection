@@ -143,6 +143,14 @@ test('색칠 땅따먹기: 접속하면 판을 받고, 시작하면 봇과 함�
   // 다른 사람은 판에 들어오기 전엔 시작할 수 없다.
   assert.equal((await emitAck(two, 'land:play', { nickname: '둘' })).ok, false);
   await emitAck(two, 'land:enter', { userId: 'land-two' });
+  // 같은 닉네임(띄어쓰기·대소문자 무시)은 판에 한 명만
+  const same = await emitAck(two, 'land:play', { nickname: ' 하 나 ' });
+  assert.equal(same.ok, false);
+  assert.match(same.message, /같은 닉네임/);
+  // 🔑 잠긴 닉네임은 비밀번호를 넣은 브라우저만
+  const locked = await emitAck(two, 'land:play', { nickname: '관리자' });
+  assert.equal(locked.ok, false);
+  assert.equal(locked.code, 'name-locked');
   assert.equal((await emitAck(two, 'land:play', { nickname: '둘' })).ok, true);
   assert.equal(landGame.bots.size, 4);
 

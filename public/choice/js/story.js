@@ -2,7 +2,8 @@
 // 초이스 게임 "막대맨 우주 대탈출"의 이야기 지도와 진행 규칙(화면을 모름). 브라우저(window.Choice.Story)와 Node 시험이 함께 쓴다.
 // 장면(node) 종류: choice(선택지) · fail(실패 장면, 다시 하기는 마지막 선택 장면으로) · ending(엔딩).
 // choice 장면에 timer(초)가 있으면 그 안에 못 고를 때 timeout 장면으로 간다.
-// art는 scenes.js의 그림 이름. 그림 이름과 장면 id는 같을 때가 많지만 달라도 된다.
+// 선택지에 lead(들어가는 말)가 있으면 다음 장면 글 앞에 붙여 보여 준다 — 여러 길이 같이 쓰는 장면에서 길마다 '어떻게 왔는지'를 말하려고(2026-10-28: 자석 길이 열쇠로 문을 연 이야기 없이 화물칸에 뚝 떨어졌음).
+  // art는 scenes.js의 그림 이름. 그림 이름과 장면 id는 같을 때가 많지만 달라도 된다.
 (function (root) {
   'use strict';
 
@@ -17,7 +18,7 @@
         { icon: '👽', label: '외계인 변장 키트', next: 'kitchen' },
         { icon: '😴', label: '일단 한숨 자기', next: 'f_sleep' },
         { icon: '🎸', label: '우주 기타로 슬픈 노래 부르기', next: 'f_song' },
-        { icon: '🧲', label: '자석으로 열쇠 끌어오기', next: 'cargo' },
+        { icon: '🧲', label: '자석으로 열쇠 끌어오기', next: 'cargo', lead: '자석을 쭉 내밀자 경비병 허리춤의 열쇠가 휙! 날아와 철컥 붙었다. 그 열쇠로 감옥 문을 따고 살금살금 빠져나왔다.' },
         { icon: '🍕', label: '피자 배달 시키기', next: 'f_pizza' },
         { icon: '🧻', label: '휴지로 미라 변장', next: 'f_mummy' },
         { icon: '🪥', label: '칫솔로 환기구 나사 풀기', next: 'vent' }
@@ -37,7 +38,7 @@
         { icon: '🕺', label: '로봇 춤 추기', next: 'f_dance' },
         { icon: '🧹', label: '청소 로봇인 척하기', next: 'f_mop' },
         { icon: '🍌', label: '바나나 하나 더 던지기', next: 'f_banana2' },
-        { icon: '🚪', label: '옆 문으로 뛰어들기', next: 'cargo' }
+        { icon: '🚪', label: '옆 문으로 뛰어들기', next: 'cargo', lead: '옆 문으로 몸을 날려 뛰어들고 문을 쾅 닫았다. 휴, 로봇은 못 봤다!' }
       ] },
     f_mop: { type: 'fail', art: 'f_mop', title: '청소 당번', text: '로봇이 믿었다! 그리고 우주선 전체 청소를 맡겼다. 화장실만 342개다.' },
     f_banana2: { type: 'fail', art: 'f_banana2', title: '바퀴는 안 미끄러진다', text: '로봇은 바퀴라서 바나나를 그냥 밟고 지나갔다. 대신 막대맨이 자기 바나나에 미끄러졌다.' },
@@ -93,7 +94,7 @@
         { icon: '📸', label: '기념 셀카 찍기', next: 'f_selfie' }
       ] },
     f_selfie: { type: 'fail', art: 'f_selfie', title: '찰칵', text: '셀카는 아주 잘 나왔다. 뒤에서 화난 경비병 열 명이 브이를 하고 있었다.' },
-    f_door: { type: 'fail', art: 'f_door', title: '문이 열린 채로', text: '조금 늦게 눌러서 포드 문이 덜 닫힌 채로 발사됐다. 막대맨은 포드 밖에 매달려 갔다.' },
+    f_door: { type: 'fail', art: 'f_door', title: '문이 열린 채로', text: '발사 버튼을 조금 늦게 눌렀다(출발 음악을 고르느라, 또는 머뭇거리느라). 그래서 포드 문이 덜 닫힌 채로 발사됐다. 막대맨은 포드 밖에 매달려 갔다.' },
     f_float: { type: 'fail', art: 'f_float', title: '우주 미아', text: '멋지게 뛰어내렸지만 우주에는 바닥이 없었다. 막대맨은 지금도 빙글빙글 떠다니는 중이다.' },
 
     // ----- 2-B. 주방(변장 길) -----
@@ -104,10 +105,11 @@
         { icon: '🌶️', label: '아주 매운 소스 듬뿍', next: 'f_spicy' },
         { icon: '🍳', label: '커다란 알로 계란 프라이', next: 'f_egg' },
         { icon: '🧁', label: '컵케이크 굽기', next: 'f_cake' },
-        { icon: '🍧', label: '우주 얼음으로 빙수 만들기', next: 'captain' },
+        { icon: '🍧', label: '우주 얼음으로 빙수 만들기', next: 'f_bingsu' },
         { icon: '🎤', label: '요리 대신 노래로 시간 끌기', next: 'f_karaoke' },
         { icon: '🗑️', label: '음식물 쓰레기통으로 탈출', next: 'f_trash' }
       ] },
+    f_bingsu: { type: 'fail', art: 'f_bingsu', title: '머리가 띵!', text: '우주 얼음은 너무 차가웠다. 빙수를 한 입 먹은 주방장이 머리가 띵! 하고 얼어붙었다. 막대맨은 다시 감옥으로.' },
     f_egg: { type: 'fail', art: 'f_egg', title: '엄마가 왔다', text: '그 알은 외계 공룡의 알이었다. 프라이팬에 올리자마자 엄마 공룡이 주방 문을 부수고 들어왔다.' },
     f_cake: { type: 'fail', art: 'f_cake', title: '크림 폭발', text: '우주 밀가루는 지구보다 100배 부푼다. 오븐이 펑 터지고 주방이 크림 바다가 됐다.' },
     f_karaoke: { type: 'fail', art: 'f_karaoke', title: '100점!', text: '노래방 기계가 100점을 줬다. 손님들이 앵콜을 외쳐서 막대맨은 지금 우주 투어 공연 중이다.' },
@@ -127,7 +129,7 @@
     f_fart: { type: 'fail', art: 'f_fart', title: '뿡', text: '외계인에게 방귀는 "전쟁을 선포한다"는 뜻이었다. 우주 전쟁이 시작될 뻔했다.' },
 
     // ----- 2-C. 화물칸(자석·옆 문 길) -----
-    cargo: { type: 'choice', art: 'cargo', text: '도착한 곳은 커다란 화물칸! 이상한 이름표가 붙은 상자가 가득하다. 어떻게 할까?',
+    cargo: { type: 'choice', art: 'cargo', text: '들어선 곳은 커다란 화물칸! 이상한 이름표가 붙은 상자가 가득하다. 어떻게 할까?',
       choices: [
         { icon: '🍮', label: '"우주 젤리" 상자 열기', next: 'f_jelly' },
         { icon: '🦖', label: '"절대 깨우지 마시오" 상자 열기', next: 'f_dino' },

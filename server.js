@@ -25,8 +25,10 @@ const { setupBoard } = require('./src/board');
 const { createMiningLinkStore } = require('./lib/mining-link-store');
 const { setupMiningTycoon } = require('./src/mining-tycoon');
 const { setupMiningMulti } = require('./src/mining-tycoon/multi');
+const { setupMiningTeam } = require('./src/mining-tycoon/team');
 const { createWorldcupStore } = require('./lib/worldcup-store');
 const { setupWorldcup } = require('./src/worldcup');
+const { createNameLock } = require('./lib/name-lock');
 const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -64,7 +66,14 @@ const rooms = new MemoryRoomStore();
 const roomTimers = new Map();
 const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 
-const musicGame = setupMusicGame({ app, io, rootDir: __dirname });
+// 🔑 잠긴 닉네임(관리자·개발자 등): 모든 게임보다 먼저 소켓 패킷을 검사한다.
+const nameLock = createNameLock();
+io.of('/').setMaxListeners(30); // 게임마다 connection 감시자를 하나씩 달아서 기본 한도(10)를 넘는다
+io.on('connection', (socket) => { socket.setMaxListeners(30); nameLock.guardSocket(socket); });
+const musicGame = setupMusicGame({ app, io, rootDir: __dirname, nameLock });
+// 송캐치가 몸통(JSON)을 읽는 미들웨어를 먼저 달아 두므로 그 바로 뒤에서 이름을 검사한다.
+app.use(nameLock.httpGuard);
+nameLock.setupRoutes(app);
 const triangleGame = setupTriangleGame({ app, io, rootDir: __dirname });
 const landGame = setupLandGame({ app, io, rootDir: __dirname });
 const duelGames = setupDuelGames({ app, io });
@@ -96,6 +105,7 @@ app.get('/geometry-dash', (_req, res) => res.sendFile(path.join(__dirname, 'publ
 app.get('/music', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music.html')));
 app.get('/music/solo', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-solo.html')));
 app.get('/music/lobby', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-lobby.html')));
+app.get('/music/add', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-add.html')));
 app.get('/music/room', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'music-room.html')));
 app.get('/admin-login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
@@ -145,15 +155,16 @@ registerScoreboard('mining-tycoon-destroy', MINING_TIME_MAX, { order: 'asc', per
 // 게임 선택 화면의 개선사항·댓글 게시판(30일 보관, Gist `board.json`에도 보관해 다시 켜져도 남음)과
 // 기간 한정 게임 추천받기 창(Gist `game-requests.json`, 관리자만 봄).
 setupBoard({ app, store: createBoardStore(process.env.BOARD_PATH || path.join(__dirname, 'data', 'board.json'), { remote: gistSync, remoteName: 'board.json' }),
-  requests: createGameRequestStore(process.env.GAME_REQUESTS_PATH || path.join(__dirname, 'data', 'game-requests.json'), { remote: gistSync }) });
+  requests: createGameRequestStore(process.env.GAME_REQUESTS_PATH || path.join(__dirname, 'data', 'game-requests.json'), { remote: gistSync }), nameLock });
 // 광질 타이쿤 📱 다른 기기 연동 보관함(30일 안 하면 지움, Gist `mining-tycoon-worlds.json`에도 보관).
 const miningLinkStore = createMiningLinkStore(process.env.MINING_LINK_PATH || path.join(__dirname, 'data', 'mining-tycoon-worlds.json'), { remote: gistSync });
 setupMiningTycoon({ app, store: miningLinkStore });
 const miningMulti = setupMiningMulti({ io }); // 👫 친구와 함께(같은 땅, 돈·차는 각자)
+const miningTeam = setupMiningTeam({ io }); // ⚔️ 팀전(같은 새 땅, 팀끼리 돈·업그레이드·가방 공유, 보물 먼저 캔 팀 승리)
 // 💘 이상형 월드컵: 주제별 1위·결승 진출 횟수(Gist `worldcup-stats.json`에도 보관).
 setupWorldcup({ app, store: createWorldcupStore(process.env.WORLDCUP_PATH || path.join(__dirname, 'data', 'worldcup-stats.json'), { remote: gistSync }) });
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size, miningRooms: miningMulti.rooms.size,
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size, miningRooms: miningMulti.rooms.size, miningTeamRooms: miningTeam.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
 
 function cleanText(value, maxLength) {
