@@ -164,7 +164,8 @@ test('내가 쓴 글·답글만 고치고 지울 수 있고, 고친 글엔 (수�
   assert.equal(edited.name, '철수');
   const reply = (await call(`/api/board/posts/${post.id}/replies`, { method: 'POST', body: { text: '관리자 답글' }, token, owner: other })).body.posts[0].replies[0];
   assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', owner: me })).status, 403, '남의 답글은 못 지운다');
-  assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', owner: other })).body.posts[0].replies.length, 0, '내 답글은 지운다');
+  assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', owner: other })).status, 403, '👑관리자 답글은 쓴 기기라도 관리자 모드가 꺼져 있으면 못 지운다');
+  assert.equal((await call(`/api/board/items/${reply.id}`, { method: 'DELETE', token, owner: other })).body.posts[0].replies.length, 0, '관리자 모드면 지운다');
   assert.equal((await call(`/api/board/items/${post.id}`, { method: 'DELETE', owner: other })).status, 403);
   assert.deepEqual((await call(`/api/board/items/${post.id}`, { method: 'DELETE', owner: me })).body.posts, []);
 });
@@ -220,7 +221,7 @@ test('게임 추천받기 마감은 한국 시간 10월 31일 토요일 밤까�
   assert.equal(new Date(end).getUTCDay(), 6, '토요일(한국 시간 기준 밤 = UTC 오후)');
 });
 
-test('👑 관리자 글은 관리자 모드면 다른 기기에서 쓴 글이라도 고칠 수 있다(일반 사람 글은 못 고침)', async (t) => {
+test('👑 관리자 글은 관리자 모드일 때만 고친다: 다른 기기에서 쓴 글도 되고, 쓴 기기라도 관리자 모드를 끄면 안 된다(일반 사람 글은 관리자도 못 고침)', async (t) => {
   const call = await startBoard(t);
   const { body: { token } } = await call('/api/board/admin/login', { method: 'POST', body: { password: '1234' } });
   const deviceA = 'a'.repeat(32); const deviceB = 'b'.repeat(32); const user = 'c'.repeat(32);
@@ -232,6 +233,11 @@ test('👑 관리자 글은 관리자 모드면 다른 기기에서 쓴 글이�
   assert.equal(edited.body.posts.find((p) => p.id === notice.id).text, '고친 공지');
   // 관리자 모드가 아니면 다른 기기에서 못 고친다
   assert.equal((await call(`/api/board/items/${notice.id}`, { method: 'PATCH', body: { text: '몰래' }, owner: deviceB })).status, 403);
+  // 관리자 글을 쓴 그 기기(A)라도 관리자 모드를 끄면 못 고치고 못 지운다
+  const listed = (await call('/api/board', { owner: deviceA })).body.posts.find((p) => p.id === notice.id);
+  assert.equal(listed.admin, true);
+  assert.equal((await call(`/api/board/items/${notice.id}`, { method: 'PATCH', body: { text: '몰래' }, owner: deviceA })).status, 403);
+  assert.equal((await call(`/api/board/items/${notice.id}`, { method: 'DELETE', owner: deviceA })).status, 403);
   // 관리자라도 일반 사람 글은 못 고친다(지우기만)
   assert.equal((await call(`/api/board/items/${userPost.id}`, { method: 'PATCH', body: { text: '바꿈' }, token, owner: deviceB })).status, 403);
 });

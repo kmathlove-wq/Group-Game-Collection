@@ -107,21 +107,24 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
   });
 
   // 내가 쓴 글 고치기: 이름은 그대로 두고 내용만 바꾼다. 검사는 새 글과 같다.
-  // 👑 관리자 글은 관리자 모드면 어느 기기에서 썼든 고칠 수 있다(사용자 결정 2026-10-28). 일반 사람 글은 관리자도 못 고침(지우기만).
+  // 👑 관리자 글은 관리자 모드일 때만 고친다 — 어느 기기에서 썼든 되고, 쓴 기기라도 관리자 모드를 끄면 안 된다(사용자 결정 2026-10-28).
+  // 일반 사람 글은 주인만(관리자도 못 고침, 지우기만).
+  const canEdit = (req, item) => (item.admin ? isAdmin(req) : store.isOwner(item.id, ownerOf(req)));
   app.patch('/api/board/items/:id', (req, res) => {
     const item = store.find(req.params.id);
     if (!item) return res.status(404).json({ error: '이미 지워진 글이에요.' });
-    if (!store.isOwner(req.params.id, ownerOf(req)) && !(item.admin && isAdmin(req))) return res.status(403).json({ error: '내가 쓴 글만 고칠 수 있어요.' });
+    if (!canEdit(req, item)) return res.status(403).json({ error: item.admin ? '관리자 글은 관리자 모드에서만 고칠 수 있어요.' : '내가 쓴 글만 고칠 수 있어요.' });
     const entry = readEntry({ name: '익명', text: req.body?.text }, true);
     if (entry.error) return res.status(400).json(entry);
     store.edit(req.params.id, entry.text);
     res.json(listFor(req));
   });
 
-  // 지우기: 관리자는 모든 글, 그 밖에는 내가 쓴 글만.
+  // 지우기: 관리자 모드는 모든 글, 그 밖에는 내가 쓴 일반 글만(👑관리자 글은 관리자 모드에서만).
   app.delete('/api/board/items/:id', (req, res) => {
-    if (!store.find(req.params.id)) return res.status(404).json({ error: '이미 지워진 글이에요.' });
-    if (!isAdmin(req) && !store.isOwner(req.params.id, ownerOf(req))) return res.status(403).json({ error: '내가 쓴 글만 지울 수 있어요.' });
+    const item = store.find(req.params.id);
+    if (!item) return res.status(404).json({ error: '이미 지워진 글이에요.' });
+    if (!isAdmin(req) && !canEdit(req, item)) return res.status(403).json({ error: item.admin ? '관리자 글은 관리자 모드에서만 지울 수 있어요.' : '내가 쓴 글만 지울 수 있어요.' });
     store.remove(req.params.id);
     res.json(listFor(req));
   });

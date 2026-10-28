@@ -119,11 +119,13 @@
   // 글 본문: 고치는 중이면 고치기 칸, 아니면 내용.
   const body = (item) => (editing === item.id ? editForm(item) : el('p', 'board-text', item.text));
 
-  // 내 글이거나 (관리자 모드에서) 👑관리자 글이면 수정 버튼, 내 글이거나 관리자면 삭제 버튼.
+  // 수정·삭제 단추: 👑관리자 글은 관리자 모드에서만, 일반 글은 내 글이면(삭제는 관리자도).
   function ownButtons(item) {
     const buttons = [];
-    if (item.mine || (adminToken && item.admin)) buttons.push(button('✏️ 수정', 'board-link', () => { editing = editing === item.id ? null : item.id; render(posts); }));
-    if (item.mine || adminToken) buttons.push(button('🗑 삭제', 'board-link danger-text', () => remove(item.id)));
+    // 👑관리자 글은 관리자 모드일 때만(쓴 기기라도 관리자 모드를 끄면 못 고침), 일반 글은 내 글일 때
+    const canEdit = item.admin ? Boolean(adminToken) : item.mine;
+    if (canEdit) buttons.push(button('✏️ 수정', 'board-link', () => { editing = editing === item.id ? null : item.id; render(posts); }));
+    if (canEdit || adminToken) buttons.push(button('🗑 삭제', 'board-link danger-text', () => remove(item.id)));
     return buttons;
   }
 
