@@ -107,9 +107,11 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
   });
 
   // 내가 쓴 글 고치기: 이름은 그대로 두고 내용만 바꾼다. 검사는 새 글과 같다.
+  // 👑 관리자 글은 관리자 모드면 어느 기기에서 썼든 고칠 수 있다(사용자 결정 2026-10-28). 일반 사람 글은 관리자도 못 고침(지우기만).
   app.patch('/api/board/items/:id', (req, res) => {
-    if (!store.find(req.params.id)) return res.status(404).json({ error: '이미 지워진 글이에요.' });
-    if (!store.isOwner(req.params.id, ownerOf(req))) return res.status(403).json({ error: '내가 쓴 글만 고칠 수 있어요.' });
+    const item = store.find(req.params.id);
+    if (!item) return res.status(404).json({ error: '이미 지워진 글이에요.' });
+    if (!store.isOwner(req.params.id, ownerOf(req)) && !(item.admin && isAdmin(req))) return res.status(403).json({ error: '내가 쓴 글만 고칠 수 있어요.' });
     const entry = readEntry({ name: '익명', text: req.body?.text }, true);
     if (entry.error) return res.status(400).json(entry);
     store.edit(req.params.id, entry.text);

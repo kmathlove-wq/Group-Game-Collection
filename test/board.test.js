@@ -219,3 +219,19 @@ test('게임 추천받기 마감은 한국 시간 10월 31일 토요일 밤까�
   assert.equal(new Date(end + 1).toISOString(), '2026-10-31T15:00:00.000Z'); // 한국 11월 1일 0시 = 끝난 직후
   assert.equal(new Date(end).getUTCDay(), 6, '토요일(한국 시간 기준 밤 = UTC 오후)');
 });
+
+test('👑 관리자 글은 관리자 모드면 다른 기기에서 쓴 글이라도 고칠 수 있다(일반 사람 글은 못 고침)', async (t) => {
+  const call = await startBoard(t);
+  const { body: { token } } = await call('/api/board/admin/login', { method: 'POST', body: { password: '1234' } });
+  const deviceA = 'a'.repeat(32); const deviceB = 'b'.repeat(32); const user = 'c'.repeat(32);
+  const notice = (await call('/api/board/posts', { method: 'POST', body: { text: '공지' }, token, owner: deviceA })).body.posts[0];
+  const userPost = (await call('/api/board/posts', { method: 'POST', body: { name: '철수', text: '안녕' }, owner: user })).body.posts.find((p) => !p.admin);
+  // 다른 기기(B) + 관리자 모드 → 관리자 글 고치기 OK
+  const edited = await call(`/api/board/items/${notice.id}`, { method: 'PATCH', body: { text: '고친 공지' }, token, owner: deviceB });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.posts.find((p) => p.id === notice.id).text, '고친 공지');
+  // 관리자 모드가 아니면 다른 기기에서 못 고친다
+  assert.equal((await call(`/api/board/items/${notice.id}`, { method: 'PATCH', body: { text: '몰래' }, owner: deviceB })).status, 403);
+  // 관리자라도 일반 사람 글은 못 고친다(지우기만)
+  assert.equal((await call(`/api/board/items/${userPost.id}`, { method: 'PATCH', body: { text: '바꿈' }, token, owner: deviceB })).status, 403);
+});
