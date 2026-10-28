@@ -141,7 +141,7 @@ npm start
 | `SESSION_SECRET` | 임시 무작위 값 | 운영 관리자 세션 서명 키 |
 | `ADMIN_USERNAME` | 없음 | DB가 비었을 때 만들 최초 관리자 아이디 |
 | `ADMIN_PASSWORD` | 없음 | 최초 관리자 비밀번호(저장은 bcrypt 해시) |
-| `MAX_AUDIO_MB` | `30` | 음원 한 파일의 최대 MB |
+| `MAX_AUDIO_MB` | — | 더 이상 쓰지 않음(송캐치 노래는 누구나 올리기로만 받고 Gist 보관 때문에 7MB 고정) |
 | `MUSIC_DB_PATH` | `data/music-game.db` | SQLite 파일 경로 |
 | `MUSIC_UPLOAD_DIR` | `uploads` | 음원·이미지 상위 폴더 |
 | `STDICT_API_KEY` | 없음 | 끝말잇기용 표준국어대사전 Open API 키 |

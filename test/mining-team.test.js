@@ -158,3 +158,22 @@ test('⚔️ 팀 경제 숫자 한 줄: 읽기·쓰기·고치기·팔기', () =
   assert.equal(sold.count, 4);
   assert.equal(sold.total, 4 * Rules.ORES[2].value);
 });
+
+test('⚔️ 팀전 방 목록: 시작 전 방만 보이고, 방장 이름·팀별 인원을 알려 준다', async (t) => {
+  const { connect } = await startServer(t);
+  const host = await connect();
+  const made = await call(host, 'mt:team:create', { name: '방장', teams: 3, team: 1 });
+  const viewer = await connect();
+  let list = await call(viewer, 'mt:team:list', {});
+  assert.equal(list.ok, true);
+  assert.equal(list.rooms.length, 1);
+  assert.equal(list.rooms[0].code, made.code);
+  assert.equal(list.rooms[0].hostName, '방장');
+  assert.equal(list.rooms[0].teams.length, 3);
+  assert.equal(list.rooms[0].players.filter((p) => p.team === 1).length, 1);
+  await call(viewer, 'mt:team:join', { name: '구경꾼', code: made.code, team: 0 });
+  await call(host, 'mt:team:start', {});
+  const other = await connect();
+  list = await call(other, 'mt:team:list', {});
+  assert.equal(list.rooms.length, 0, '시작한 방은 목록에서 빠진다');
+});

@@ -298,3 +298,18 @@ button, input { font: inherit; }
 .mt-team-col li small { opacity: .7; font-weight: 600; }
 .mt-team-col button { width: 100%; padding: 6px; border: 0; border-radius: 10px; background: var(--team); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
 .mt-team-card { max-height: 92dvh; overflow: auto; }
+
+/* ⚔️ 팀전 열린 방 목록 */
+.mt-team-refresh { margin-left: 6px; padding: 2px 8px; border: 0; border-radius: 8px; background: #eee5d6; font: inherit; cursor: pointer; }
+.mt-team-rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 210px; overflow: auto; text-align: left; }
+.mt-team-rooms li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #f2ebdf; }
+.mt-team-rooms li.on { background: #fff; box-shadow: 0 0 0 2px #6c4ff6; }
+.mt-team-rooms li > div { flex: 1; min-width: 0; }
+.mt-team-rooms li b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-team-rooms li small { font-weight: 700; opacity: .8; }
+.mt-team-rooms li button { flex: none; padding: 8px 12px; border: 0; border-radius: 10px; background: #6c4ff6; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+.mt-team-rooms .mt-team-empty { justify-content: center; color: #8a7d68; font-weight: 700; }
+
+.mt-team-code { grid-template-columns: 1fr auto; margin-top: 8px; }
+.mt-team-code input { font-size: 18px; letter-spacing: .15em; padding: 8px; }
+.mt-team-new { margin-top: 18px; padding-top: 12px; border-top: 2px dashed #e4d8c4; }

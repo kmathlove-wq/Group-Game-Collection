@@ -39,6 +39,7 @@ function mapSong(row, { privateFields = false } = {}) {
   };
   if (privateFields) {
     song.audioFilename = row.audio_filename;
+    song.audioGist = row.audio_gist || '';
     song.imageFilename = row.image_filename;
   }
   return song;
@@ -111,8 +112,10 @@ function createMusicDatabase({ filename, bcrypt, adminUsername, adminPassword })
   `);
 
   // 누구나 노래 추가(2026-10-28): 올린 사람 이름 칸. 예전 DB에는 없으니 없으면 붙인다.
-  if (!db.prepare('PRAGMA table_info(songs)').all().some((c) => c.name === 'uploader')) {
-    try { db.exec("ALTER TABLE songs ADD COLUMN uploader TEXT NOT NULL DEFAULT ''"); } catch (error) { if (!/duplicate column/i.test(error.message)) throw error; } // 동시에 켜진 다른 서버가 먼저 붙였으면 괜찮음
+  // Gist 보관(2026-10-28): 노래 파일을 넣어 둔 비밀 Gist 번호 칸(audio_gist).
+  for (const [column, type] of [['uploader', "TEXT NOT NULL DEFAULT ''"], ['audio_gist', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (db.prepare('PRAGMA table_info(songs)').all().some((c) => c.name === column)) continue;
+    try { db.exec(`ALTER TABLE songs ADD COLUMN ${column} ${type}`); } catch (error) { if (!/duplicate column/i.test(error.message)) throw error; } // 동시에 켜진 다른 서버가 먼저 붙였으면 괜찮음
   }
   if (adminUsername && adminPassword && !db.prepare('SELECT id FROM admins LIMIT 1').get()) {
     const hash = bcrypt.hashSync(adminPassword, 12);
@@ -206,8 +209,44 @@ function createMusicDatabase({ filename, bcrypt, adminUsername, adminPassword })
     return setId;
   });
 
+  // ── Gist 보관용: 노래·문제집 전체를 JSON으로 내보내고, 서버가 새로 켜지면 되살린다 ──
+  // 노래는 저장 파일 이름(audio_filename, 무작위라 겹치지 않음)으로 같은 노래인지 알아본다.
+  const SONG_COLUMNS = db.prepare('PRAGMA table_info(songs)').all().map((c) => c.name);
+  function exportAll() {
+    const byId = new Map(db.prepare('SELECT id, audio_filename FROM songs').all().map((r) => [r.id, r.audio_filename]));
+    return {
+      version: 1,
+      songs: db.prepare('SELECT * FROM songs ORDER BY id').all(),
+      sets: db.prepare('SELECT * FROM question_sets ORDER BY id').all().map((set) => ({ ...set,
+        songs: db.prepare('SELECT song_id FROM question_set_songs WHERE set_id=? ORDER BY position').all(set.id).map((r) => byId.get(r.song_id)).filter(Boolean) }))
+    };
+  }
+  // 없는 노래·문제집만 더한다(이미 있는 건 그대로). 지운 노래 목록(deleted)에 있는 건 되살리지 않는다.
+  const importAll = db.transaction((saved, deleted = new Set()) => {
+    let added = 0;
+    const have = new Set(db.prepare('SELECT audio_filename FROM songs').all().map((r) => r.audio_filename));
+    for (const row of Array.isArray(saved?.songs) ? saved.songs : []) {
+      if (!row || typeof row.audio_filename !== 'string' || have.has(row.audio_filename) || deleted.has(row.audio_filename)) continue;
+      const columns = SONG_COLUMNS.filter((c) => c in row && (c !== 'id' || !statements.songById.get(row.id)));
+      db.prepare(`INSERT INTO songs(${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`).run(...columns.map((c) => row[c]));
+      have.add(row.audio_filename);
+      added++;
+    }
+    const idOf = new Map(db.prepare('SELECT id, audio_filename FROM songs').all().map((r) => [r.audio_filename, r.id]));
+    for (const set of Array.isArray(saved?.sets) ? saved.sets : []) {
+      if (!set?.name || db.prepare('SELECT id FROM question_sets WHERE name=?').get(set.name)) continue;
+      const setId = Number(db.prepare(`INSERT INTO question_sets(name, description, is_random, use_in_solo, use_in_group, is_public)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(set.name, set.description || '', set.is_random ? 1 : 0, set.use_in_solo ? 1 : 0, set.use_in_group ? 1 : 0, set.is_public ? 1 : 0).lastInsertRowid);
+      (set.songs || []).map((f) => idOf.get(f)).filter(Boolean)
+        .forEach((songId, i) => db.prepare('INSERT OR IGNORE INTO question_set_songs(set_id, song_id, position) VALUES (?, ?, ?)').run(setId, songId, i));
+    }
+    return added;
+  });
+
   return {
-    db, mapSong, listSongs, getSong, insertSong, updateSong, listSets, getSetSongIds, saveSet,
+    db, mapSong, exportAll, importAll,
+    setAudioGist: (id, gistId) => db.prepare('UPDATE songs SET audio_gist=? WHERE id=?').run(gistId, id),
+    songFiles: () => db.prepare("SELECT id, audio_filename, audio_gist FROM songs WHERE audio_gist != ''").all(), listSongs, getSong, insertSong, updateSong, listSets, getSetSongIds, saveSet,
     findAdmin: (username) => statements.adminByName.get(username),
     getAdmin: (id) => statements.adminById.get(id),
     updatePassword: (id, hash) => statements.updatePassword.run(hash, id),

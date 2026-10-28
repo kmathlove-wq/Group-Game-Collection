@@ -308,20 +308,22 @@
       <div id="mtTeamIdle">
         <p>같은 새 땅에서 팀끼리 겨뤄요! <b>돈·업그레이드·가방은 팀끼리 함께</b> 써요. 300m 아래 <b>전설의 보물을 먼저 캐는 팀</b>이 이겨요.</p>
         <p class="mt-muted">내가 하던 게임은 그대로 저장돼 있다가 팀전이 끝나면 돌아와요.</p>
+        <p class="mt-team-label">📋 열린 팀전 방 <button class="mt-team-refresh" id="mtTeamRefresh" type="button" aria-label="방 목록 새로 고침">↻</button></p>
+        <ul class="mt-team-rooms" id="mtTeamRooms"></ul>
+        <div id="mtTeamJoinBox" class="hidden">
+          <p class="mt-team-label">들어갈 팀을 골라요</p>
+          <div class="mt-team-pick" id="mtTeamJoinPick"></div>
+        </div>
+        <form id="mtTeamJoinForm" class="mt-multi-join mt-team-code">
+          <input id="mtTeamCode" type="text" maxlength="4" placeholder="방 코드로 찾기" autocomplete="off" autocapitalize="characters" aria-label="팀전 방 코드">
+          <button class="mt-secondary" id="mtTeamFind" type="submit">👀 찾기</button>
+        </form>
+        <p class="mt-team-label mt-team-new">🏠 새 방 만들기</p>
         <p class="mt-team-label">팀 수</p>
         <div class="mt-team-pick" id="mtTeamCountPick"></div>
         <p class="mt-team-label">내 팀</p>
         <div class="mt-team-pick" id="mtTeamCreatePick"></div>
         <button class="mt-primary mt-wide" id="mtTeamCreate" type="button">🏠 팀전 방 만들기</button>
-        <p class="mt-muted mt-multi-or">또는 친구가 알려 준 방 코드를 넣어요</p>
-        <form id="mtTeamJoinForm" class="mt-multi-join">
-          <input id="mtTeamCode" type="text" maxlength="4" placeholder="예: K7QM" autocomplete="off" autocapitalize="characters" aria-label="팀전 방 코드">
-          <button class="mt-primary" id="mtTeamFind" type="submit">👀 방 찾기</button>
-        </form>
-        <div id="mtTeamJoinBox" class="hidden">
-          <p class="mt-team-label">들어갈 팀을 골라요</p>
-          <div class="mt-team-pick" id="mtTeamJoinPick"></div>
-        </div>
       </div>
       <div id="mtTeamRoom" class="hidden">
         <p class="mt-multi-code-label">방 코드</p>

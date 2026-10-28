@@ -29,6 +29,7 @@ const { setupMiningTeam } = require('./src/mining-tycoon/team');
 const { createWorldcupStore } = require('./lib/worldcup-store');
 const { setupWorldcup } = require('./src/worldcup');
 const { createNameLock } = require('./lib/name-lock');
+const { createSongVault } = require('./lib/song-vault');
 const { createGeometryDashScoreStore, sanitizePlayerId, SCORE_MAX } = require('./lib/geometry-dash-scores');
 
 const BUBBLE_BOBBLE_SCORE_MAX = 9_999_999;
@@ -70,7 +71,10 @@ const SCORE_SUBMIT_COOLDOWN_MS = 2_000;
 const nameLock = createNameLock();
 io.of('/').setMaxListeners(30); // 게임마다 connection 감시자를 하나씩 달아서 기본 한도(10)를 넘는다
 io.on('connection', (socket) => { socket.setMaxListeners(30); nameLock.guardSocket(socket); });
-const musicGame = setupMusicGame({ app, io, rootDir: __dirname, nameLock });
+const gistSync = createGistSync({ token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID });
+// 🎵 송캐치 노래 파일은 노래마다 비밀 Gist에(공용 Gist에 넣으면 켜질 때마다 수십 MB를 받게 됨)
+const songVault = createSongVault({ token: process.env.GIST_TOKEN });
+const musicGame = setupMusicGame({ app, io, rootDir: __dirname, nameLock, remote: gistSync, vault: songVault });
 // 송캐치가 몸통(JSON)을 읽는 미들웨어를 먼저 달아 두므로 그 바로 뒤에서 이름을 검사한다.
 app.use(nameLock.httpGuard);
 nameLock.setupRoutes(app);
@@ -80,7 +84,6 @@ const duelGames = setupDuelGames({ app, io });
 const liarGame = setupLiarGame({ app, io, rootDir: __dirname });
 const mafiaGame = setupMafiaGame({ app, io, rootDir: __dirname });
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
-const gistSync = createGistSync({ token: process.env.GIST_TOKEN, gistId: process.env.GIST_ID });
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
 const wordChainBrain = createBrain(process.env.WORD_CHAIN_BRAIN_PATH || path.join(__dirname, 'data', 'word-chain-brain.json'), { remote: gistSync });
 const wordChainDictionary = createDictionary({ store: oneShotStore });

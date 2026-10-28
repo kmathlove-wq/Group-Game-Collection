@@ -192,3 +192,9 @@ body.admin-page {
 @media (prefers-reduced-motion: reduce) {
   .admin-page *, .admin-page *::before, .admin-page *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* 🎧 원본 듣기 칸 */
+.admin-player { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; padding: 12px 14px; border-radius: 16px; background: #f3f0ff; }
+.admin-player > div { display: grid; min-width: 160px; }
+.admin-player small { color: #6b62b8; font-weight: 700; }
+.admin-player audio { flex: 1 1 260px; min-width: 0; }

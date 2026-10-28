@@ -11,11 +11,13 @@ const { createMusicDatabase } = require('./database');
 const { createGroupGame } = require('./group-game');
 const { hasBadWord } = require('../../lib/bad-words');
 const {
-  AUDIO_MIMES, AUDIO_EXTENSIONS, IMAGE_MIMES, IMAGE_EXTENSIONS,
-  text, boolean, number, parseSong, checkAnswer, shuffle, createTokenStore
+  AUDIO_MIMES, AUDIO_EXTENSIONS,
+  text, boolean, parseSong, checkAnswer, shuffle, createTokenStore
 } = require('./service');
 
-function setupMusicGame({ app, io, rootDir, nameLock = null }) {
+const REMOTE_NAME = 'songcatch-songs.json';
+
+function setupMusicGame({ app, io, rootDir, nameLock = null, remote = null, vault = null }) {
   const dataDir = path.join(rootDir, 'data');
   const uploadRoot = process.env.MUSIC_UPLOAD_DIR || path.join(rootDir, 'uploads');
   const audioDir = path.join(uploadRoot, 'audio');
@@ -25,6 +27,53 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
   const database = createMusicDatabase({ filename: process.env.MUSIC_DB_PATH || path.join(dataDir, 'music-game.db'),
     bcrypt, adminUsername: process.env.ADMIN_USERNAME, adminPassword: process.env.ADMIN_PASSWORD });
   const tokenStore = createTokenStore();
+
+  // ── ☁️ Gist 보관(사용자 결정 2026-10-28): Render가 다시 켜져도 노래가 남게 ──
+  // 노래 목록·문제집은 공용 Gist의 songcatch-songs.json(remote, lib/gist-sync.js), 노래 파일은 노래마다 비밀 Gist(vault, lib/song-vault.js).
+  // 지운 노래 파일 이름(deleted)도 함께 적어 두어, 합칠 때 되살아나지 않게 한다.
+  const deleted = new Set();
+  const changed = () => remote?.save(REMOTE_NAME);
+  if (remote) {
+    remote.attach(REMOTE_NAME, {
+      absorb: (saved) => {
+        (saved?.deleted || []).forEach((name) => deleted.add(name));
+        const added = database.importAll(saved, deleted);
+        if (added) console.log(`[songcatch] Gist에서 노래 ${added}곡을 되살렸어요.`);
+        prefetchAudio();
+      },
+      snapshot: () => JSON.stringify({ ...database.exportAll(), deleted: [...deleted].slice(-2000) })
+    });
+  }
+  // 노래 파일이 없으면(서버가 새로 켜짐) Gist에서 받아 온다. 같은 파일을 동시에 두 번 받지 않는다.
+  const fetching = new Map();
+  function ensureAudio(filename, gistId) {
+    const file = path.join(audioDir, path.basename(filename));
+    if (fs.existsSync(file)) return Promise.resolve(true);
+    if (!vault || !gistId) return Promise.resolve(false);
+    if (!fetching.has(file)) {
+      fetching.set(file, vault.get(gistId, 'audio')
+        .then((buffer) => { if (!buffer) return false; fs.writeFileSync(file, buffer); return true; })
+        .catch((error) => { console.error('[songcatch] 노래 파일 받기 실패:', error.message); return false; })
+        .finally(() => fetching.delete(file)));
+    }
+    return fetching.get(file);
+  }
+  // 켜진 뒤 빠진 노래 파일을 하나씩 미리 받아 둔다(첫 재생이 느리지 않게).
+  async function prefetchAudio() {
+    for (const row of database.songFiles()) await ensureAudio(row.audio_filename, row.audio_gist);
+  }
+  // 새 노래 파일을 비밀 Gist에 올린다(실패하면 서버가 꺼지기 전까지만 남음 — 로그로 알림).
+  async function backupAudio(song) {
+    if (!vault) return;
+    try {
+      const id = await vault.create(`${song.title} - ${song.artist}`, { audio: fs.readFileSync(path.join(audioDir, song.audioFilename)) });
+      if (!database.getSong(song.id)) { await vault.remove(id); return; } // 올리는 사이에 지워졌으면
+      database.setAudioGist(song.id, id);
+      changed();
+    } catch (error) { console.error(`[songcatch] 노래 파일 보관 실패(${song.id}):`, error.message); }
+  }
+  // 관리 기록을 남기는 일(노래·문제집 바꾸기)이면 Gist에도 저장한다.
+  const log = (...args) => { database.log(...args); if (!['login', 'password_change'].includes(args[1])) changed(); };
   const soloSessions = new Map();
   const sessionMiddleware = session({ name: 'groupgame.admin', secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
     resave: false, saveUninitialized: false, cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 8 * 60 * 60_000 } });
@@ -63,7 +112,7 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
     if (!valid) return res.status(401).json({ ok: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
     req.session.regenerate((error) => {
       if (error) return res.status(500).json({ ok: false, message: '로그인 세션을 만들지 못했습니다.' });
-      req.session.adminId = admin.id; database.log(admin.id, 'login'); res.json({ ok: true, admin: database.getAdmin(admin.id) });
+      req.session.adminId = admin.id; log(admin.id, 'login'); res.json({ ok: true, admin: database.getAdmin(admin.id) });
     });
   });
   app.post('/api/admin/logout', adminOnly, (req, res) => req.session.destroy(() => res.json({ ok: true })));
@@ -72,7 +121,7 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
     if (!row || !await bcrypt.compare(String(req.body.currentPassword || ''), row.password_hash)) return res.status(400).json({ ok: false, message: '현재 비밀번호가 맞지 않습니다.' });
     const next = String(req.body.newPassword || '');
     if (next.length < 10) return res.status(400).json({ ok: false, message: '새 비밀번호는 10자 이상이어야 합니다.' });
-    database.updatePassword(row.id, await bcrypt.hash(next, 12)); database.log(row.id, 'password_change'); res.json({ ok: true });
+    database.updatePassword(row.id, await bcrypt.hash(next, 12)); log(row.id, 'password_change'); res.json({ ok: true });
   });
 
   const storage = (directory, extensions) => multer.diskStorage({ destination: directory,
@@ -80,11 +129,15 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
       const ext = path.extname(file.originalname).toLowerCase();
       callback(extensions.has(ext) ? null : new Error('지원하지 않는 파일 확장자입니다.'), `${crypto.randomUUID()}${ext}`);
     } });
-  const audioUpload = multer({ storage: storage(audioDir, AUDIO_EXTENSIONS), limits: { fileSize: Number(process.env.MAX_AUDIO_MB || 30) * 1024 * 1024 },
-    fileFilter: (_req, file, callback) => callback(AUDIO_MIMES.has(file.mimetype) ? null : new Error('지원하지 않는 음원 형식입니다.'), AUDIO_MIMES.has(file.mimetype)) }).single('audio');
-  const imageUpload = multer({ storage: storage(imageDir, IMAGE_EXTENSIONS), limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (_req, file, callback) => callback(IMAGE_MIMES.has(file.mimetype) ? null : new Error('지원하지 않는 이미지 형식입니다.'), IMAGE_MIMES.has(file.mimetype)) }).single('image');
-  const runUpload = (uploader) => (req, res, next) => uploader(req, res, (error) => error ? res.status(400).json({ ok: false, message: error.message }) : next());
+  // 🎵 누구나 올리기는 7MB까지: 노래 파일을 Gist에 보관하는데(lib/song-vault.js) base64로 바꾸면 1.33배가 되고,
+  // Gist는 10MB가 넘는 파일을 API로 돌려주지 않기 때문(보통 노래 한 곡 mp3는 3~5MB).
+  const PUBLIC_AUDIO_MB = 7;
+  const publicAudioUpload = multer({ storage: storage(audioDir, AUDIO_EXTENSIONS), limits: { fileSize: PUBLIC_AUDIO_MB * 1024 * 1024 },
+    fileFilter: (_req, file, callback) => callback(AUDIO_MIMES.has(file.mimetype) ? null : new Error('mp3·m4a·wav·ogg 노래 파일만 올릴 수 있어요.'), AUDIO_MIMES.has(file.mimetype)) }).single('audio');
+  const runUpload = (uploader) => (req, res, next) => uploader(req, res, (error) => {
+    if (!error) return next();
+    res.status(400).json({ ok: false, message: error.code === 'LIMIT_FILE_SIZE' ? `노래 파일은 ${PUBLIC_AUDIO_MB}MB까지 올릴 수 있어요.` : error.message });
+  });
 
   app.get('/api/admin/songs', adminOnly, (req, res) => {
     const result = database.listSongs({ search: text(req.query.search, 100), genre: text(req.query.genre, 50),
@@ -96,40 +149,11 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
     const song = database.getSong(Number(req.params.id), false);
     res.status(song ? 200 : 404).json(song || { message: '음원을 찾을 수 없습니다.' });
   });
-  app.post('/api/admin/songs', adminOnly, runUpload(audioUpload), (req, res) => {
-    const parsed = parseSong(req.body);
-    if (!req.file) return res.status(400).json({ ok: false, message: '음원 파일을 선택해 주세요.' });
-    if (!boolean(req.body.copyrightConfirmed, false)) { fs.unlinkSync(req.file.path); return res.status(400).json({ ok: false, message: '음원 사용 권한 확인에 동의해야 합니다.' }); }
-    if (parsed.error) { fs.unlinkSync(req.file.path); return res.status(400).json({ ok: false, message: parsed.error }); }
-    if (database.hasDuplicate(parsed.value.title, parsed.value.artist)) { fs.unlinkSync(req.file.path); return res.status(409).json({ ok: false, message: '같은 제목과 가수의 음원이 이미 있습니다.' }); }
-    try {
-      parsed.value.audioFilename = req.file.filename;
-      const song = database.insertSong(parsed.value); database.log(req.session.adminId, 'song_create', 'song', song.id, `${song.title} - ${song.artist}`);
-      res.status(201).json({ ok: true, song });
-    } catch (error) { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); res.status(500).json({ ok: false, message: '음원 정보를 저장하지 못했습니다.' }); }
-  });
-  app.put('/api/admin/songs/:id', adminOnly, (req, res) => {
-    const current = database.getSong(Number(req.params.id), true); if (!current) return res.status(404).json({ ok: false, message: '음원을 찾을 수 없습니다.' });
-    const parsed = parseSong(req.body, current); if (parsed.error) return res.status(400).json({ ok: false, message: parsed.error });
-    if (database.hasDuplicate(parsed.value.title, parsed.value.artist, current.id)) return res.status(409).json({ ok: false, message: '같은 제목과 가수의 음원이 이미 있습니다.' });
-    const song = database.updateSong(current.id, parsed.value); database.log(req.session.adminId, 'song_update', 'song', song.id); res.json({ ok: true, song });
-  });
-  app.post('/api/admin/songs/:id/image', adminOnly, runUpload(imageUpload), (req, res) => {
-    const current = database.getSong(Number(req.params.id), true); if (!current || !req.file) return res.status(404).json({ ok: false, message: '음원 또는 이미지를 찾을 수 없습니다.' });
-    const old = current.imageFilename; current.imageFilename = req.file.filename; const song = database.updateSong(current.id, current);
-    if (old) fs.rm(path.join(imageDir, old), { force: true }, () => {}); database.log(req.session.adminId, 'song_image', 'song', song.id); res.json({ ok: true, song });
-  });
   app.delete('/api/admin/songs/:id', adminOnly, (req, res) => {
     const song = database.getSong(Number(req.params.id), true); if (!song) return res.status(404).json({ ok: false });
-    database.deleteSong(song.id); fs.rm(path.join(audioDir, song.audioFilename), { force: true }, () => {});
+    database.deleteSong(song.id); deleted.add(song.audioFilename); if (song.audioGist) vault?.remove(song.audioGist).catch(() => {}); fs.rm(path.join(audioDir, song.audioFilename), { force: true }, () => {});
     if (song.imageFilename) fs.rm(path.join(imageDir, song.imageFilename), { force: true }, () => {});
-    database.log(req.session.adminId, 'song_delete', 'song', song.id, `${song.title} - ${song.artist}`); res.json({ ok: true });
-  });
-  app.post('/api/admin/songs/batch-active', adminOnly, (req, res) => {
-    const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Number.isInteger).slice(0, 500) : [];
-    if (!ids.length) return res.status(400).json({ ok: false, message: '음원을 선택해 주세요.' });
-    const placeholders = ids.map(() => '?').join(','); database.db.prepare(`UPDATE songs SET is_active=?, updated_at=CURRENT_TIMESTAMP WHERE id IN (${placeholders})`).run(boolean(req.body.active) ? 1 : 0, ...ids);
-    database.log(req.session.adminId, 'songs_batch_active', 'song', ids.join(',')); res.json({ ok: true });
+    log(req.session.adminId, 'song_delete', 'song', song.id, `${song.title} - ${song.artist}`); res.json({ ok: true });
   });
   app.post('/api/admin/songs/:id/preview', adminOnly, (req, res) => {
     const song = database.getSong(Number(req.params.id), true); if (!song) return res.status(404).json({ ok: false });
@@ -146,7 +170,7 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
     const origin = req.get('origin');
     try { if (origin && new URL(origin).host !== req.get('host')) return res.status(403).json({ ok: false, message: '허용되지 않은 요청 출처입니다.' }); } catch { return res.status(403).json({ ok: false, message: '요청 출처를 확인할 수 없습니다.' }); }
     next();
-  }, publicUploadLimiter, runUpload(audioUpload), (req, res) => {
+  }, publicUploadLimiter, runUpload(publicAudioUpload), (req, res) => {
     const fail = (status, message) => { if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); res.status(status).json({ ok: false, message }); };
     if (!req.file) return fail(400, '노래 파일을 골라 주세요.');
     if (!boolean(req.body.copyrightConfirmed, false)) return fail(400, '노래를 써도 되는지 확인하는 칸에 체크해 주세요.');
@@ -165,7 +189,8 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
       parsed.value.audioFilename = req.file.filename;
       parsed.value.uploader = uploader;
       const song = database.insertSong(parsed.value);
-      database.log(null, 'song_public_create', 'song', song.id, `${song.title} - ${song.artist} (올린 사람: ${uploader}, ${req.ip || ''})`);
+      log(null, 'song_public_create', 'song', song.id, `${song.title} - ${song.artist} (올린 사람: ${uploader}, ${req.ip || ''})`);
+      backupAudio(song);
       res.status(201).json({ ok: true, song: { id: song.id, title: song.title, artist: song.artist } });
     } catch { fail(500, '노래 정보를 저장하지 못했어요.'); }
   });
@@ -177,9 +202,9 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
   }
   app.get('/api/admin/sets', adminOnly, (_req, res) => res.json({ sets: database.listSets() }));
   app.get('/api/admin/sets/:id', adminOnly, (req, res) => { const set = database.getSet(Number(req.params.id)); res.status(set ? 200 : 404).json(set || { message: '문제집을 찾을 수 없습니다.' }); });
-  app.post('/api/admin/sets', adminOnly, (req, res) => { const data = parseSet(req.body); if (!data.name || !data.songIds.length) return res.status(400).json({ ok: false, message: '이름과 한 곡 이상의 음원이 필요합니다.' }); const id = database.saveSet(null, data); database.log(req.session.adminId, 'set_create', 'set', id); res.status(201).json({ ok: true, set: database.getSet(id) }); });
-  app.put('/api/admin/sets/:id', adminOnly, (req, res) => { const id = Number(req.params.id); if (!database.getSet(id)) return res.status(404).json({ ok: false }); const data = parseSet(req.body); if (!data.name || !data.songIds.length) return res.status(400).json({ ok: false, message: '이름과 한 곡 이상의 음원이 필요합니다.' }); database.saveSet(id, data); database.log(req.session.adminId, 'set_update', 'set', id); res.json({ ok: true, set: database.getSet(id) }); });
-  app.delete('/api/admin/sets/:id', adminOnly, (req, res) => { database.deleteSet(Number(req.params.id)); database.log(req.session.adminId, 'set_delete', 'set', req.params.id); res.json({ ok: true }); });
+  app.post('/api/admin/sets', adminOnly, (req, res) => { const data = parseSet(req.body); if (!data.name || !data.songIds.length) return res.status(400).json({ ok: false, message: '이름과 한 곡 이상의 음원이 필요합니다.' }); const id = database.saveSet(null, data); log(req.session.adminId, 'set_create', 'set', id); res.status(201).json({ ok: true, set: database.getSet(id) }); });
+  app.put('/api/admin/sets/:id', adminOnly, (req, res) => { const id = Number(req.params.id); if (!database.getSet(id)) return res.status(404).json({ ok: false }); const data = parseSet(req.body); if (!data.name || !data.songIds.length) return res.status(400).json({ ok: false, message: '이름과 한 곡 이상의 음원이 필요합니다.' }); database.saveSet(id, data); log(req.session.adminId, 'set_update', 'set', id); res.json({ ok: true, set: database.getSet(id) }); });
+  app.delete('/api/admin/sets/:id', adminOnly, (req, res) => { database.deleteSet(Number(req.params.id)); log(req.session.adminId, 'set_delete', 'set', req.params.id); res.json({ ok: true }); });
   app.get('/api/admin/logs', adminOnly, (_req, res) => res.json({ logs: database.getLogs() }));
 
   app.get('/api/music/options', (_req, res) => {
@@ -219,9 +244,10 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
   app.post('/api/music/solo/skip', (req, res) => { const game = getSolo(req, res); if (!game) return; if (game.answered) return res.status(400).json({ ok: false, message: '이미 처리한 문제입니다.' }); const song = database.getSong(game.songIds[game.index], true); game.answered = true; res.json({ ok: true, answer: { title: song.title, artist: song.artist }, score: game.score }); });
   app.post('/api/music/solo/next', (req, res) => { const game = getSolo(req, res); if (!game) return; if (!game.answered) return res.status(400).json({ ok: false, message: '현재 문제를 먼저 풀어 주세요.' }); game.index += 1; game.stage = 1; game.answered = false; const challenge = soloChallenge(game); if (challenge.finished) soloSessions.delete(game.id); res.json({ ok: true, challenge }); });
 
-  app.get('/api/music/audio/:token', (req, res) => {
+  app.get('/api/music/audio/:token', async (req, res) => {
     const access = tokenStore.get(req.params.token); if (!access) return res.status(404).end();
-    const file = path.join(audioDir, path.basename(access.filename)); if (!fs.existsSync(file)) return res.status(404).end();
+    const file = path.join(audioDir, path.basename(access.filename));
+    if (!fs.existsSync(file) && !(await ensureAudio(access.filename, database.getSong(access.songId, true)?.audioGist))) return res.status(404).end();
     const size = fs.statSync(file).size; const range = req.headers.range;
     const contentTypes = { '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.ogg': 'audio/ogg' };
     res.setHeader('Content-Type', contentTypes[path.extname(file).toLowerCase()] || 'application/octet-stream');
@@ -240,7 +266,7 @@ function setupMusicGame({ app, io, rootDir, nameLock = null }) {
     if (req.body.action === 'announce') io.to(`music:${room.code}`).emit('music:admin:announcement', { text: text(req.body.text, 300) });
     else if (req.body.action === 'end') groupGame.endRoom(room.code);
     else return res.status(400).json({ ok: false, message: '지원하지 않는 관리 동작입니다.' });
-    database.log(req.session.adminId, `room_${req.body.action}`, 'room', room.code); res.json({ ok: true });
+    log(req.session.adminId, `room_${req.body.action}`, 'room', room.code); res.json({ ok: true });
   });
 
   return { database, groupGame, close: () => { groupGame.close(); tokenStore.clear(); database.db.close(); } };

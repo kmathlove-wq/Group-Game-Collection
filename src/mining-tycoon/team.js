@@ -129,13 +129,21 @@ function setupMiningTeam({ io, graceMs = GRACE_MS, endKeepMs = END_KEEP_MS }) {
       const teamCount = Math.max(2, Math.min(TEAMS.length, Math.floor(Number(raw?.teams) || 2)));
       const code = newCode();
       if (!code) return reply(ack, { ok: false, message: '방 코드를 만들지 못했어요. 다시 해 주세요.' });
-      const room = { code, teamCount, phase: 'waiting', players: new Map(), nextId: 0, seed: 0, tiles: null, ores: null, econ: [], winner: null };
+      const room = { code, teamCount, createdAt: Date.now(), phase: 'waiting', players: new Map(), nextId: 0, seed: 0, tiles: null, ores: null, econ: [], winner: null };
       const team = checkTeam(room, raw?.team);
       const player = { id: room.nextId++, key: crypto.randomBytes(16).toString('hex'), name: cleanName(raw?.name), team: team < 0 ? 0 : team, host: true, pos: null, seq: 0 };
       room.players.set(player.id, player);
       rooms.set(code, room);
       join(socket, room, player);
       reply(ack, { ok: true, code, you: player.id, key: player.key, lobby: lobby(room) });
+    });
+
+    // 📋 열린 방 목록(두들팡처럼 보고 고르기): 아직 시작 안 한 방만, 최근 만든 방부터
+    socket.on('mt:team:list', (_raw, ack) => {
+      const list = [...rooms.values()].filter((r) => r.phase === 'waiting' && r.players.size < MAX_PLAYERS)
+        .sort((a, b) => b.createdAt - a.createdAt).slice(0, 30)
+        .map((r) => ({ ...lobby(r), hostName: ([...r.players.values()].find((p) => p.host) || {}).name || '' }));
+      reply(ack, { ok: true, rooms: list });
     });
 
     // 👀 코드로 방 미리 보기(팀 고르기 전에 팀 목록과 사람 수를 본다)

@@ -5,6 +5,7 @@
   const player = $('player');
   let duration = 0; // 노래 전체 길이(초) — 브라우저가 파일을 읽어 알아낸다
   let stopTimer = 0;
+  const MAX_MB = 7; // 서버(src/music/index.js PUBLIC_AUDIO_MB)와 같음 — Gist에 보관할 수 있는 크기
 
   try { $('uploader').value = localStorage.getItem('catchmind:nickname') || ''; } catch { /* 저장소를 못 써도 됨 */ }
   fetch('/api/music/songs/count').then((r) => r.json()).then((d) => { $('songCount').textContent = `(지금 ${d.total}곡)`; }).catch(() => {});
@@ -20,6 +21,8 @@
     duration = 0;
     $('listen').disabled = $('useNow').disabled = true;
     if (!file) { player.classList.add('hidden'); return; }
+    if (file.size > MAX_MB * 1024 * 1024) { notice(`노래 파일은 ${MAX_MB}MB까지 올릴 수 있어요. 이 파일은 ${(file.size / 1024 / 1024).toFixed(1)}MB예요.`); $('audio').value = ''; player.classList.add('hidden'); return; }
+    $('notice').classList.add('hidden');
     if (player.src) URL.revokeObjectURL(player.src);
     player.src = URL.createObjectURL(file);
     player.classList.remove('hidden');

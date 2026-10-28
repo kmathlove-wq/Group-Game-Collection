@@ -444,9 +444,43 @@
     teamError('');
     teamPeek = null;
     $('mtTeamCode').value = '';
+    teamRooms = null;
     renderTeam();
     openModal('mtTeamModal');
+    refreshTeamRooms();
   }
+
+  // 📋 열린 팀전 방 목록(두들팡처럼 보고 고르기): 창이 열려 있고 아직 방에 안 들어갔으면 3초마다 새로 받는다.
+  var teamRooms = null, teamRoomsTimer = null;
+  function refreshTeamRooms() {
+    clearTimeout(teamRoomsTimer);
+    if (modal !== 'mtTeamModal' || team.active()) return;
+    team.list().then(function (r) {
+      if (modal !== 'mtTeamModal' || team.active()) return;
+      teamRooms = r.ok ? r.rooms : [];
+      // 고른 방이 목록에 있으면 인원 수를 새로 맞춘다
+      if (teamPeek) teamRooms.forEach(function (room) { if (room.code === teamPeek.code) teamPeek = room; });
+      renderTeam();
+      teamRoomsTimer = setTimeout(refreshTeamRooms, 3000);
+    });
+  }
+  function renderTeamRooms() {
+    var list = $('mtTeamRooms');
+    list.textContent = '';
+    if (!teamRooms) { list.append(el('li', 'mt-team-empty', '방 목록을 불러오는 중…')); return; }
+    if (!teamRooms.length) { list.append(el('li', 'mt-team-empty', '아직 열린 방이 없어요. 위에서 방을 만들어 보세요!')); return; }
+    teamRooms.forEach(function (room) {
+      var li = el('li', teamPeek && teamPeek.code === room.code ? 'on' : '');
+      var info = el('div');
+      info.append(el('b', null, '👑 ' + room.hostName + '의 방'));
+      info.append(el('small', null, room.teams.map(function (t) {
+        return t.emoji + ' ' + room.players.filter(function (p) { return p.team === t.id; }).length;
+      }).join('  ') + ' · 모두 ' + room.players.length + '명'));
+      li.append(info, button('들어가기', '', function () { teamPeek = room; teamError(''); renderTeam(); }));
+      list.append(li);
+    });
+  }
+  $('mtTeamRefresh').addEventListener('click', refreshTeamRooms);
   function teamButton(t, label, on, onClick) {
     var b = button(label, on ? 'on' : '', onClick);
     b.style.setProperty('--team', t.color);
@@ -468,6 +502,7 @@
       MT.Team.TEAMS.slice(0, teamCountPick).forEach(function (t) {
         pick.append(teamButton(t, t.emoji + ' ' + t.name, t.id === teamCreatePick, function () { teamCreatePick = t.id; renderTeam(); }));
       });
+      renderTeamRooms();
       $('mtTeamJoinBox').classList.toggle('hidden', !teamPeek);
       if (teamPeek) {
         var join = $('mtTeamJoinPick');
@@ -558,7 +593,7 @@
     team.begin().then(function (r) { b.disabled = false; if (!r.ok) teamError(r.message); });
   });
   $('mtTeamLeave').addEventListener('click', function () {
-    if (team.phase === 'waiting') { team.leave(); updateMultiButton(); renderTeam(); return; }
+    if (team.phase === 'waiting') { team.leave(); updateMultiButton(); renderTeam(); refreshTeamRooms(); return; }
     askConfirm('🏳️ 팀전을 그만할까요?', '우리 팀은 남은 사람끼리 계속해요. 나는 내 게임으로 돌아가요.', function () { backFromTeam('🏠 팀전을 그만하고 내 게임으로 돌아왔어요.'); });
   });
 

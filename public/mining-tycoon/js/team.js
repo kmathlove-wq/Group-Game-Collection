@@ -105,6 +105,7 @@
     if (this.phase) return Promise.resolve({ ok: false, message: '이미 팀전 방에 있어요.' });
     return emit(this.connect(), 'mt:team:create', { name: name, teams: teams, team: team }).then(function (r) { if (r.ok) self.enter(r); return r; });
   };
+  Team.prototype.list = function () { return emit(this.connect(), 'mt:team:list', {}); };
   Team.prototype.peek = function (code) { return emit(this.connect(), 'mt:team:peek', { code: code }); };
   Team.prototype.join = function (name, code, team) {
     var self = this;
