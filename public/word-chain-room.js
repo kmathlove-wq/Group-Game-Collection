@@ -49,6 +49,7 @@
       }
       root.append(row);
     });
+    root.querySelector('.wc-player.turn')?.scrollIntoView({ block: 'nearest' }); // 30명이면 목록이 길어서 차례인 사람을 보이게
   }
 
   function renderChain(game) {

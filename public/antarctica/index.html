@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-남극 탐험</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="guideBtn" type="button" aria-label="설명 보기">❓</button>
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <div class="hud" aria-live="polite">
+      <div class="gauge" title="체온">
+        <span class="gauge-icon">🌡️</span>
+        <span class="meter"><span id="warmFill" class="fill warm"></span></span>
+        <span id="warmText" class="gauge-num">100</span>
+      </div>
+      <div class="gauge" title="식량(힘)">
+        <span class="gauge-icon">🍫</span>
+        <span class="meter"><span id="foodFill" class="fill food"></span></span>
+        <span id="foodText" class="gauge-num">100</span>
+      </div>
+      <span id="bag" class="chip">🎒 0/3</span>
+      <span id="points" class="chip points">🔬 0점</span>
+      <span id="weather" class="chip">☀️ 맑음</span>
+    </div>
+    <p id="mission" class="mission">🎯 미션</p>
+    <div class="stage">
+      <canvas id="game" aria-label="남극 지도. 방향키나 손가락으로 움직여요."></canvas>
+      <div id="toast" class="toast" role="status"></div>
+      <div id="card" class="card" role="status" hidden>
+        <canvas id="cardIcon" width="92" height="92" aria-hidden="true"></canvas>
+        <div class="card-text">
+          <b id="cardName"></b>
+          <p id="cardDesc"></p>
+          <small id="cardPoints"></small>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="actBtn" type="button" class="act">🔍 관찰·줍기 <kbd>E</kbd></button>
+      <button id="tentBtn" type="button">⛺ 텐트 <kbd>T</kbd></button>
+      <button id="shopBtn" type="button">🛠️ 장비 <kbd>B</kbd></button>
+      <button id="dexBtn" type="button">📖 도감 <kbd>F</kbd></button>
+    </div>
+    <p class="help">⬆⬇⬅➡ / WASD로 움직이고, 휴대폰은 지도를 누른 채 끌어요. 동물에게 다가가 E로 관찰, 표본(반짝이는 것)은 E로 주워 기지에 가져가요.</p>
+  </main>
+
+  <div id="shop" class="dialog" role="dialog" aria-modal="true" aria-labelledby="shopTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="shopTitle">🛠️ 장비 업그레이드</h2>
+      <p id="shopWhere" class="where"></p>
+      <div id="upgrades" class="list"></div>
+      <button id="shopClose" type="button" class="primary">닫기</button>
+      <button id="resetBtn" type="button" class="danger">처음부터 다시 하기</button>
+    </div>
+  </div>
+
+  <div id="dex" class="dialog" role="dialog" aria-modal="true" aria-labelledby="dexTitle" hidden>
+    <div class="dialog-card wide">
+      <h2 id="dexTitle">📖 남극 도감</h2>
+      <p id="dexCount" class="where"></p>
+      <h3>🐧 동물</h3>
+      <div id="dexAnimals" class="dex-grid"></div>
+      <h3>🧪 연구 표본</h3>
+      <div id="dexSamples" class="dex-grid"></div>
+      <button id="dexClose" type="button" class="primary">닫기</button>
+    </div>
+  </div>
+
+  <div id="guide" class="dialog" role="dialog" aria-modal="true" aria-labelledby="guideTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="guideTitle">🧊 남극 탐험</h2>
+      <ol class="guide">
+        <li>나는 <b>세종기지</b>의 탐험대원! 밖은 아주 추워서 <b>🌡️ 체온</b>이 조금씩 내려가요. 남극점 쪽(위)으로 갈수록 더 추워요.</li>
+        <li><b>기지</b>에 들어가면 몸이 녹고 배도 채워요. 체온이 0이 되면 구조대가 기지로 데려오지만 <b>가방 속 표본을 잃어요.</b></li>
+        <li>펭귄·물범·새에게 다가가 <b>E(🔍)</b>로 관찰하면 도감에 적혀요. 반짝이는 <b>표본</b>(이끼·화석·운석·얼음 코어)은 주워서 기지에 가져가면 <b>🔬 연구 점수</b>!</li>
+        <li>파란 <b>얼음</b>은 미끄럽고, <b>깊은 눈</b>은 느려요. 눈밭에는 숨은 <b>크레바스</b>(얼음 틈)가 있어 가까이 가야 보여요. 🌨️ <b>눈보라</b>가 오면 체온이 빨리 내려가요.</li>
+        <li>연구 점수로 🛠️ 장비(방한복·썰매·아이젠·스노모빌·탐지기·텐트)를 사요. <b>🎯 미션</b>을 차례로 끝내고 마지막엔 <b>🚩 남극점</b>까지 가 보세요!</li>
+      </ol>
+      <p class="small">게임은 이 기기에 자동 저장돼요. 🏆 순위에는 모은 연구 점수를 올릴 수 있어요.</p>
+      <button id="guideClose" type="button" class="primary">탐험 시작!</button>
+    </div>
+  </div>
+
+  <div id="ending" class="dialog" role="dialog" aria-modal="true" aria-labelledby="endingTitle" hidden>
+    <div class="dialog-card ending-card">
+      <div class="ending-flag" aria-hidden="true">🚩🐧🎉</div>
+      <h2 id="endingTitle">남극점에 도착했어요!</h2>
+      <p>지구의 맨 아래, 남위 90도! 여기서는 어느 쪽을 봐도 모두 북쪽이에요. 위대한 탐험대원이 되었어요.</p>
+      <ul id="endingStats" class="stats"></ul>
+      <button id="endingRank" type="button" class="primary">🏆 순위에 올리기</button>
+      <button id="endingClose" type="button" class="ghost">계속 탐험하기 (도감 채우기)</button>
+    </div>
+  </div>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/main.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>

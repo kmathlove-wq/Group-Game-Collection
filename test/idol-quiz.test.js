@@ -52,6 +52,24 @@ test('문제 뽑기: 겹치지 않고 고른 종류만', () => {
   }
 });
 
+test('세대 거르기: 4세대 2018~2022, 5세대 2023~, 종류와 함께 걸 수 있고 모자라면 있는 만큼', () => {
+  assert.equal(Q.genOf(2017), 'old');
+  assert.equal(Q.genOf(2018), '4');
+  assert.equal(Q.genOf(2022), '4');
+  assert.equal(Q.genOf(2023), '5');
+  for (const gen of ['4', '5']) {
+    for (const kind of ['all', 'boy', 'girl']) {
+      const qs = Q.pickQuestions(kind, Q.QUESTION_COUNT, null, gen);
+      assert.ok(qs.length > 0 && qs.length <= Q.QUESTION_COUNT, `${gen}세대 ${kind}`);
+      assert.equal(new Set(qs.map((g) => g.name)).size, qs.length);
+      assert.ok(qs.every((g) => Q.genOf(g.year) === gen && (kind === 'all' || g.type === kind)));
+    }
+    assert.equal(Q.pickQuestions('all', Q.QUESTION_COUNT, null, gen).length, Q.QUESTION_COUNT);
+  }
+  assert.equal(Q.pickQuestions('all', Q.QUESTION_COUNT, null, 'all').length, Q.QUESTION_COUNT);
+  assert.equal(Q.pickQuestions('girl', 999, null, '5').length, Q.poolFor('girl', '5').length);
+});
+
 test('아이돌 초성퀴즈 순위 API: 상한 3,750점', async (t) => {
   const { server, io, rooms } = require('../server');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

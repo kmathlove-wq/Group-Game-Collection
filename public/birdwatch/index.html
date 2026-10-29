@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-탐조 여행</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <span id="pointsLabel" class="chip">🪙 0</span>
+      <span id="dexLabel" class="chip">📖 0/0</span>
+      <button id="soundBtn" type="button" aria-pressed="false">🔊</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <!-- 지역 고르기 -->
+    <section id="mapView">
+      <header class="intro">
+        <h1>🔭 탐조 여행</h1>
+        <p>우리나라 곳곳의 탐조 지역에서 새를 찾아 눌러 보세요. 처음 본 새는 도감에 올라가요!</p>
+        <div class="map-tools">
+          <button id="mapDexBtn" type="button">📖 도감</button>
+          <button id="mapLogBtn" type="button">📝 기록장</button>
+          <button id="mapShopBtn" type="button">🛒 상점</button>
+          <button id="mapMissionBtn" type="button">🎯 미션</button>
+        </div>
+      </header>
+      <div id="regionGrid" class="regions"></div>
+    </section>
+
+    <!-- 탐조 화면 -->
+    <section id="fieldView" hidden>
+      <div class="hud">
+        <span id="regionLabel" class="pill">지역</span>
+        <span class="hud-tip">새를 눌러 발견해요!</span>
+      </div>
+      <div id="viewport" class="viewport">
+        <div class="stage">
+          <div id="scene" class="scene"></div>
+          <div id="birds" class="birds"></div>
+        </div>
+      </div>
+      <button id="missionBox" class="mission-box" type="button" aria-label="미션 목록 보기">
+        <span class="m-head">🎯 미션 <span id="missionCount">1/1</span></span>
+        <span id="missionText" class="m-text"></span>
+      </button>
+      <div class="tools">
+        <button id="mapBtn" type="button">🗺️ 지역 선택</button>
+        <button id="dexBtn" type="button">📖 도감</button>
+        <button id="logBtn" type="button">📝 기록장</button>
+        <button id="shopBtn" type="button">🛒 상점</button>
+        <button id="refreshBtn" type="button">🔄 새 다시 찾기</button>
+        <button id="zoomBtn" type="button" aria-pressed="false">🔭 쌍안경</button>
+      </div>
+      <p class="hint-text">희귀한 새일수록 드물게 나오고 빨리 날아가요. 상점에서 망원경과 새 모이를 사면 더 쉬워져요.</p>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- 도감·기록장·상점·미션 창 -->
+  <div id="modal" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="sheet-head">
+        <h2 id="modalTitle">창</h2>
+        <button id="modalClose" class="close" type="button" aria-label="닫기">✕</button>
+      </div>
+      <div id="modalBody" class="sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- 새 정보 카드 -->
+  <div id="card" class="overlay top" hidden>
+    <div class="bird-card" role="dialog" aria-modal="true" aria-label="새 정보">
+      <div id="cardBody"></div>
+      <button id="cardClose" class="close wide" type="button">확인</button>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/main.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>

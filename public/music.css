@@ -8,3 +8,13 @@
 .liar-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#8b5cf6,#f97316);font-size:32px}
 .mafia-card{background:linear-gradient(145deg,#fff,#eef0ff)}
 .mafia-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#1e1b4b,#4f46e5);font-size:32px}
+.nunchi-card{background:linear-gradient(145deg,#fff,#ecfeff)}
+.nunchi-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#06b6d4,#f59e0b);font-size:32px}
+.korea-bird-card{background:linear-gradient(145deg,#fff,#e7f3ff)}
+.korea-bird-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#74c0fc,#1864ab);font-size:30px}
+.antarctica-card{background:linear-gradient(145deg,#fff,#e7f5ff)}
+.antarctica-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#74c0fc,#ff7a1a);font-size:30px}
+.roach-card{background:linear-gradient(145deg,#fff,#fff4e6)}
+.roach-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#7c4a1e,#c2772f);font-size:32px}
+.birdwatch-card{background:linear-gradient(145deg,#fff,#eaf8ef)}
+.birdwatch-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#74c0fc,#2f9e44);font-size:30px}

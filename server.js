@@ -12,6 +12,8 @@ const { setupWordChainGame } = require('./src/word-chain');
 const { setupDuelGames } = require('./src/duel');
 const { setupLiarGame } = require('./src/liar');
 const { setupMafiaGame } = require('./src/mafia');
+const { setupNunchiGame } = require('./src/nunchi');
+const { setupRoachGame } = require('./src/roach');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createPatrol } = require('./src/word-chain/patrol');
@@ -83,6 +85,8 @@ const landGame = setupLandGame({ app, io, rootDir: __dirname });
 const duelGames = setupDuelGames({ app, io });
 const liarGame = setupLiarGame({ app, io, rootDir: __dirname });
 const mafiaGame = setupMafiaGame({ app, io, rootDir: __dirname });
+const nunchiGame = setupNunchiGame({ app, io, rootDir: __dirname });
+const roachGame = setupRoachGame({ app, io, rootDir: __dirname });
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
 const wordChainBrain = createBrain(process.env.WORD_CHAIN_BRAIN_PATH || path.join(__dirname, 'data', 'word-chain-brain.json'), { remote: gistSync });
@@ -151,6 +155,7 @@ registerScoreboard('bird-find', 999_999, { top: 50 }); // 🐦 새 찾기(쉬움
 registerScoreboard('bird-find-hard', 999_999, { top: 50 }); // 🔥 새 찾기 어려움(순위 따로)
 registerScoreboard('school-smash', 999_999, { top: 50 }); // 🏫 학교 부수기(60초 도전)
 registerScoreboard('egg-heist', 1_000_000_000_000, { top: 50, perPlayer: true }); // 🥚 계란 훔치기: 번 돈, 게임 한 판(playerId)당 한 줄
+registerScoreboard('antarctica', 100_000_000, { top: 50 }); // 🐧 남극 탐험: 모은 연구 점수
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });
@@ -167,7 +172,7 @@ const miningTeam = setupMiningTeam({ io }); // ⚔️ 팀전(같은 새 땅, 팀
 // 💘 이상형 월드컵: 주제별 1위·결승 진출 횟수(Gist `worldcup-stats.json`에도 보관).
 setupWorldcup({ app, store: createWorldcupStore(process.env.WORLDCUP_PATH || path.join(__dirname, 'data', 'worldcup-stats.json'), { remote: gistSync }) });
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size, miningRooms: miningMulti.rooms.size, miningTeamRooms: miningTeam.rooms.size,
+app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size, musicRooms: musicGame.groupGame.rooms.size, triangleRooms: triangleGame.rooms.size, landPlayers: landGame.humans.size, wordChainRooms: wordChainGame.rooms.size, liarRooms: liarGame.rooms.size, mafiaRooms: mafiaGame.rooms.size, nunchiRooms: nunchiGame.rooms.size, roachRooms: roachGame.rooms.size, miningRooms: miningMulti.rooms.size, miningTeamRooms: miningTeam.rooms.size,
   duelMatches: Object.fromEntries(Object.entries(duelGames).map(([kind, game]) => [kind, game.matches.size])) }));
 
 function cleanText(value, maxLength) {
@@ -1026,5 +1031,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame
+  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame, nunchiGame, roachGame
 };

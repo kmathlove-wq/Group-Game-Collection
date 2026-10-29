@@ -1,14 +1,16 @@
 // ===== main.js =====
 // 아이돌 초성퀴즈 화면: 시작 → 15문제(문제마다 15초) → 결과·순위.
-// 고른 종류는 localStorage 'idol-quiz:kind'에 기억한다. 글은 모두 textContent로만 넣는다.
+// 고른 종류는 localStorage 'idol-quiz:kind', 고른 세대는 'idol-quiz:gen'에 기억한다. 글은 모두 textContent로만 넣는다.
 (function (Q) {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var KIND_KEY = 'idol-quiz:kind';
+  var GEN_KEY = 'idol-quiz:gen';
   var screens = { start: $('startScreen'), play: $('playScreen'), end: $('endScreen') };
   var ranking = window.GroupRanking.create({ slug: 'idol-quiz', unit: '점', top: 50 });
 
   var kind = 'all';
+  var gen = 'all';
   var questions = [];
   var index = 0;
   var score = 0;
@@ -33,14 +35,31 @@
     kind = ['all', 'girl', 'boy'].indexOf(k) >= 0 ? k : 'all';
     set(KIND_KEY, kind);
     document.querySelectorAll('.kind-btn').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.kind === kind)); });
+    updatePool();
+  }
+  function setGen(g) {
+    gen = ['all', '4', '5'].indexOf(g) >= 0 ? g : 'all';
+    set(GEN_KEY, gen);
+    document.querySelectorAll('.gen-btn').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.gen === gen)); });
+    updatePool();
+  }
+  // 고른 조합의 그룹이 문제 수보다 적으면 있는 만큼만 낸다고 알려 준다.
+  function updatePool() {
+    var n = Q.poolFor(kind, gen).length;
+    $('poolNote').textContent = n >= Q.QUESTION_COUNT ? '' : '이 조합은 그룹이 ' + n + '개뿐이라 ' + n + '문제만 나와요.';
+    $('startBtn').disabled = n === 0;
   }
   document.querySelectorAll('.kind-btn').forEach(function (b) {
     b.addEventListener('click', function () { setKind(b.dataset.kind); });
   });
+  document.querySelectorAll('.gen-btn').forEach(function (b) {
+    b.addEventListener('click', function () { setGen(b.dataset.gen); });
+  });
+  setGen(get(GEN_KEY) || 'all');
   setKind(get(KIND_KEY) || 'all');
 
   function start() {
-    questions = Q.pickQuestions(kind, Q.QUESTION_COUNT);
+    questions = Q.pickQuestions(kind, Q.QUESTION_COUNT, null, gen);
     index = 0; score = 0; results = []; submitted = false;
     $('scoreNow').textContent = '0점';
     show('play');

@@ -6,9 +6,12 @@ const { DictionaryError, DICTIONARIES } = require('./dictionary');
 const { createBrain, strengthOf } = require('./brain');
 const { thinkSeconds } = require('./master');
 
-const MAX_PLAYERS = 8;
+const MAX_PLAYERS = 30;
 const TURN_TIMES = [0, 10, 15, 20, 30]; // 0 = 제한 없음
-const COLORS = ['#ff4d75', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+const COLORS = ['#ff4d75', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
+  '#ef4444', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#db2777', '#0d9488', '#ea580c',
+  '#e11d48', '#0284c7', '#65a30d', '#ca8a04', '#9333ea', '#c026d3', '#0891b2', '#b45309',
+  '#be123c', '#4f46e5', '#15803d', '#a16207', '#6d28d9', '#475569'];
 const DISCONNECT_GRACE_MS = 3_000;
 const RECONNECT_MS = 30_000;
 const CHAT_LIMIT = 100;

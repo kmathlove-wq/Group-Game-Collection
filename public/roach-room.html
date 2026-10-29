@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#7c4a1e">
+  <title>그룹 게임 컬렉션-인간 vs 바퀴벌레</title>
+  <link rel="icon" href="/assets/group-game-logo.png?v=1">
+  <link rel="stylesheet" href="/music.css">
+  <link rel="stylesheet" href="/word-chain.css">
+  <link rel="stylesheet" href="/roach.css">
+</head>
+<body class="wc-play-page roach-play-page">
+  <!-- 대기실(게임 전·결과 뒤) -->
+  <main id="lobbyView" class="wc-room-shell">
+    <header class="wc-header">
+      <a class="wc-brand" href="/roach" aria-label="인간 vs 바퀴벌레 첫 화면"><span aria-hidden="true">🪳</span><b>인간 vs 바퀴벌레</b></a>
+      <div class="wc-title">
+        <h1 id="roomTitle">방에 입장하는 중…</h1>
+        <button id="copyCode" type="button" title="방 코드 복사" aria-label="방 코드 복사"><small>CODE</small> <strong id="roomCode">------</strong></button>
+      </div>
+      <span id="teamBadge" class="wc-dict-badge"></span>
+      <button id="leave" class="danger">나가기</button>
+    </header>
+
+    <section class="wc-status" aria-label="게임 진행 상태">
+      <div><small>게임 시간</small><strong id="minutesLabel">-</strong></div>
+      <div class="wc-status-center"><small id="statusLabel">대기실</small><strong id="statusMessage">모두 준비하면 방장이 시작해요!</strong></div>
+      <div><small>인간 수</small><strong id="humansLabel">자동</strong></div>
+    </section>
+
+    <section class="wc-layout">
+      <aside class="panel wc-side-panel">
+        <div class="wc-panel-heading"><h2>참가자 <span id="playerCount">0/0</span></h2></div>
+        <div id="players" class="wc-player-list"></div>
+        <div id="hostSettings" class="roach-settings hidden">
+          <label for="setMinutes">⏰ 게임 시간</label>
+          <select id="setMinutes"><option value="2">2분</option><option value="3">3분</option><option value="4">4분</option></select>
+          <label for="setHumans">🧑 인간 수</label>
+          <select id="setHumans"></select>
+        </div>
+        <div class="wc-actions">
+          <button id="ready" class="secondary wide hidden">✓ 준비하기</button>
+          <button id="start" class="primary wide hidden">▶ 게임 시작</button>
+          <button id="closeRoom" class="danger wide hidden">방 종료</button>
+        </div>
+      </aside>
+
+      <section class="panel wc-board roach-howto">
+        <h2>🏠 이렇게 놀아요</h2>
+        <div class="roach-howto-grid">
+          <div class="roach-howto-card human">
+            <b>🧑 인간</b>
+            <p>바퀴벌레를 모두 잡으면 승리! 몸이 크고 느려요.</p>
+            <ul>
+              <li>🩴 <b>슬리퍼</b>: 바로 앞을 철썩! (스페이스 · 클릭, 0.8초마다)</li>
+              <li>🧴 <b>스프레이</b>: 앞쪽 부채꼴, 맞은 바퀴는 2초 동안 느려져요 (Shift · E, 6초마다)</li>
+              <li>숨은 바퀴는 안 보여요. 가구 근처에서 기다려 보세요!</li>
+            </ul>
+          </div>
+          <div class="roach-howto-card roach">
+            <b>🪳 바퀴벌레</b>
+            <p>한 마리라도 끝까지 살아남으면 승리! 작고 빨라요.</p>
+            <ul>
+              <li>🍞 부스러기를 먹으면 팀 점수(🍰 케이크는 3점). 목표를 채우면 바로 승리!</li>
+              <li>🛋️ 식탁·냉장고·소파·거실 탁자·침대·신발장 밑에 숨으면 인간 눈에 안 보여요. 하지만 <b>8초</b>가 지나면 쫓겨나요.</li>
+              <li>🥚 팀 점수 10점마다 잡힌 친구가 알에서 다시 태어나요.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="roach-controls">🖱️ PC: 마우스 쪽으로 이동(또는 WASD·방향키) · 📱 휴대폰: 화면을 누른 채 끌면 조이스틱</p>
+        <div id="lastResult" class="roach-last-result hidden"></div>
+        <div id="result" class="notice hidden" role="status"></div>
+      </section>
+
+      <aside class="panel wc-side-panel wc-chat-panel">
+        <div class="wc-panel-heading"><h2>채팅 <span>(대기실에서만)</span></h2></div>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="answer-row wc-chat-form">
+          <input id="chatInput" maxlength="200" autocomplete="off" placeholder="메시지 입력…">
+          <button id="chatSend" class="secondary" aria-label="채팅 전송">➤</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <!-- 게임 화면 -->
+  <section id="gameView" class="roach-game hidden" aria-label="게임 화면">
+    <canvas id="arena" aria-label="집 지도와 캐릭터"></canvas>
+    <div class="roach-hud">
+      <button id="gameLeave" class="roach-hud-leave" type="button" aria-label="게임 나가기">✕</button>
+      <div class="roach-hud-role" id="roleBadge">🪳 바퀴벌레</div>
+      <div class="roach-hud-timer"><small>남은 시간</small><strong id="gameTimer">3:00</strong></div>
+      <div class="roach-hud-score">
+        <small>🍞 바퀴 팀 점수 <b id="scoreText">0/0</b></small>
+        <div class="roach-meter"><i id="scoreBar"></i></div>
+        <small id="aliveText">🪳 0마리 살아 있음</small>
+      </div>
+      <button id="sound" class="roach-hud-sound" type="button" aria-label="소리 끄기">🔊</button>
+    </div>
+    <canvas id="minimap" class="roach-minimap" width="160" height="100" aria-label="작은 지도"></canvas>
+    <div id="hideMeter" class="roach-hide hidden"><span>🛋️ 숨는 중</span><div class="roach-meter"><i id="hideBar"></i></div></div>
+    <div id="banner" class="roach-banner hidden" aria-live="polite"></div>
+    <div id="toast" class="roach-toast hidden" aria-live="polite"></div>
+    <div id="actions" class="roach-actions hidden">
+      <button id="btnSpray" type="button" aria-label="스프레이"><span>🧴</span><small>스프레이</small><i></i></button>
+      <button id="btnSlipper" type="button" aria-label="슬리퍼"><span>🩴</span><small>슬리퍼</small><i></i></button>
+    </div>
+  </section>
+
+  <dialog id="resultDialog" class="wc-result-dialog roach-result">
+    <p class="eyebrow">게임 끝!</p>
+    <h2 id="winnerTitle">🪳 바퀴벌레 승리!</h2>
+    <p id="resultReason"></p>
+    <ol id="statList" class="wc-ranking"></ol>
+    <div class="wc-result-actions">
+      <button id="again" class="primary hidden">↻ 한 판 더</button>
+      <button id="closeResult" class="secondary">대기실로</button>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/roach-draw.js"></script>
+  <script src="/roach-room.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>

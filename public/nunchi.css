@@ -1,0 +1,101 @@
+/* 눈치게임 전용 스타일. 화면 틀(헤더·상태 막대·3열·참가자·채팅·결과 창)은 word-chain.css의 wc- 클래스를 빌려 쓰고 색만 바꾼다. */
+:root { --wc: #06b6d4; --wc2: #f59e0b; --music: #06b6d4; --music2: #f59e0b; }
+
+.nunchi-page {
+  background: radial-gradient(circle at 15% 20%, #cffafe 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #fef3c7 0 22%, transparent 23%),
+    linear-gradient(135deg, #ecfeff, #fffbeb);
+}
+.nunchi-page .wc-logo { font-size: 50px; box-shadow: 0 14px 32px #06b6d444; }
+.nunchi-page .wc-dict-choice input:checked + span { background: #ecfeff; }
+.nunchi-page .wc-dict-choice label { position: relative; }
+.nunchi-page .field-row { grid-template-columns: repeat(2, 1fr); }
+.nunchi-page select:disabled { opacity: .5; }
+.nunchi-play-page { background: linear-gradient(135deg, #ecfeff, #fffbeb); }
+.nunchi-play-page .wc-brand span { font-size: 18px; }
+.nunchi-play-page #copyCode { border-color: #a5f3fc; background: #ecfeff; }
+.nunchi-play-page .wc-dict-badge { background: #ecfeff; color: #0e7490; }
+.nunchi-sound { padding: 8px 10px; font-size: 16px; }
+
+/* 30명까지 들어오니 참가자 목록은 스크롤 */
+.nunchi-player-list { max-height: min(60vh, 560px); }
+.wc-player.nunchi-clash { border-color: #f43f5e; background: #fff1f2; }
+
+/* 가운데 큰 숫자 */
+.nunchi-board { display: grid; gap: 12px; }
+.nunchi-stage { display: grid; justify-items: center; gap: 4px; padding: 18px 12px 8px; text-align: center; }
+.nunchi-stage small { color: var(--muted); font-weight: 800; font-size: 14px; }
+.nunchi-stage strong {
+  display: block; min-width: 1.4em; font-size: clamp(84px, 16vw, 150px); line-height: 1; font-weight: 900;
+  color: #0e7490; text-shadow: 0 6px 0 #a5f3fc;
+}
+.nunchi-stage.counting strong { color: #f59e0b; text-shadow: 0 6px 0 #fde68a; }
+.nunchi-stage p { margin: 4px 0 0; color: #555b70; font-weight: 700; }
+.nunchi-stage strong.pop { animation: nunchi-pop .3s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes nunchi-pop { from { transform: scale(.55); } }
+
+/* 라운드 결과 띠 */
+.nunchi-banner {
+  justify-self: center; padding: 12px 20px; border-radius: 18px; background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  color: #fff; font-size: clamp(16px, 2.6vw, 22px); font-weight: 900; text-align: center; box-shadow: 0 12px 28px #06b6d444;
+}
+.nunchi-banner.clash { background: linear-gradient(135deg, #f43f5e, #f97316); box-shadow: 0 12px 28px #f43f5e55; }
+.nunchi-banner.show { animation: wc-boom .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes wc-boom { from { transform: scale(.3) rotate(-6deg); opacity: 0; } }
+
+/* 외친 사람 말풍선 */
+.nunchi-bubbles {
+  list-style: none; margin: 0; padding: 4px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+  max-height: 26vh; overflow-y: auto;
+}
+.nunchi-bubble {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 8px; border-radius: 18px 18px 18px 4px;
+  background: color-mix(in srgb, var(--player) 14%, #fff); border: 2px solid color-mix(in srgb, var(--player) 45%, #fff);
+  animation: nunchi-bubble .25s ease-out;
+}
+.nunchi-bubble b {
+  display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 6px; border-radius: 12px;
+  background: var(--player); color: #fff; font-size: 18px;
+}
+.nunchi-bubble span { font-weight: 800; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nunchi-bubble.mine { box-shadow: 0 0 0 3px #0e749033; }
+.nunchi-bubble.pending { opacity: .85; }
+.nunchi-bubble.clash { border-color: #f43f5e; background: #fff1f2; }
+.nunchi-bubble.clash b { background: #f43f5e; }
+@keyframes nunchi-bubble { from { transform: translateY(8px) scale(.8); opacity: 0; } }
+
+/* 큰 외치기 단추 */
+.nunchi-call {
+  display: grid; justify-items: center; gap: 2px; width: 100%; min-height: 110px; padding: 14px; border: 0; border-radius: 26px;
+  background: #cbd5e1; color: #fff; font-size: clamp(30px, 6vw, 44px); font-weight: 900; cursor: not-allowed;
+  box-shadow: 0 8px 0 #94a3b8; transition: transform .06s, box-shadow .06s, background .2s;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.nunchi-call small { font-size: 14px; font-weight: 800; opacity: .85; }
+.nunchi-call.ready { background: linear-gradient(135deg, #06b6d4, #f59e0b); box-shadow: 0 8px 0 #0e7490; cursor: pointer; }
+.nunchi-call.ready:active { transform: translateY(6px); box-shadow: 0 2px 0 #0e7490; }
+.nunchi-call:focus-visible { outline: 4px solid #f59e0b88; outline-offset: 3px; }
+
+/* 겹쳤을 때 판 흔들림 */
+.nunchi-board.shake { animation: nunchi-shake .5s; }
+@keyframes nunchi-shake {
+  10%, 90% { transform: translateX(-3px); } 20%, 80% { transform: translateX(6px); }
+  30%, 50%, 70% { transform: translateX(-10px); } 40%, 60% { transform: translateX(10px); }
+}
+
+.nunchi-section-title { margin: 8px 0; font-size: 15px; text-align: left; }
+.nunchi-play-page .wc-ranking small { color: var(--muted); font-weight: 600; font-size: 12px; }
+.nunchi-play-page .wc-result-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+@media (max-width: 760px) {
+  .nunchi-page .field-row { grid-template-columns: 1fr; }
+  .nunchi-stage { padding-top: 8px; }
+  .nunchi-call { min-height: 120px; }
+  .nunchi-call small { display: none; }
+  .nunchi-bubbles { max-height: 20vh; }
+  .nunchi-player-list { max-height: 36vh; }
+  .nunchi-play-page .wc-header .nunchi-sound { padding: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nunchi-stage strong.pop, .nunchi-banner.show, .nunchi-bubble, .nunchi-board.shake { animation: none; }
+}

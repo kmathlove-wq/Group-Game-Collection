@@ -135,6 +135,15 @@
     달샤벳|girl|2011|dalshabet
     라붐|girl|2014|laboum
     에프엑스|girl|2009|fx
+    에잇턴|boy|2023|8turn
+    이븐|boy|2023|evnne
+    알파드라이브원|boy|2024|alphadriveone
+    앰퍼샌드원|boy|2023|ampersandone,ampersone
+    코르티스|boy|2025|cortis
+    베이비돈크라이|girl|2025|babydontcry
+    캣츠아이|girl|2024|katseye
+    루셈블|girl|2023|loossemble
+    브이브이업|girl|2024|vvup
   `.trim().split('\n').map(function (line) {
     var p = line.trim().split('|');
     return { name: p[0], type: p[1], year: Number(p[2]), aliases: p[3] ? p[3].split(',') : [] };
@@ -180,10 +189,22 @@
     return Math.max(20, 100 + left * 10 - hints * 30);
   }
 
-  // kind: 'all' | 'boy' | 'girl' — 겹치지 않게 count개
-  function pickQuestions(kind, count, rand) {
+  // 세대: 데뷔 연도 기준 — 4세대 = 2018~2022년, 5세대 = 2023년 이후, 그 전은 'old'
+  function genOf(year) {
+    return year >= 2023 ? '5' : year >= 2018 ? '4' : 'old';
+  }
+
+  // kind: 'all' | 'boy' | 'girl', gen: 'all' | '4' | '5' — 조건에 맞는 그룹들
+  function poolFor(kind, gen) {
+    return GROUPS.filter(function (g) {
+      return (!kind || kind === 'all' || g.type === kind) && (!gen || gen === 'all' || genOf(g.year) === gen);
+    });
+  }
+
+  // 겹치지 않게 count개(조건에 맞는 그룹이 모자라면 있는 만큼만)
+  function pickQuestions(kind, count, rand, gen) {
     rand = rand || Math.random;
-    var pool = GROUPS.filter(function (g) { return kind === 'all' || g.type === kind; });
+    var pool = poolFor(kind, gen);
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(rand() * (i + 1));
       var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
@@ -198,7 +219,7 @@
   var api = {
     GROUPS: GROUPS, QUESTION_COUNT: QUESTION_COUNT, SECONDS: SECONDS, SCORE_MAX: SCORE_MAX,
     chosung: chosung, reveal: reveal, normalize: normalize, isCorrect: isCorrect, scoreFor: scoreFor,
-    pickQuestions: pickQuestions, hintText: hintText
+    pickQuestions: pickQuestions, poolFor: poolFor, genOf: genOf, hintText: hintText
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.IdolQuiz = api;

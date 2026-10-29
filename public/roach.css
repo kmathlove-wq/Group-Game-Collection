@@ -1,0 +1,112 @@
+/* 인간 vs 바퀴벌레 전용 스타일. 화면 틀(헤더·상태 막대·3열·참가자·채팅·결과 창)은 word-chain.css의 wc- 클래스를 빌려 쓰고 색만 바꾼다.
+   게임 중에는 body.roach-in-game으로 대기실을 숨기고 Canvas를 화면 전체에 띄운다. */
+:root { --wc: #9a5a26; --wc2: #16a34a; --music: #9a5a26; --music2: #16a34a; }
+
+.roach-page {
+  background: radial-gradient(circle at 15% 20%, #fde7c8 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 75%, #dcfce7 0 22%, transparent 23%),
+    linear-gradient(135deg, #fff7ed, #f0fdf4);
+}
+.roach-page .wc-logo { font-size: 52px; background: linear-gradient(135deg, #7c4a1e, #c2772f); box-shadow: 0 14px 32px #9a5a2644; }
+.roach-create-help { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.roach-play-page { background: linear-gradient(135deg, #fff7ed, #f0fdf4); }
+.roach-play-page .wc-brand span { font-size: 18px; background: linear-gradient(135deg, #7c4a1e, #c2772f); }
+.roach-play-page #copyCode { border-color: #f1c99a; background: #fff7ed; }
+.roach-play-page .wc-dict-badge { background: #fff7ed; color: #9a3412; }
+.roach-play-page .wc-player i { background: transparent; font-size: 16px; }
+
+/* 방장 설정 */
+.roach-settings { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; margin: 0 0 12px; padding: 10px 12px; border-radius: 14px; background: #fff7ed; }
+.roach-settings label { font-weight: 800; font-size: 14px; }
+.roach-settings select { padding: 8px 10px; border: 1.5px solid #f1c99a; border-radius: 10px; background: #fff; min-width: 0; }
+
+/* 놀이 방법 */
+.roach-howto { padding: 18px; }
+.roach-howto h2 { margin: 0 0 12px; font-size: 20px; }
+.roach-howto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.roach-howto-card { padding: 14px 16px; border-radius: 16px; border: 2px solid; line-height: 1.5; }
+.roach-howto-card > b { font-size: 18px; }
+.roach-howto-card p { margin: 4px 0 6px; color: #555b70; }
+.roach-howto-card ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.roach-howto-card li { margin: 4px 0; }
+.roach-howto-card.human { background: #eff6ff; border-color: #bfdbfe; }
+.roach-howto-card.roach { background: #fff7ed; border-color: #fed7aa; }
+.roach-controls { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: #f6f6fa; color: #45415e; font-size: 14px; font-weight: 700; }
+.roach-last-result { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; font-weight: 800; background: #fef3c7; color: #92400e; }
+.roach-last-result[data-winner="humans"] { background: #dbeafe; color: #1e3a8a; }
+
+/* ── 게임 화면 ── */
+body.roach-in-game { overflow: hidden; overscroll-behavior: none; }
+.roach-game { position: fixed; inset: 0; z-index: 5; background: #2b211b; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.roach-game canvas#arena { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.roach-hud {
+  position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 10px;
+  padding: max(8px, env(safe-area-inset-top)) 10px 8px; pointer-events: none;
+}
+.roach-hud > * { pointer-events: auto; }
+.roach-hud-leave, .roach-hud-sound {
+  width: 40px; height: 40px; border: 0; border-radius: 12px; background: #ffffffe6; font-size: 18px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 4px 12px #0003;
+}
+.roach-hud-role { padding: 8px 12px; border-radius: 12px; background: #fff7ed; color: #7c2d12; font-weight: 900; white-space: nowrap; box-shadow: 0 4px 12px #0003; }
+.roach-hud-role[data-role="human"] { background: #dbeafe; color: #1e3a8a; }
+.roach-hud-role[data-role="dead"] { background: #e5e7eb; color: #374151; }
+.roach-hud-timer { padding: 4px 14px; border-radius: 12px; background: #ffffffe6; text-align: center; box-shadow: 0 4px 12px #0003; }
+.roach-hud-timer small { display: block; font-size: 11px; color: var(--muted); font-weight: 800; }
+.roach-hud-timer strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.roach-hud-timer strong.urgent { color: var(--bad); animation: wc-pulse .5s ease-in-out infinite alternate; display: inline-block; }
+.roach-hud-score { flex: 1; max-width: 360px; margin-left: auto; padding: 6px 12px; border-radius: 12px; background: #ffffffe6; box-shadow: 0 4px 12px #0003; }
+.roach-hud-score small { display: block; font-size: 12px; font-weight: 800; color: #57534e; }
+.roach-meter { height: 10px; margin: 4px 0; border-radius: 99px; background: #e7e5e4; overflow: hidden; }
+.roach-meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #d97706, #16a34a); transition: width .2s; }
+.roach-minimap {
+  position: absolute; right: 10px; top: 76px; width: 160px; height: 100px; border-radius: 10px;
+  border: 2px solid #ffffffcc; box-shadow: 0 4px 12px #0005; opacity: .92; pointer-events: none;
+}
+.roach-hide {
+  position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(320px, 80vw);
+  padding: 8px 14px; border-radius: 14px; background: #fff7ede6; color: #7c2d12; font-weight: 800; text-align: center; pointer-events: none;
+}
+.roach-hide.urgent { background: #fee2e2f0; color: #b91c1c; }
+.roach-hide.urgent .roach-meter i { background: #ef4444; }
+.roach-banner {
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); max-width: calc(100vw - 32px);
+  padding: 16px 26px; border-radius: 22px; background: #1c1917d9; color: #fff; text-align: center;
+  font-size: clamp(22px, 5vw, 44px); font-weight: 900; pointer-events: none; box-shadow: 0 18px 40px #0006;
+}
+.roach-toast {
+  position: absolute; left: 50%; top: 84px; transform: translateX(-50%); max-width: calc(100vw - 200px);
+  padding: 10px 16px; border-radius: 14px; background: #ffffffee; color: #292524; font-weight: 800; text-align: center;
+  box-shadow: 0 6px 18px #0004; pointer-events: none;
+}
+.roach-actions { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: flex; gap: 12px; align-items: flex-end; }
+.roach-actions button {
+  position: relative; overflow: hidden; display: grid; place-items: center; align-content: center; gap: 2px;
+  width: 78px; height: 78px; border: 3px solid #fff; border-radius: 50%; background: #2563eb; color: #fff;
+  box-shadow: 0 6px 18px #0006; cursor: pointer; touch-action: manipulation;
+}
+.roach-actions #btnSlipper { width: 92px; height: 92px; background: #ea580c; }
+.roach-actions #btnSpray { background: #16a34a; }
+.roach-actions span { font-size: 30px; line-height: 1; position: relative; z-index: 1; }
+.roach-actions small { font-size: 11px; font-weight: 900; position: relative; z-index: 1; }
+.roach-actions i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: #0009; }
+.roach-actions button.cooling { filter: saturate(.5); }
+.roach-actions button:active { transform: scale(.94); }
+
+/* 결과 창 */
+.roach-result .wc-ranking strong { font-size: 13px; }
+
+@media (max-width: 1100px) { .roach-howto-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .roach-hud { gap: 6px; padding-left: 6px; padding-right: 6px; flex-wrap: wrap; }
+  .roach-hud-role { padding: 6px 8px; font-size: 13px; }
+  .roach-hud-timer strong { font-size: 18px; }
+  .roach-hud-score { order: 5; flex-basis: 100%; max-width: none; padding: 4px 10px; }
+  .roach-hud-score small:last-child { display: none; }
+  .roach-minimap { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); left: 10px; right: auto; width: 120px; height: 75px; }
+  .roach-toast { top: 112px; max-width: calc(100vw - 24px); font-size: 14px; }
+  .roach-hide { bottom: 130px; }
+  .roach-actions button { width: 68px; height: 68px; }
+  .roach-actions #btnSlipper { width: 82px; height: 82px; }
+}
+@media (prefers-reduced-motion: reduce) { .roach-hud-timer strong.urgent { animation: none; } }
