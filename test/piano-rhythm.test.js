@@ -50,19 +50,27 @@ test('누르기: 맞는 줄은 판정, 다른 줄 음표가 가까우면 엉뚱�
   assert.deepEqual(R.expired(notes, notes[1].time + 1, w).map((n) => n.id).slice(0, 1), [1]);
 });
 
-test('점수: 모두 퍼펙트면 100만 × 난이도 배율, 등급 S~D', () => {
+test('점수: 모두 퍼펙트면 100만 점, 등급 S~D', () => {
   const total = 40;
   const all = { perfect: total, great: 0, good: 0, miss: 0 };
-  assert.equal(R.scoreFor(all, total, total, 'easy'), 1_000_000);
-  assert.equal(R.scoreFor(all, total, total, 'hard'), R.SCORE_MAX);
-  assert.equal(R.scoreFor({ perfect: 0, great: 0, good: 0, miss: total }, total, 0, 'hard'), 0);
-  assert.ok(R.scoreFor({ perfect: 20, great: 0, good: 0, miss: 20 }, total, 20, 'normal') < R.scoreFor(all, total, total, 'normal'));
+  assert.equal(R.SCORE_MAX, 1_000_000);
+  assert.equal(R.scoreFor(all, total, total), R.SCORE_MAX);
+  assert.equal(R.scoreFor({ perfect: 0, great: 0, good: 0, miss: total }, total, 0), 0);
+  assert.ok(R.scoreFor({ perfect: 20, great: 0, good: 0, miss: 20 }, total, 20) < R.scoreFor(all, total, total));
   assert.equal(R.gradeFor(1), 'S');
   assert.equal(R.gradeFor(0.9), 'A');
   assert.equal(R.gradeFor(0.3), 'D');
 });
 
-test('피아노 리듬 화면과 순위 API: 상한 150만 점', async (t) => {
+test('순위표 이름: 곡 5 × 난이도 3 = 15개, 겹치지 않음', () => {
+  const slugs = R.boardSlugs();
+  assert.equal(slugs.length, R.SONGS.length * Object.keys(R.DIFFICULTIES).length);
+  assert.equal(new Set(slugs).size, slugs.length);
+  assert.equal(R.boardSlug('twinkle', 'hard'), 'piano-rhythm-twinkle-hard');
+  assert.ok(slugs.every((s) => /^[a-z0-9-]+$/.test(s)));
+});
+
+test('피아노 리듬 화면과 곡·난이도별 순위 API: 상한 100만 점, 서로 따로', async (t) => {
   const { server, io, rooms } = require('../server');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
@@ -72,9 +80,16 @@ test('피아노 리듬 화면과 순위 API: 상한 150만 점', async (t) => {
   });
   assert.equal((await fetch(`${url}/piano-rhythm/`)).status, 200);
   assert.equal((await fetch(`${url}/piano-rhythm/js/main.js`)).status, 200);
-  const post = (body) => fetch(`${url}/api/piano-rhythm/scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.equal((await post({ name: '시험', score: R.SCORE_MAX + 1 })).status, 400);
-  const ok = await post({ name: '피아니스트', score: R.SCORE_MAX });
+  const api = (slug) => `${url}/api/${slug}/scores`;
+  const post = (slug, body) => fetch(api(slug), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const easy = R.boardSlug('twinkle', 'easy');
+  const hard = R.boardSlug('twinkle', 'hard');
+  assert.equal((await post(easy, { name: '시험', score: R.SCORE_MAX + 1 })).status, 400);
+  const ok = await post(easy, { name: '피아니스트', score: R.SCORE_MAX });
   assert.equal(ok.status, 200);
   assert.equal((await ok.json()).rank, 1);
+  // 다른 난이도 순위표에는 안 섞임
+  assert.deepEqual((await (await fetch(api(hard))).json()).scores, []);
+  for (const slug of R.boardSlugs()) assert.equal((await fetch(api(slug))).status, 200, slug);
+  assert.equal((await fetch(`${url}/shared/ranking.js`)).status, 200);
 });

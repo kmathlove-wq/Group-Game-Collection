@@ -2,6 +2,7 @@
 // 여러 1인용 게임이 함께 쓰는 🏆 전체 순위 창. 창 모양(DOM)은 스스로 만들고, 꾸미기는 shared/ranking.css.
 // 서버 /api/<slug>/scores(registerScoreboard)에 저장·조회한다. 이름은 localStorage '<slug>:nickname'(20자).
 // 쓰는 법: var rank = GroupRanking.create({ slug: 'idol-quiz', unit: '점', top: 50 });
+// title: 창 제목(기본 '🏆 전체 순위'), nameKey: 이름 저장 키(기본 '<slug>:nickname') — 한 게임이 순위표를 여러 개 쓸 때.
 // playerId: 함수를 주면 그 값을 함께 보낸다(서버 perPlayer 순위 — 한 사람(한 판)은 가장 좋은 기록 한 줄).
 //          rank.show(점수, 닫힌 뒤 할 일)  — 점수가 0이면 순위만 본다.
 // 사용자가 쓴 글은 모두 textContent로만 넣는다.
@@ -24,7 +25,7 @@
 
   function create(options) {
     var api = '/api/' + options.slug + '/scores';
-    var nameKey = options.slug + ':nickname';
+    var nameKey = options.nameKey || options.slug + ':nickname'; // 순위표 여러 개가 이름 하나를 같이 쓸 때 nameKey를 준다
     var unit = options.unit || '점';
     var top = options.top || 10;
     var format = options.format || function (n) { return n.toLocaleString('ko-KR') + unit; };
@@ -34,7 +35,7 @@
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     var card = el('div', 'gr-card');
-    var title = el('h2', null, '🏆 전체 순위');
+    var title = el('h2', null, options.title || '🏆 전체 순위');
     var scoreLine = el('p', 'gr-score');
     var label = el('label', 'gr-label', '내 이름 (20자까지)');
     var row = el('div', 'gr-row');

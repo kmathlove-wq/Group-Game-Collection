@@ -28,14 +28,22 @@
              '레 레 미 도 | 레 미~ 파~ 미 도 | 레 미~ 파~ 미 레 | 도 레 솔- | 미 미 파 솔 | 솔 파 미 레 | 도 도 레 미 | 레. 도~ 도-' }
   ];
 
-  // 난이도: 박자 빠르기 배율(tempo), 음표가 위에서 판정선까지 내려오는 초(travel), 판정 폭(밀리초), 점수 배율(mult)
+  // 난이도: 박자 빠르기 배율(tempo), 음표가 위에서 판정선까지 내려오는 초(travel), 판정 폭(밀리초)
   var DIFFICULTIES = {
-    easy: { name: '쉬움', tempo: 0.85, travel: 2.4, windows: { perfect: 70, great: 120, good: 180 }, mult: 1 },
-    normal: { name: '보통', tempo: 1, travel: 1.8, windows: { perfect: 50, great: 95, good: 140 }, mult: 1.25 },
-    hard: { name: '어려움', tempo: 1.25, travel: 1.3, windows: { perfect: 35, great: 70, good: 110 }, mult: 1.5 }
+    easy: { name: '쉬움', tempo: 0.85, travel: 2.4, windows: { perfect: 70, great: 120, good: 180 } },
+    normal: { name: '보통', tempo: 1, travel: 1.8, windows: { perfect: 50, great: 95, good: 140 } },
+    hard: { name: '어려움', tempo: 1.25, travel: 1.3, windows: { perfect: 35, great: 70, good: 110 } }
   };
-  var BASE_SCORE = 1000000;
-  var SCORE_MAX = Math.round(BASE_SCORE * DIFFICULTIES.hard.mult);
+  // 순위는 곡·난이도마다 따로라서(사용자 결정 2026-10-31) 점수는 모두 100만 점 만점이다.
+  var SCORE_MAX = 1000000;
+
+  // 곡·난이도별 순위표 이름(서버 /api/<이름>/scores) 목록과 이름 만들기
+  function boardSlug(songId, diffKey) { return 'piano-rhythm-' + songId + '-' + diffKey; }
+  function boardSlugs() {
+    var out = [];
+    SONGS.forEach(function (s) { Object.keys(DIFFICULTIES).forEach(function (d) { out.push(boardSlug(s.id, d)); }); });
+    return out;
+  }
   var JUDGE_VALUE = { perfect: 1, great: 0.7, good: 0.4, miss: 0 };
   var JUDGE_TEXT = { perfect: '퍼펙트!', great: '좋아요!', good: '괜찮아요', miss: '놓침' };
 
@@ -115,12 +123,10 @@
     return sum / total;
   }
 
-  // 점수: 정확도 90% + 최대 콤보 10% 로 100만 점, 난이도 배율을 곱함
-  function scoreFor(counts, total, maxCombo, diffKey) {
+  // 점수: 정확도 90% + 최대 콤보 10% 로 100만 점
+  function scoreFor(counts, total, maxCombo) {
     if (!total) return 0;
-    var diff = DIFFICULTIES[diffKey] || DIFFICULTIES.normal;
-    var base = BASE_SCORE * (0.9 * accuracy(counts, total) + 0.1 * Math.min(1, maxCombo / total));
-    return Math.round(Math.round(base) * diff.mult);
+    return Math.round(SCORE_MAX * (0.9 * accuracy(counts, total) + 0.1 * Math.min(1, maxCombo / total)));
   }
 
   function gradeFor(acc) {
@@ -133,7 +139,7 @@
 
   var api = {
     NAMES: NAMES, KEYS: KEYS, KEY_LABELS: KEY_LABELS, FREQS: FREQS, SONGS: SONGS, DIFFICULTIES: DIFFICULTIES,
-    BASE_SCORE: BASE_SCORE, SCORE_MAX: SCORE_MAX, JUDGE_TEXT: JUDGE_TEXT,
+    SCORE_MAX: SCORE_MAX, JUDGE_TEXT: JUDGE_TEXT, boardSlug: boardSlug, boardSlugs: boardSlugs,
     parseScore: parseScore, songById: songById, buildChart: buildChart, judge: judge, press: press,
     expired: expired, accuracy: accuracy, scoreFor: scoreFor, gradeFor: gradeFor
   };

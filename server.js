@@ -157,7 +157,8 @@ registerScoreboard('bird-find-hard', 999_999, { top: 50 }); // 🔥 새 찾기 �
 registerScoreboard('school-smash', 999_999, { top: 50 }); // 🏫 학교 부수기(60초 도전)
 registerScoreboard('egg-heist', 1_000_000_000_000, { top: 50, perPlayer: true }); // 🥚 계란 훔치기: 번 돈, 게임 한 판(playerId)당 한 줄
 registerScoreboard('antarctica', 100_000_000, { top: 50 }); // 🐧 남극 탐험: 모은 연구 점수
-registerScoreboard('piano-rhythm', PIANO_RHYTHM.SCORE_MAX, { top: 50 }); // 🎹 피아노 리듬: 곡마다 100만 점 × 난이도 배율(최고 150만)
+// 🎹 피아노 리듬: 곡·난이도마다 순위표 따로(piano-rhythm-<곡>-<난이도>, 5곡×3 = 15개), 모두 100만 점 만점.
+for (const slug of PIANO_RHYTHM.boardSlugs()) registerScoreboard(slug, PIANO_RHYTHM.SCORE_MAX, { top: 50 });
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
 registerScoreboard('mining-tycoon-money', MINING_MONEY_MAX, { perPlayer: true });
 registerScoreboard('mining-tycoon-time', MINING_TIME_MAX, { order: 'asc', perPlayer: true });

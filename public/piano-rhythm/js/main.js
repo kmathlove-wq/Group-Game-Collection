@@ -8,11 +8,23 @@
 
   var SONG_KEY = 'piano-rhythm:song';
   var DIFF_KEY = 'piano-rhythm:diff';
-  var BEST_KEY = 'piano-rhythm:best';
+  var BEST_KEY = 'piano-rhythm:best:v2'; // v1('piano-rhythm:best')은 난이도 배율이 붙던 점수라 버림
   var LANE_COLORS = ['#ff6b6b', '#ff922b', '#fcc419', '#51cf66', '#22b8cf', '#4c6ef5', '#845ef7', '#f06595'];
   var JUDGE_COLORS = { perfect: '#ffd43b', great: '#69db7c', good: '#74c0fc', miss: '#ff8787' };
 
-  var ranking = window.GroupRanking.create({ slug: 'piano-rhythm', unit: '점', top: 50 });
+  // 순위표는 곡·난이도마다 따로(15개). 창은 처음 열 때 만들어 두고, 이름은 'piano-rhythm:nickname' 하나를 같이 쓴다.
+  var boards = {};
+  function rankingFor(id, diff) {
+    var slug = R.boardSlug(id, diff);
+    if (!boards[slug]) {
+      var song = R.songById(id);
+      boards[slug] = window.GroupRanking.create({
+        slug: slug, unit: '점', top: 50, nameKey: 'piano-rhythm:nickname',
+        title: '🏆 ' + song.emoji + ' ' + song.title + ' · ' + R.DIFFICULTIES[diff].name + ' 순위'
+      });
+    }
+    return boards[slug];
+  }
   function $(id) { return document.getElementById(id); }
   function get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function set(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* 무시 */ } }
@@ -204,7 +216,7 @@
     }
     popups.push({ text: R.JUDGE_TEXT[result], color: JUDGE_COLORS[result], born: performance.now() });
     if (popups.length > 3) popups.shift();
-    $('scoreNow').textContent = R.scoreFor(g.counts, g.chart.notes.length, g.maxCombo, g.diffKey).toLocaleString('ko-KR');
+    $('scoreNow').textContent = R.scoreFor(g.counts, g.chart.notes.length, g.maxCombo).toLocaleString('ko-KR');
   }
 
   var held = [false, false, false, false, false, false, false, false];
@@ -398,7 +410,7 @@
     cancelAnimationFrame(raf);
     var total = g.chart.notes.length;
     var acc = R.accuracy(g.counts, total);
-    var score = R.scoreFor(g.counts, total, g.maxCombo, g.diffKey);
+    var score = R.scoreFor(g.counts, total, g.maxCombo);
     var grade = R.gradeFor(acc);
     var key = g.song.id + ':' + g.diffKey;
     var all = bests();
@@ -423,12 +435,18 @@
   $('againBtn').addEventListener('click', start);
   $('menuBtn').addEventListener('click', function () { show('start'); renderBest(); });
   $('endRankBtn').addEventListener('click', function () {
-    if (game.submitted) return ranking.show(0);
+    var board = rankingFor(game.song.id, game.diffKey);
+    if (game.submitted) return board.show(0);
     game.submitted = true;
     $('endRankBtn').hidden = true;
-    ranking.show(game.score);
+    board.show(game.score);
   });
-  $('rankBtn').addEventListener('click', function () { ranking.show(0); });
+  // 위 🏆 단추: 연주 중·결과 화면이면 방금 곡, 시작 화면이면 고른 곡·난이도의 순위
+  $('rankBtn').addEventListener('click', function () {
+    if (game && screens.start.hidden) rankingFor(game.song.id, game.diffKey).show(0);
+    else rankingFor(songId, diffKey).show(0);
+  });
+  $('bestRankBtn').addEventListener('click', function () { rankingFor(songId, diffKey).show(0); });
 
   // 콘솔·자동 확인용 통로(게임 진행에는 안 씀)
   R.debug = { get game() { return game; }, now: function () { return game ? now() : 0; }, down: down, up: up };
