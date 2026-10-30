@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-피아노 리듬</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <button id="rankBtn" type="button">🏆 순위</button>
+  </nav>
+
+  <main class="shell">
+    <!-- 시작 -->
+    <section id="startScreen" class="card">
+      <h1>🎹 피아노 리듬</h1>
+      <p class="lead">음표가 아래 선에 닿는 순간 맞는 건반을 눌러요.<br>딱 맞게 누르면 내 손으로 노래가 연주돼요!</p>
+      <h2 class="pick-title">곡 고르기</h2>
+      <div id="songList" class="song-list" role="radiogroup" aria-label="곡 고르기"></div>
+      <h2 class="pick-title">난이도</h2>
+      <div class="kind-row" role="radiogroup" aria-label="난이도">
+        <button type="button" class="diff-btn" data-diff="easy" aria-pressed="false">쉬움</button>
+        <button type="button" class="diff-btn" data-diff="normal" aria-pressed="true">보통</button>
+        <button type="button" class="diff-btn" data-diff="hard" aria-pressed="false">어려움</button>
+      </div>
+      <p id="bestLine" class="small best-line"></p>
+      <button id="startBtn" type="button" class="primary big">연주 시작</button>
+      <p class="small">키보드 <b>A S D F J K L ;</b> = 도 레 미 파 솔 라 시 높은도<br>휴대폰은 아래 건반을 손가락으로 눌러요.</p>
+    </section>
+
+    <!-- 연주 -->
+    <section id="playScreen" class="play" hidden>
+      <div class="hud">
+        <span id="songName" class="pill"></span>
+        <span id="scoreNow" class="score">0</span>
+      </div>
+      <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+      <div class="stage">
+        <canvas id="stage" aria-label="떨어지는 음표"></canvas>
+        <div id="pauseCard" class="pause-card" hidden>
+          <p>⏸ 잠깐 멈췄어요</p>
+          <button id="resumeBtn" type="button" class="primary">계속하기</button>
+          <button id="quitBtn" type="button" class="ghost">그만하기</button>
+        </div>
+      </div>
+      <div id="keys" class="keys"></div>
+      <div class="play-tools">
+        <button id="pauseBtn" type="button" class="ghost">⏸ 멈춤 (Esc)</button>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section id="endScreen" class="card" hidden>
+      <h2 id="endTitle">🎉 연주 끝!</h2>
+      <p id="grade" class="grade"></p>
+      <p class="final"><b id="finalScore"></b>점</p>
+      <p id="finalLine" class="lead"></p>
+      <ul class="counts">
+        <li class="perfect">퍼펙트 <b id="cPerfect"></b></li>
+        <li class="great">좋아요 <b id="cGreat"></b></li>
+        <li class="good">괜찮아요 <b id="cGood"></b></li>
+        <li class="miss">놓침 <b id="cMiss"></b></li>
+      </ul>
+      <div class="end-actions">
+        <button id="againBtn" type="button" class="primary">한 번 더</button>
+        <button id="menuBtn" type="button">다른 곡 고르기</button>
+        <button id="endRankBtn" type="button">🏆 순위에 올리기</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/main.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>
