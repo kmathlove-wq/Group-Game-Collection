@@ -10,7 +10,7 @@ test('악보 읽기: 길이 표시(-, ., ~)와 쉼표', () => {
 });
 
 test('모든 곡이 읽히고, 어려움에서도 같은 줄 음표가 판정 폭보다 멀리 떨어져 있음', () => {
-  assert.ok(R.SONGS.length >= 5);
+  assert.ok(R.SONGS.length >= 10);
   assert.equal(new Set(R.SONGS.map((s) => s.id)).size, R.SONGS.length);
   for (const song of R.SONGS) {
     for (const diff of Object.keys(R.DIFFICULTIES)) {
@@ -62,7 +62,7 @@ test('점수: 모두 퍼펙트면 100만 점, 등급 S~D', () => {
   assert.equal(R.gradeFor(0.3), 'D');
 });
 
-test('순위표 이름: 곡 5 × 난이도 3 = 15개, 겹치지 않음', () => {
+test('순위표 이름: 곡 수 × 난이도 3개, 겹치지 않음', () => {
   const slugs = R.boardSlugs();
   assert.equal(slugs.length, R.SONGS.length * Object.keys(R.DIFFICULTIES).length);
   assert.equal(new Set(slugs).size, slugs.length);
