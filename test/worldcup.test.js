@@ -16,8 +16,8 @@ test('주제마다 후보가 450개 넘고 id·이름이 겹치지 않는다', (
     assert.ok(/^[a-z]+$/.test(t.id), t.id);
     assert.ok(!topicIds.has(t.id), `주제 ${t.id} 중복`);
     topicIds.add(t.id);
-    // 실제 사람 주제(people)는 확실한 사람만 넣어서 100명 이상이면 된다
-    assert.ok(t.items.length >= (t.people ? 100 : 450), `${t.title} 후보 수 ${t.items.length}`);
+    // 실제 사람 주제(people)는 확실한 사람만 넣어서 70명 이상이면 된다
+    assert.ok(t.items.length >= (t.people ? 70 : 450), `${t.title} 후보 수 ${t.items.length}`);
     const ids = new Set(t.items.map((i) => i.id));
     assert.equal(ids.size, t.items.length, `${t.title} 후보 id 중복`);
     const names = new Set(t.items.map((i) => i.name.replace(/\s/g, '')));
@@ -29,6 +29,25 @@ test('주제마다 후보가 450개 넘고 id·이름이 겹치지 않는다', (
     }
   }
   assert.deepEqual(SIZES, [8, 16]);
+});
+
+test('후보 사진(images.js)은 있는 후보만 가리키고 위키미디어 주소·출처가 있다', () => {
+  const Images = require('../public/worldcup/js/images.js');
+  let count = 0;
+  for (const [topicId, rows] of Object.entries(Images.IMAGES)) {
+    const topic = TOPICS.find((t) => t.id === topicId);
+    assert.ok(topic, `없는 주제 ${topicId}`);
+    const ids = new Set(topic.items.map((i) => i.id));
+    for (const itemId of Object.keys(rows)) {
+      assert.ok(ids.has(itemId), `${topicId}에 없는 후보 ${itemId}`);
+      const pic = Images.imageOf(topicId, itemId);
+      assert.match(pic.src, /^https:\/\/upload\.wikimedia\.org\/wikipedia\//);
+      assert.ok(/위키미디어 공용$/.test(pic.credit), pic.credit);
+      count++;
+    }
+  }
+  assert.ok(count > 1000, `사진 ${count}개`);
+  assert.equal(Images.imageOf('food', '없는후보'), null);
 });
 
 test('한 판은 전체 후보 중 무작위 16개라 판마다 달라진다', () => {

@@ -63,13 +63,37 @@
   function start(t) {
     topic = t;
     bracket = Bracket.create(t.items, size);
+    preload(bracket.round);
     $('question').textContent = t.question;
     show('match');
     renderMatch();
   }
 
+  // 사진(위키미디어 공용, images.js)이 있으면 사진, 없거나 못 불러오면 이모지를 보여 준다.
+  function picOf(item) {
+    var Images = window.WorldcupImages;
+    return Images && topic ? Images.imageOf(topic.id, item.id) : null;
+  }
+  function showPhoto(img, em, creditEl, item) {
+    var pic = picOf(item);
+    em.textContent = item.emoji;
+    creditEl.textContent = '';
+    img.onerror = null;
+    if (!pic) { img.hidden = true; img.removeAttribute('src'); em.hidden = false; return; }
+    img.onerror = function () { img.hidden = true; em.hidden = false; creditEl.textContent = ''; };
+    img.alt = item.name;
+    img.src = pic.src;
+    img.hidden = false;
+    em.hidden = true;
+    creditEl.textContent = '📷 ' + pic.credit;
+  }
+  // 이번 판 후보 사진을 미리 받아 두어 다음 대결 때 바로 뜨게 한다.
+  function preload(items) {
+    items.forEach(function (item) { var pic = picOf(item); if (pic) new Image().src = pic.src; });
+  }
+
   function fillCard(btn, item) {
-    btn.querySelector('.emoji').textContent = item.emoji;
+    showPhoto(btn.querySelector('.photo'), btn.querySelector('.emoji'), btn.querySelector('.credit'), item);
     btn.querySelector('.name').textContent = item.name;
     btn.setAttribute('aria-label', item.name + ' 고르기');
   }
@@ -113,7 +137,7 @@
   // ----- 3) 결과 -----
   function finish() {
     var w = bracket.winner, r = bracket.runnerUp;
-    $('winnerEmoji').textContent = w.emoji;
+    showPhoto($('winnerPhoto'), $('winnerEmoji'), $('winnerCredit'), w);
     $('winnerName').textContent = w.name;
     $('runnerUp').textContent = '결승에서 ' + r.emoji + ' ' + josa(r.name, '을', '를') + ' 이겼어요';
     $('share').textContent = '모두의 결과를 불러오는 중이에요…';
