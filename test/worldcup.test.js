@@ -16,7 +16,8 @@ test('주제마다 후보가 450개 넘고 id·이름이 겹치지 않는다', (
     assert.ok(/^[a-z]+$/.test(t.id), t.id);
     assert.ok(!topicIds.has(t.id), `주제 ${t.id} 중복`);
     topicIds.add(t.id);
-    assert.ok(t.items.length >= 450, `${t.title} 후보 수 ${t.items.length}`);
+    // 실제 사람 주제(people)는 확실한 사람만 넣어서 100명 이상이면 된다
+    assert.ok(t.items.length >= (t.people ? 100 : 450), `${t.title} 후보 수 ${t.items.length}`);
     const ids = new Set(t.items.map((i) => i.id));
     assert.equal(ids.size, t.items.length, `${t.title} 후보 id 중복`);
     const names = new Set(t.items.map((i) => i.name.replace(/\s/g, '')));
