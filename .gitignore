@@ -22,3 +22,6 @@ data/mining-tycoon-worlds.json*
 data/*-scores.json
 data/worldcup-stats.json*
 data/worldcup-images-raw.json
+
+# 블렌더 자동 예비 파일
+*.blend1
