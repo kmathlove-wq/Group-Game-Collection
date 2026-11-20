@@ -23,3 +23,5 @@
 .piano-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#4c6ef5,#15aabf);font-size:30px}
 .hole-card{background:linear-gradient(145deg,#fff,#eaf7e4)}
 .hole-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#8fd16f,#3d7a2e);font-size:30px}
+.baseball-card{background:linear-gradient(145deg,#fff,#e8f0ff)}
+.baseball-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#1f6feb,#0b1f3f);font-size:30px}

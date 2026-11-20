@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-풀카운트 야구</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">{ "imports": { "three": "/shared/three/three.module.min.js" } }</script>
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button" aria-label="소리 켜고 끄기">🔊</button>
+    </div>
+  </nav>
+
+  <main class="stage" id="stage">
+    <canvas id="view" aria-label="야구장. 마우스로 타격 원이나 투구 위치를 움직이고 클릭해요."></canvas>
+
+    <!-- 점수판(중계 화면처럼) -->
+    <div class="bug" id="bug" hidden>
+      <div class="bug-teams">
+        <div class="bug-row" id="bugAway"><i></i><span></span><b>0</b></div>
+        <div class="bug-row" id="bugHome"><i></i><span></span><b>0</b></div>
+      </div>
+      <div class="bug-mid">
+        <div class="inning" id="bugInning">▲1</div>
+        <div class="diamond" aria-label="주자"><i id="b2"></i><i id="b3"></i><i id="b1"></i></div>
+      </div>
+      <div class="bug-count">
+        <div><span>B</span><em id="cB"></em></div>
+        <div><span>S</span><em id="cS"></em></div>
+        <div><span>O</span><em id="cO"></em></div>
+      </div>
+    </div>
+    <div class="pitch-info" id="pitchInfo" hidden></div>
+    <div class="who" id="who" hidden></div>
+    <div class="call" id="call" aria-live="polite"></div>
+    <div class="hint" id="hint" hidden></div>
+
+    <!-- 투구: 구종 고르기 -->
+    <div class="pitch-panel" id="pitchPanel" hidden>
+      <button type="button" data-p="fastball"><kbd>1</kbd>직구<small>빠름</small></button>
+      <button type="button" data-p="slider"><kbd>2</kbd>슬라이더<small>옆으로 휨</small></button>
+      <button type="button" data-p="curve"><kbd>3</kbd>커브<small>뚝 떨어짐</small></button>
+      <button type="button" data-p="changeup"><kbd>4</kbd>체인지업<small>느림</small></button>
+    </div>
+
+    <!-- 시작 메뉴 -->
+    <section class="panel menu" id="menuPanel">
+      <div class="logo" aria-hidden="true">⚾</div>
+      <h1>풀카운트 야구</h1>
+      <p class="lead">진짜 공기 저항과 회전으로 휘는 공! 직구·슬라이더·커브·체인지업을 던지고 쳐요.</p>
+      <h3>내 팀 고르기</h3>
+      <div class="teams" id="teamGrid"></div>
+      <div class="opts">
+        <label>이닝 <select id="optInnings"><option value="1">1이닝</option><option value="3" selected>3이닝</option><option value="5">5이닝</option></select></label>
+        <label>난이도 <select id="optLevel"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label>
+        <label>순서 <select id="optOrder"><option value="away" selected>먼저 공격</option><option value="home">먼저 수비</option></select></label>
+      </div>
+      <button id="soloBtn" class="primary" type="button" disabled>모형 불러오는 중…</button>
+      <button id="multiBtn" class="primary friends" type="button" disabled>👫 친구와 경기 (사람끼리)</button>
+      <p id="menuMsg" class="msg" role="status"></p>
+      <ul class="howto">
+        <li>🏏 <b>칠 때</b>: 마우스로 동그란 타격 원을 공이 올 곳에 두고, 공이 홈에 올 때 <b>클릭</b>(또는 스페이스)</li>
+        <li>🎯 <b>던질 때</b>: 구종(1~4) → 코스를 클릭 → 줄어드는 고리가 안쪽 원에 겹칠 때 다시 클릭(제구)</li>
+        <li>📱 휴대폰은 화면을 눌러 원·코스를 옮기고, 손을 떼면 스윙·결정이에요</li>
+      </ul>
+    </section>
+
+    <!-- 친구와 경기: 방 목록 -->
+    <section class="panel lobby" id="lobbyPanel" hidden>
+      <h2>👫 친구와 경기</h2>
+      <p class="lead small">두 사람이 서로 다른 팀을 골라 한 사람이 던지면 다른 사람이 쳐요. 다른 사람은 관전할 수 있어요.</p>
+      <label class="name" for="nameInput">내 이름</label>
+      <input id="nameInput" type="text" maxlength="12" autocomplete="off" placeholder="이름 (12자까지)">
+      <button id="createBtn" class="primary" type="button">＋ 방 만들기</button>
+      <div class="code-row">
+        <input id="codeInput" type="text" maxlength="4" autocomplete="off" placeholder="방 코드 4글자" aria-label="방 코드">
+        <button id="joinBtn" class="ghost" type="button">코드로 입장</button>
+      </div>
+      <p id="lobbyMsg" class="msg" role="status"></p>
+      <div class="list-head"><b>📋 열린 방</b><button id="refreshBtn" class="link" type="button">🔄 새로고침</button></div>
+      <ul id="roomList" class="room-list"></ul>
+      <button id="lobbyBack" class="ghost wide" type="button">← 처음으로</button>
+    </section>
+
+    <!-- 친구와 경기: 방 대기실 -->
+    <section class="panel room" id="roomPanel" hidden>
+      <h2 id="roomTitle">방</h2>
+      <p class="code-big">방 코드 <b id="roomCode">----</b></p>
+      <div class="sides">
+        <div class="side" id="sideAway"><h4>원정(먼저 공격)</h4><div class="side-who"></div><select aria-label="원정 팀"></select><button type="button" class="ghost">여기 앉기</button></div>
+        <div class="side" id="sideHome"><h4>홈(먼저 수비)</h4><div class="side-who"></div><select aria-label="홈 팀"></select><button type="button" class="ghost">여기 앉기</button></div>
+      </div>
+      <p class="lead small" id="spectators"></p>
+      <label class="inline">이닝 <select id="roomInnings"><option value="1">1이닝</option><option value="3" selected>3이닝</option><option value="5">5이닝</option></select></label>
+      <p id="roomMsg" class="msg" role="status"></p>
+      <button id="roomStart" class="primary" type="button">▶ 경기 시작</button>
+      <button id="roomLeave" class="ghost wide" type="button">🚪 방 나가기</button>
+    </section>
+
+    <!-- 경기 끝 -->
+    <section class="panel result" id="resultPanel" hidden>
+      <h2 id="resultTitle">경기 끝!</h2>
+      <table class="linescore" id="lineScore"></table>
+      <p id="resultLine" class="lead"></p>
+      <div class="row">
+        <button id="submitBtn" class="primary" type="button">🏆 순위에 올리기</button>
+        <button id="againBtn" class="ghost" type="button">🔁 다시 하기</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../shared/ranking.js"></script>
+  <script src="js/rules.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -15,6 +15,7 @@ const { setupMafiaGame } = require('./src/mafia');
 const { setupNunchiGame } = require('./src/nunchi');
 const { setupRoachGame } = require('./src/roach');
 const { setupGulpHole } = require('./src/gulp-hole');
+const { setupBaseball } = require('./src/baseball');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createPatrol } = require('./src/word-chain/patrol');
@@ -90,6 +91,7 @@ const mafiaGame = setupMafiaGame({ app, io, rootDir: __dirname });
 const nunchiGame = setupNunchiGame({ app, io, rootDir: __dirname });
 const roachGame = setupRoachGame({ app, io, rootDir: __dirname });
 const gulpHole = setupGulpHole({ io }); // 🕳️ 꿀꺽 구멍 👫 친구들과 대결(사람끼리)
+const baseball = setupBaseball({ io }); // ⚾ 풀카운트 야구 👫 친구와 경기(서버 판정)
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
 const wordChainBrain = createBrain(process.env.WORD_CHAIN_BRAIN_PATH || path.join(__dirname, 'data', 'word-chain-brain.json'), { remote: gistSync });
@@ -160,6 +162,7 @@ registerScoreboard('school-smash', 999_999, { top: 50 }); // 🏫 학교 부수�
 registerScoreboard('egg-heist', 1_000_000_000_000, { top: 50, perPlayer: true }); // 🥚 계란 훔치기: 번 돈, 게임 한 판(playerId)당 한 줄
 registerScoreboard('antarctica', 100_000_000, { top: 50 }); // 🐧 남극 탐험: 모은 연구 점수
 registerScoreboard('gulp-hole', 10_000_000, { top: 50 }); // 🕳️ 꿀꺽 구멍: 2분 동안 삼킨 점수
+registerScoreboard('baseball', 10_000_000, { top: 50 }); // ⚾ 풀카운트 야구: 득점×100 + 안타×20 + 승리 500
 // 🎹 피아노 리듬: 곡·난이도마다 순위표 따로(piano-rhythm-<곡>-<난이도>, 5곡×3 = 15개), 모두 100만 점 만점.
 for (const slug of PIANO_RHYTHM.boardSlugs()) registerScoreboard(slug, PIANO_RHYTHM.SCORE_MAX, { top: 50 });
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.
@@ -1037,5 +1040,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame, nunchiGame, roachGame, gulpHole
+  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame, nunchiGame, roachGame, gulpHole, baseball
 };
