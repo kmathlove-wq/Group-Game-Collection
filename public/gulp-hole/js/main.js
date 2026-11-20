@@ -370,7 +370,30 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur', () => { keys.clear(); drag.on = false; stick.classList.remove('on'); });
+// 🖱️ 컴퓨터 마우스: 누르지 않아도 마우스가 가리키는 땅 쪽으로 구멍이 따라간다(휴대폰 손가락은 아래 끌기 막대)
+const mouse = { on: false, x: 0, y: 0 };
+const raycaster = new THREE.Raycaster();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const _ndc = new THREE.Vector2(), _hit = new THREE.Vector3();
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return;
+  mouse.on = true; mouse.x = e.clientX; mouse.y = e.clientY;
+});
+canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') mouse.on = false; });
+function mouseInput() {
+  const r = canvas.getBoundingClientRect();
+  _ndc.set(((mouse.x - r.left) / r.width) * 2 - 1, -((mouse.y - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(_ndc, camera);
+  if (!raycaster.ray.intersectPlane(groundPlane, _hit)) return { x: 0, z: 0 };
+  const me = state.holes[0];
+  const dx = _hit.x - me.x, dz = _hit.z - me.z, dist = Math.hypot(dx, dz);
+  // 구멍 가운데 가까이면 멈추고, 멀수록 빠르게(구멍 크기 + 4m 떨어지면 최고 속도)
+  const k = Math.max(0, Math.min(1, (dist - me.r * 0.25) / (me.r + 4)));
+  return dist > 0.01 ? { x: dx / dist * k, z: dz / dist * k } : { x: 0, z: 0 };
+}
+
 canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse') { unlockAudio(); return; }   // 마우스는 끌 필요 없음
   if (drag.on) return;
   drag.on = true; drag.id = e.pointerId;
   drag.sx = drag.x = e.clientX; drag.sy = drag.y = e.clientY;
@@ -404,10 +427,13 @@ function readInput() {
   if (keys.has('arrowright') || keys.has('d')) x += 1;
   if (keys.has('arrowup') || keys.has('w')) z -= 1;
   if (keys.has('arrowdown') || keys.has('s')) z += 1;
+  if (x || z) return { x, z };                               // 방향키가 먼저
   if (drag.on) {
     const dx = drag.x - drag.sx, dy = drag.y - drag.sy, len = Math.hypot(dx, dy);
     if (len > 6) { const k = Math.min(1, len / 48) / len; x = dx * k; z = dy * k; }  // 화면 위 = 도시 북쪽(-z)
+    return { x, z };
   }
+  if (mouse.on) return mouseInput();
   return { x, z };
 }
 
