@@ -15,10 +15,9 @@ const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5; // 10분에 5번 틀리면 잠깐 막기
 const CLEANUP_MS = 60 * 60 * 1000;
 const OWNER_KEY = /^[0-9a-f]{32,64}$/;
-// 게임 추천받기 창은 이때까지만 뜨고 받는다(사용자 결정 2026-10: 10/23부터 10/31 토요일 밤까지, 한국 시간).
-const REQUEST_ENDS_AT = Date.parse('2026-10-31T23:59:59.999+09:00');
+// 게임 추천받기 창은 날짜 제한 없이 항상 열려 있다(사용자 결정 2026-11-20).
 
-function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_AT, adminHash = process.env.BOARD_ADMIN_PASSWORD_HASH || DEFAULT_ADMIN_HASH,
+function setupBoard({ app, store, requests = null, adminHash = process.env.BOARD_ADMIN_PASSWORD_HASH || DEFAULT_ADMIN_HASH,
   cooldownMs = POST_COOLDOWN_MS, now = Date.now, cleanupTimer = true, nameLock = null }) {
   const lastPostAt = new Map(); // IP → 마지막으로 쓴 때
   const lastRequestAt = new Map(); // IP → 마지막으로 게임 추천을 보낸 때
@@ -135,13 +134,11 @@ function setupBoard({ app, store, requests = null, requestEndsAt = REQUEST_ENDS_
     res.json(listFor(req));
   });
 
-  // ── 게임 추천받기: 기간 안에만 받고, 들어온 추천은 관리자만 본다 ──
+  // ── 게임 추천받기: 날짜 제한 없이 항상 받고, 들어온 추천은 관리자만 본다 ──
   if (requests) {
-    const requestOpen = () => now() <= requestEndsAt;
-    app.get('/api/game-requests/status', (_req, res) => res.json({ open: requestOpen(), endsAt: requestEndsAt }));
+    app.get('/api/game-requests/status', (_req, res) => res.json({ open: true }));
 
     app.post('/api/game-requests', (req, res) => {
-      if (!requestOpen()) return res.status(403).json({ error: '게임 추천받기 기간이 끝났어요.' });
       const text = String(req.body?.text ?? '').trim();
       if (!text) return res.status(400).json({ error: '원하는 게임을 적어 주세요.' });
       if ([...text].length > REQUEST_MAX_LENGTH) return res.status(400).json({ error: `${REQUEST_MAX_LENGTH}자까지 쓸 수 있어요.` });

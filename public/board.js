@@ -217,7 +217,7 @@
     } catch (error) { showMessage(error.message); }
   });
 
-  // ── 게임 추천받기 창: 기간 안이면 들어올 때마다 뜬다(닉네임 없이 내용만) ──
+  // ── 게임 추천받기 창: 항상(날짜 제한 없이) 들어올 때마다 뜬다(닉네임 없이 내용만) ──
   const requestModal = $('gameRequestModal');
   const requestText = $('gameRequestText');
   const requestMessage = $('gameRequestMessage');
@@ -228,10 +228,9 @@
     requestMessage.className = `notice ${kind}`;
   }
 
-  fetch('/api/game-requests/status').then((response) => response.json()).then(({ open, endsAt }) => {
+  fetch('/api/game-requests/status').then((response) => response.json()).then(({ open }) => {
     if (!open) return;
-    const end = new Date(endsAt);
-    $('gameRequestUntil').textContent = `(${end.getMonth() + 1}월 ${end.getDate()}일까지 받아요)`;
+    $('gameRequestUntil').textContent = '';
     requestModal.classList.remove('hidden');
     requestText.focus();
   }).catch(() => {});

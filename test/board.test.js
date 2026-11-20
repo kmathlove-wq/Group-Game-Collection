@@ -84,11 +84,11 @@ test('고정 글이 맨 위, 나머지는 최신순이고 다시 켜도(파일�
   assert.deepEqual(reopened.list().map((post) => post.id), [first.id, third.id]);
 });
 
-async function startBoard(t, { now = Date.now, requestEndsAt } = {}) {
+async function startBoard(t, { now = Date.now } = {}) {
   const app = express();
   app.use(express.json({ limit: '2kb' }));
   const adminHash = await bcrypt.hash('1234', 4);
-  setupBoard({ app, store: createBoardStore(tempFile()), requests: createGameRequestStore(tempFile()), requestEndsAt, now, adminHash, cooldownMs: 60_000, cleanupTimer: false });
+  setupBoard({ app, store: createBoardStore(tempFile()), requests: createGameRequestStore(tempFile()), now, adminHash, cooldownMs: 60_000, cleanupTimer: false });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, resolve));
   t.after(() => server.close());
@@ -183,10 +183,10 @@ test('Gist와 합칠 때 더 늦게 고친 내용을 쓴다', () => {
   assert.equal(store.list()[0].text, '다른 곳에서 더 늦게 고침');
 });
 
-test('게임 추천받기: 기간 안에만 받고, 비속어·도배를 막고, 들어온 추천은 관리자만 본다', async (t) => {
+test('게임 추천받기: 날짜 제한 없이 받고, 비속어·도배를 막고, 들어온 추천은 관리자만 본다', async (t) => {
   let now = 1_000_000;
-  const call = await startBoard(t, { now: () => now, requestEndsAt: 2_000_000 });
-  assert.deepEqual((await call('/api/game-requests/status')).body, { open: true, endsAt: 2_000_000 });
+  const call = await startBoard(t, { now: () => now });
+  assert.deepEqual((await call('/api/game-requests/status')).body, { open: true });
   assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: '  ' } })).status, 400);
   assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: '시1발 게임' } })).status, 400);
   assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: 'x'.repeat(201) } })).status, 400);
@@ -197,9 +197,6 @@ test('게임 추천받기: 기간 안에만 받고, 비속어·도배를 막고,
   const list = (await call('/api/board/admin/game-requests', { token })).body.requests;
   assert.deepEqual(list.map((item) => item.text), ['달리기 게임']);
   assert.deepEqual((await call(`/api/board/admin/game-requests/${list[0].id}`, { method: 'DELETE', token })).body.requests, []);
-  now = 2_000_001;
-  assert.equal((await call('/api/game-requests/status')).body.open, false);
-  assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: '늦은 추천' } })).status, 403, '기간이 끝나면 안 받는다');
 });
 
 test('게임 추천받기: 다시 켜져도 남고, 지운 추천은 Gist와 합쳐도 되살아나지 않는다', () => {
@@ -214,11 +211,14 @@ test('게임 추천받기: 다시 켜져도 남고, 지운 추천은 Gist와 합
   assert.deepEqual(reopened.list().map((item) => item.id), [keep.id]);
 });
 
-test('게임 추천받기 마감은 한국 시간 10월 31일 토요일 밤까지다', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'board', 'index.js'), 'utf8');
-  const end = Date.parse(src.match(/REQUEST_ENDS_AT = Date\.parse\('([^']+)'\)/)[1]);
-  assert.equal(new Date(end + 1).toISOString(), '2026-10-31T15:00:00.000Z'); // 한국 11월 1일 0시 = 끝난 직후
-  assert.equal(new Date(end).getUTCDay(), 6, '토요일(한국 시간 기준 밤 = UTC 오후)');
+test('게임 추천받기: 날짜가 한참 지나도(예전 마감 10월 31일 이후, 먼 미래) 계속 열려 있다', async (t) => {
+  let now = Date.parse('2026-11-20T00:00:00+09:00');
+  const call = await startBoard(t, { now: () => now });
+  assert.deepEqual((await call('/api/game-requests/status')).body, { open: true });
+  assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: '마감 뒤 추천' } })).status, 200);
+  now = Date.parse('2030-01-01T00:00:00+09:00');
+  assert.equal((await call('/api/game-requests/status')).body.open, true);
+  assert.equal((await call('/api/game-requests', { method: 'POST', body: { text: '먼 미래 추천' } })).status, 200);
 });
 
 test('👑 관리자 글은 관리자 모드일 때만 고친다: 다른 기기에서 쓴 글도 되고, 쓴 기기라도 관리자 모드를 끄면 안 된다(일반 사람 글은 관리자도 못 고침)', async (t) => {
