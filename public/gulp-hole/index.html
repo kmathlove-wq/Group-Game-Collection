@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-꿀꺽 구멍</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">{ "imports": { "three": "/shared/three/three.module.min.js" } }</script>
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button" aria-label="소리 켜고 끄기">🔊</button>
+    </div>
+  </nav>
+
+  <main class="stage" id="stage">
+    <canvas id="view" aria-label="꿀꺽 구멍 도시. 방향키나 화면을 끌어 구멍을 움직여요."></canvas>
+
+    <div class="hud" id="hud" hidden>
+      <div class="chip time">⏱ <b id="timeText">2:00</b></div>
+      <div class="chip score">🕳️ <b id="scoreText">0</b>점</div>
+      <div class="chip size">📏 <b id="sizeText">1.0</b>m</div>
+    </div>
+    <ol class="board" id="board" aria-label="실시간 순위" hidden></ol>
+    <div class="popups" id="popups" aria-hidden="true"></div>
+    <div class="stick" id="stick" aria-hidden="true"><span></span></div>
+    <div class="eaten" id="eaten" hidden><b id="eatenText">먹혔어요!</b><small>3초 뒤 작은 구멍으로 다시 나와요</small></div>
+
+    <section class="panel start" id="startPanel">
+      <div class="logo" aria-hidden="true"><span></span></div>
+      <h1>꿀꺽 구멍</h1>
+      <p class="lead">구멍을 움직여 도시를 삼켜요! 사람 → 자동차 → 집 → 빌딩까지,<br>먹을수록 구멍이 커져요. 2분 동안 컴퓨터 구멍 9개와 대결!</p>
+      <label class="name" for="nameInput">내 구멍 이름</label>
+      <input id="nameInput" type="text" maxlength="12" autocomplete="off" placeholder="이름 (12자까지)">
+      <button id="startBtn" class="primary" type="button" disabled>모형 불러오는 중…</button>
+      <ul class="howto">
+        <li>⌨️ 방향키·WASD 또는 🖱️ 화면을 누른 채 끌기 · 📱 손가락으로 끌기</li>
+        <li>🔴 구멍보다 큰 건 덜덜 떨기만 해요 — 작은 것부터!</li>
+        <li>⚠️ 나보다 큰 구멍에 닿으면 삼켜져요. 작은 구멍은 내가 삼킬 수 있어요</li>
+      </ul>
+    </section>
+
+    <section class="panel result" id="resultPanel" hidden>
+      <h2 id="resultTitle">경기 끝!</h2>
+      <p id="resultLine" class="lead"></p>
+      <ol id="resultList" class="result-list"></ol>
+      <div class="row">
+        <button id="submitBtn" class="primary" type="button">🏆 순위에 올리기</button>
+        <button id="againBtn" class="ghost" type="button">🔁 다시 하기</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/rules.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
