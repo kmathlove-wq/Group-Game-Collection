@@ -38,11 +38,38 @@
       <label class="name" for="nameInput">내 구멍 이름</label>
       <input id="nameInput" type="text" maxlength="12" autocomplete="off" placeholder="이름 (12자까지)">
       <button id="startBtn" class="primary" type="button" disabled>모형 불러오는 중…</button>
+      <button id="multiBtn" class="primary friends" type="button" disabled>👫 친구들과 대결 (사람끼리)</button>
+      <p id="startMsg" class="msg" role="status"></p>
       <ul class="howto">
         <li>🖱️ 마우스를 가고 싶은 곳에 올려 두면 쭉 따라가요 · ⌨️ 방향키·WASD · 📱 손가락으로 끌기</li>
         <li>🔴 구멍보다 큰 건 덜덜 떨기만 해요 — 작은 것부터!</li>
         <li>⚠️ 나보다 큰 구멍에 닿으면 삼켜져요. 작은 구멍은 내가 삼킬 수 있어요</li>
       </ul>
+    </section>
+
+    <section class="panel lobby" id="lobbyPanel" hidden>
+      <h2>👫 친구들과 대결</h2>
+      <p class="lead">봇 없이 진짜 사람끼리만! 2~10명이 같은 도시에서 2분 동안 겨뤄요.</p>
+      <button id="createBtn" class="primary" type="button">＋ 방 만들기</button>
+      <label class="check"><input id="publicCheck" type="checkbox" checked> 열린 방 목록에 보이기</label>
+      <div class="code-row">
+        <input id="codeInput" type="text" maxlength="4" autocomplete="off" placeholder="방 코드 4글자" aria-label="방 코드">
+        <button id="joinBtn" class="ghost" type="button">코드로 입장</button>
+      </div>
+      <p id="lobbyMsg" class="msg" role="status"></p>
+      <div class="list-head"><b>📋 열린 방</b><button id="refreshBtn" class="link" type="button">🔄 새로고침</button></div>
+      <ul id="roomList" class="room-list"></ul>
+      <button id="lobbyBack" class="ghost wide" type="button">← 처음으로</button>
+    </section>
+
+    <section class="panel room" id="roomPanel" hidden>
+      <h2 id="roomTitle">방</h2>
+      <p class="code-big">방 코드 <b id="roomCode">----</b></p>
+      <p class="lead small">친구에게 방 코드를 알려 주면 같이 할 수 있어요.</p>
+      <ul id="playerList" class="player-list"></ul>
+      <p id="roomMsg" class="msg" role="status"></p>
+      <button id="roomStart" class="primary" type="button">▶ 경기 시작</button>
+      <button id="roomLeave" class="ghost wide" type="button">🚪 방 나가기</button>
     </section>
 
     <section class="panel result" id="resultPanel" hidden>
@@ -56,6 +83,7 @@
     </section>
   </main>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="../shared/ranking.js"></script>
   <script src="js/rules.js"></script>
   <script type="module" src="js/main.js"></script>

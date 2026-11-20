@@ -302,15 +302,18 @@
     var holes = [];
     var names = BOT_NAMES.slice();
     for (var i = names.length - 1; i > 0; i--) { var j = Math.floor(rand() * (i + 1)); var t = names[i]; names[i] = names[j]; names[j] = t; }
-    var count = options.holes || HOLES;
+    // options.players = [{ name, color }] 이면 "사람끼리" 모드: 그 사람 수만큼 구멍, 봇 없음
+    var people = options.players || null;
+    var count = people ? people.length : options.holes || HOLES;
     var c = (MAP_MAX + MAP_MIN) / 2, ring = (MAP_MAX - MAP_MIN) * 0.33;
     for (var h = 0; h < count; h++) {
       var a = h / count * Math.PI * 2;
       holes.push({
-        id: h, name: h === 0 ? (options.playerName || '나') : names[(h - 1) % names.length], color: COLORS[h % COLORS.length],
-        bot: h !== 0, x: c + Math.cos(a) * ring, z: c + Math.sin(a) * ring, vx: 0, vz: 0,
+        id: h, name: people ? people[h].name : h === 0 ? (options.playerName || '나') : names[(h - 1) % names.length],
+        color: people && people[h].color ? people[h].color : COLORS[h % COLORS.length],
+        bot: !people && h !== 0, x: c + Math.cos(a) * ring, z: c + Math.sin(a) * ring, vx: 0, vz: 0,
         mass: 0, score: 0, r: START_R, alive: true, respawnAt: 0, eatenBy: -1,
-        think: rand() * 0.5, goalX: c, goalZ: c, skill: h === 0 ? 1 : 0.82 + rand() * 0.14,
+        think: rand() * 0.5, goalX: c, goalZ: c, skill: people || h === 0 ? 1 : 0.82 + rand() * 0.14,   // 사람은 모두 같은 빠르기
       });
     }
     var state = {
@@ -413,10 +416,13 @@
     o.ox = o.x - h.x; o.oz = o.z - h.z;
     o.vy = 0;
     o.tiltDir = Math.atan2(o.oz, o.ox);
+    o.tilt = 0; o.y = 0;
+    state.events.push({ type: 'fall', obj: o.id, hole: h.id });
     mark(state, o);
   }
 
-  function stepFall(state, o, dt) {
+  // score = false: 화면 쪽 흉내(사람끼리 모드) — 떨어지는 모습만 그리고 점수는 서버가 정한다
+  function stepFall(state, o, dt, score) {
     var h = state.holes[o.owner];
     var k = Math.exp(-dt * 2.4);
     o.ox *= k; o.oz *= k;
@@ -429,11 +435,46 @@
     var t = TYPES[o.type];
     if (o.y < -(t.h + 1.5)) {
       o.state = 'gone';
-      h.score += t.pts;
-      h.mass += t.pts;
-      state.events.push({ type: 'eat', hole: h.id, what: o.type, pts: t.pts });
+      if (score !== false) {
+        h.score += t.pts;
+        h.mass += t.pts;
+        state.events.push({ type: 'eat', hole: h.id, obj: o.id, what: o.type, pts: t.pts });
+      }
     }
     mark(state, o);
+  }
+
+  // ---------- 사람끼리 모드: 화면 쪽 흉내 ----------
+  // 서버가 "이 물건이 이 구멍에 빠지기 시작" 알려 주면 화면에서도 떨어뜨린다
+  function startFallFor(state, objId, holeId) {
+    var o = state.objects[objId], h = state.holes[holeId];
+    if (!o || !h || o.state !== 'idle') return;
+    startFall(state, o, h);
+    state.events.pop();                                        // 방금 만든 'fall' 알림은 화면 쪽에선 필요 없다
+  }
+  function removeObject(state, objId) {
+    var o = state.objects[objId];
+    if (o && o.state !== 'gone') { o.state = 'gone'; mark(state, o); }
+  }
+  // 걷는 사람·떨어지는 물건·덜덜 떨기만 화면에서 계산(차와 구멍 위치는 서버가 보내 준다)
+  function clientStep(state, dt) {
+    dt = Math.min(dt, 0.05);
+    var holes = state.holes, objs = state.objects;
+    for (var i = 0; i < objs.length; i++) {
+      var o = objs[i];
+      if (o.state === 'gone') continue;
+      var t = TYPES[o.type];
+      if (o.state === 'fall') { stepFall(state, o, dt, false); continue; }
+      if (t.walker) { moveWalker(o, dt); mark(state, o); }
+      if (o.wobble > 0) { o.wobble = Math.max(0, o.wobble - dt); mark(state, o); }
+      if (t.need <= 0.6 || t.driver) continue;
+      for (var hi = 0; hi < holes.length; hi++) {
+        var h = holes[hi];
+        if (!h.alive || t.need <= h.r) continue;
+        var dx = o.x - h.x, dz = o.z - h.z;
+        if (Math.abs(dx) < h.r && Math.abs(dz) < h.r && Math.hypot(dx, dz) < h.r * 0.9) { o.wobble = 0.25; mark(state, o); }
+      }
+    }
   }
 
   function step(state, input, dt) {
@@ -453,7 +494,8 @@
         var gx = h.goalX - h.x, gz = h.goalZ - h.z, gl = Math.hypot(gx, gz);
         moveHole(h, gl > 0.5 ? gx / gl : 0, gl > 0.5 ? gz / gl : 0, dt);
       } else {
-        moveHole(h, input ? input.x || 0 : 0, input ? input.z || 0 : 0, dt);
+        var inp = Array.isArray(input) ? input[h.id] : input;   // 사람끼리 모드는 구멍마다 입력이 따로
+        moveHole(h, inp ? inp.x || 0 : 0, inp ? inp.z || 0 : 0, dt);
       }
       var target = radiusFor(h.mass);                          // 몸집은 부드럽게 커진다
       h.r += (target - h.r) * (1 - Math.exp(-dt * 4));
@@ -521,6 +563,7 @@
     DURATION: DURATION, START_R: START_R, RESPAWN: RESPAWN,
     rng: rng, radiusFor: radiusFor, speedFor: speedFor, faceAngle: faceAngle,
     buildCity: buildCity, createGame: createGame, step: step, animateCity: animateCity, standings: standings,
+    moveHole: moveHole, clientStep: clientStep, startFallFor: startFallFor, removeObject: removeObject, COLORS: COLORS,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else { root.GulpHole = root.GulpHole || {}; root.GulpHole.Rules = api; }

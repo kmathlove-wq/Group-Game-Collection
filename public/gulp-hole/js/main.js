@@ -385,7 +385,7 @@ function mouseInput() {
   _ndc.set(((mouse.x - r.left) / r.width) * 2 - 1, -((mouse.y - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(_ndc, camera);
   if (!raycaster.ray.intersectPlane(groundPlane, _hit)) return { x: 0, z: 0 };
-  const me = state.holes[0];
+  const me = state.holes[meIdx];
   const dx = _hit.x - me.x, dz = _hit.z - me.z, dist = Math.hypot(dx, dz);
   // 구멍 가운데 가까이면 멈추고, 멀수록 빠르게(구멍 크기 + 4m 떨어지면 최고 속도)
   const k = Math.max(0, Math.min(1, (dist - me.r * 0.25) / (me.r + 4)));
@@ -481,7 +481,7 @@ function popup(text, big) {
 }
 function renderBoard(state) {
   const list = R.standings(state).slice(0, 5);
-  const me = state.holes[0];
+  const me = state.holes[meIdx];
   const ol = $('board');
   ol.textContent = '';
   const rows = list.includes(me) ? list : list.slice(0, 4).concat(me);
@@ -499,7 +499,7 @@ function renderHud(state) {
   const left = Math.max(0, Math.ceil(state.duration - state.time));
   $('timeText').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
   $('timeText').parentElement.classList.toggle('low', left <= 15);
-  const me = state.holes[0];
+  const me = state.holes[meIdx];
   $('scoreText').textContent = me.score.toLocaleString('ko-KR');
   $('sizeText').textContent = (me.r * 2).toFixed(1);
   renderBoard(state);
@@ -510,7 +510,7 @@ const MID = (R.MAP_MIN + R.MAP_MAX) / 2;
 const camAt = new THREE.Vector3(MID, 0, MID);
 let camR = 1;
 function updateCamera(state, dt, snap) {
-  const me = state.holes[0];
+  const me = state.holes[meIdx];
   const k = snap ? 1 : 1 - Math.exp(-dt * 5);
   camAt.x += (me.x - camAt.x) * k;
   camAt.z += (me.z - camAt.z) * k;
@@ -528,15 +528,23 @@ function updateCamera(state, dt, snap) {
 
 // ---------- 게임 흐름 ----------
 let state = null;
+let meIdx = 0;          // 내 구멍 번호(컴퓨터 대결은 0, 친구 대결은 서버가 정해 줌)
+let mode = 'solo';     // 'solo' 컴퓨터와 대결, 'multi' 친구들과 대결
 let running = false;
 let showcase = 0;
 let hudTimer = 0;
 let lastEaten = false;
 
-function newGame() {
+function newGame(multi) {
   const name = ($('nameInput').value || '').trim().slice(0, 12) || '나';
   store.set(NAME_KEY, name);
-  state = R.createGame({ seed: (Math.random() * 1e9) | 0, playerName: name });
+  if (multi) {                                             // 친구 대결: 서버가 준 씨앗·사람 목록으로 같은 도시
+    mode = 'multi'; meIdx = multi.you;
+    state = R.createGame({ seed: multi.seed, players: multi.players, duration: multi.duration });
+  } else {
+    mode = 'solo'; meIdx = 0;
+    state = R.createGame({ seed: (Math.random() * 1e9) | 0, playerName: name });
+  }
   makeGround(state.city);
   buildBatches(state);
   buildHoles(state);
@@ -548,16 +556,16 @@ function newGame() {
 function handleEvents() {
   for (const e of state.events) {
     if (e.type === 'eat') {
-      if (e.hole === 0) { popup('+' + e.pts + ' ' + WHAT[e.what], e.pts >= 100); gulpSound(e.pts); }
+      if (e.hole === meIdx) { popup('+' + e.pts + ' ' + WHAT[e.what], e.pts >= 100); gulpSound(e.pts); }
     } else if (e.type === 'hole') {
-      if (e.hole === 0) { popup('🕳️ ' + state.holes[e.victim].name + ' 꿀꺽! +' + e.pts, true); gulpSound(80); }
-      if (e.victim === 0) { $('eatenText').textContent = '😵 ' + state.holes[e.hole].name + '에게 먹혔어요!'; gulpSound(120); }
+      if (e.hole === meIdx) { popup('🕳️ ' + state.holes[e.victim].name + ' 꿀꺽! +' + e.pts, true); gulpSound(80); }
+      if (e.victim === meIdx) { $('eatenText').textContent = '😵 ' + state.holes[e.hole].name + '에게 먹혔어요!'; gulpSound(120); }
     } else if (e.type === 'over') {
       finish();
     }
   }
   state.events.length = 0;
-  const eaten = !state.holes[0].alive;
+  const eaten = !state.holes[meIdx].alive;
   if (eaten !== lastEaten) { $('eaten').hidden = !eaten; lastEaten = eaten; }
 }
 
@@ -565,8 +573,9 @@ function finish() {
   running = false;
   drag.on = false; stick.classList.remove('on');
   const list = R.standings(state);
-  const me = state.holes[0];
+  const me = state.holes[meIdx];
   const place = list.indexOf(me) + 1;
+  $('againBtn').textContent = mode === 'multi' ? '🏠 방으로' : '🔁 다시 하기';
   $('resultTitle').textContent = place === 1 ? '🏆 1등! 도시를 다 삼켰어요' : place <= 3 ? '🥈 ' + place + '등! 아주 잘했어요' : '경기 끝! ' + place + '등';
   $('resultLine').textContent = '내 점수 ' + me.score.toLocaleString('ko-KR') + '점 · 구멍 지름 ' + (me.r * 2).toFixed(1) + 'm';
   const ol = $('resultList');
@@ -586,15 +595,211 @@ function finish() {
   $('resultPanel').hidden = false;
 }
 
-function start() {
+function start(multi) {
   unlockAudio();
-  newGame();
+  newGame(multi && multi.seed ? multi : null);
   running = true;
   hudTimer = 0;
   lastEaten = false;
-  $('startPanel').hidden = $('resultPanel').hidden = true;
+  showPanel(null);
   $('hud').hidden = $('board').hidden = false;
   renderHud(state);
+}
+
+// 창 하나만 보이게(null이면 모두 숨김)
+const PANELS = ['startPanel', 'lobbyPanel', 'roomPanel', 'resultPanel'];
+function showPanel(id) { PANELS.forEach((p) => { $(p).hidden = p !== id; }); }
+
+// ================= 👫 친구들과 대결(사람끼리, 서버가 판정) =================
+// 서버가 초당 15번 보내는 위치(snap)를 0.11초 늦게 이어 그려서 부드럽게 보인다(보간 = 두 점 사이를 채우기).
+// 내 구멍만은 기다리지 않고 내 화면에서 바로 움직이고(예측), 서버 위치와 조금씩 맞춘다(보정).
+const INTERP_MS = 110;
+const net = { socket: null, room: null, myId: null, snaps: [], sendT: 0, ping: 0.08, pingT: 0 };
+
+function myName() { return ($('nameInput').value || '').trim().slice(0, 12); }
+function setMsg(id, text, good) { $(id).textContent = text || ''; $(id).classList.toggle('ok', Boolean(good)); }
+
+function connect() {
+  if (net.socket) return net.socket;
+  if (!window.io) { setMsg('startMsg', '서버에 연결할 수 없어요. 새로고침 해 주세요.'); return null; }
+  const socket = window.io();
+  net.socket = socket;
+  socket.on('gh:room', (room) => { net.room = room; renderRoom(); });
+  socket.on('gh:start', (data) => {
+    net.snaps = [];
+    start(data);
+  });
+  socket.on('gh:snap', (s) => {
+    s.at = performance.now();
+    net.snaps.push(s);
+    if (net.snaps.length > 30) net.snaps.shift();
+  });
+  socket.on('gh:ev', (list) => { if (mode === 'multi' && running) list.forEach(netEvent); });
+  socket.on('gh:over', (data) => {
+    if (mode !== 'multi' || !state) return;
+    data.standings.forEach(([id, score]) => { if (state.holes[id]) state.holes[id].score = score; });
+    finish();
+  });
+  socket.on('disconnect', () => {
+    if (mode === 'multi' && running) {
+      running = false;
+      $('hud').hidden = $('board').hidden = true;
+      showPanel('lobbyPanel');
+      setMsg('lobbyMsg', '서버와 연결이 끊겼어요. 방을 다시 만들거나 들어가 주세요.');
+    }
+    net.room = null;
+  });
+  return socket;
+}
+
+function openLobby() {
+  if (!myName()) { setMsg('startMsg', '먼저 내 구멍 이름을 써 주세요.'); $('nameInput').focus(); return; }
+  store.set(NAME_KEY, myName());
+  if (!connect()) return;
+  setMsg('startMsg', '');
+  setMsg('lobbyMsg', '');
+  showPanel('lobbyPanel');
+  refreshRooms();
+}
+
+function refreshRooms() {
+  net.socket.emit('gh:rooms', null, (res) => {
+    const ul = $('roomList');
+    ul.textContent = '';
+    const list = (res && res.rooms) || [];
+    if (!list.length) {
+      const li = document.createElement('li'); li.className = 'empty'; li.textContent = '아직 열린 방이 없어요. 방을 만들어 보세요!';
+      ul.appendChild(li); return;
+    }
+    list.forEach((r) => {
+      const li = document.createElement('li');
+      const name = document.createElement('span'); name.textContent = r.title;
+      const info = document.createElement('small'); info.textContent = r.count + '/' + r.max + '명' + (r.state === 'playing' ? ' · 경기 중' : '');
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = '입장'; btn.disabled = !r.canJoin;
+      btn.addEventListener('click', () => joinRoom(r.code));
+      li.append(name, info, btn);
+      ul.appendChild(li);
+    });
+  });
+}
+
+function afterEnter(res) {
+  if (!res || !res.ok) { setMsg('lobbyMsg', (res && res.error) || '들어가지 못했어요.'); return; }
+  net.myId = res.me;
+  net.room = res.room;
+  showPanel('roomPanel');
+  renderRoom();
+}
+function createRoom() {
+  net.socket.emit('gh:create', { nickname: myName(), isPublic: $('publicCheck').checked }, afterEnter);
+}
+function joinRoom(code) {
+  const c = String(code || $('codeInput').value || '').trim().toUpperCase();
+  if (c.length !== 4) { setMsg('lobbyMsg', '방 코드 4글자를 써 주세요.'); return; }
+  net.socket.emit('gh:join', { nickname: myName(), code: c }, afterEnter);
+}
+
+function renderRoom() {
+  const room = net.room;
+  if (!room) return;
+  $('roomTitle').textContent = room.title;
+  $('roomCode').textContent = room.code;
+  const ul = $('playerList');
+  ul.textContent = '';
+  room.players.forEach((p) => {
+    const li = document.createElement('li');
+    if (p.id === net.myId) li.className = 'me';
+    const dot = document.createElement('i'); dot.style.background = p.color;
+    const name = document.createElement('span'); name.textContent = (p.isHost ? '👑 ' : '') + p.nickname + (p.id === net.myId ? ' (나)' : '');
+    li.append(dot, name);
+    ul.appendChild(li);
+  });
+  const host = room.hostId === net.myId;
+  $('roomStart').hidden = !host;
+  $('roomStart').disabled = room.players.length < room.min || room.state === 'playing';
+  if (room.state === 'playing') setMsg('roomMsg', '경기 중이에요…', true);
+  else if (host) setMsg('roomMsg', room.players.length < room.min ? '친구가 한 명 이상 더 들어와야 시작할 수 있어요.' : '모두 모였으면 경기 시작을 눌러요!', room.players.length >= room.min);
+  else setMsg('roomMsg', '방장이 시작하기를 기다리는 중…', true);
+}
+
+// 서버 알림: ['f', 물건, 구멍] 빠지기 시작 · ['e', 물건, 구멍, 점수] 다 먹음 · ['h', 구멍, 먹힌 구멍, 점수] · ['r', 구멍] 다시 나옴
+function netEvent(e) {
+  if (e[0] === 'f') R.startFallFor(state, e[1], e[2]);
+  else if (e[0] === 'e') {
+    const o = state.objects[e[1]];
+    if (o && o.state === 'idle') R.removeObject(state, e[1]);     // 떨어지는 모습을 놓쳤으면 그냥 없앤다
+    if (e[2] === meIdx && o) { popup('+' + e[3] + ' ' + WHAT[o.type], e[3] >= 100); gulpSound(e[3]); }
+  } else if (e[0] === 'h') {
+    if (e[1] === meIdx) { popup('🕳️ ' + state.holes[e[2]].name + ' 꿀꺽! +' + e[3], true); gulpSound(80); }
+    if (e[2] === meIdx) { $('eatenText').textContent = '😵 ' + state.holes[e[1]].name + '에게 먹혔어요!'; gulpSound(120); }
+  }
+}
+
+const lerp = (a, b, t) => a + (b - a) * t;
+function lerpAngle(a, b, t) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; }
+
+function netFrame(dt) {
+  const input = readInput();
+  net.sendT -= dt;
+  if (net.sendT <= 0) {                                    // 방향은 초당 20번 보낸다
+    net.socket.emit('gh:input', { x: Math.round(input.x * 100) / 100, z: Math.round(input.z * 100) / 100 });
+    net.sendT = 0.05;
+  }
+  net.pingT -= dt;
+  if (net.pingT <= 0) {                                    // 2초마다 왕복 시간 재기(보정에 씀)
+    net.pingT = 2;
+    const t0 = performance.now();
+    net.socket.emit('gh:rooms', null, () => { net.ping = Math.min(0.5, (performance.now() - t0) / 1000); });
+  }
+  const snaps = net.snaps;
+  if (!snaps.length) { R.clientStep(state, dt); return; }
+  const latest = snaps[snaps.length - 1];
+  const renderAt = performance.now() - INTERP_MS;
+  let a = snaps[0], b = latest;
+  for (let i = snaps.length - 1; i > 0; i--) {
+    if (snaps[i - 1].at <= renderAt) { a = snaps[i - 1]; b = snaps[i]; break; }
+  }
+  const t = b.at > a.at ? Math.max(0, Math.min(1, (renderAt - a.at) / (b.at - a.at))) : 1;
+  // 구멍들
+  state.holes.forEach((h, i) => {
+    const k = i * 5, L = latest.h;
+    h.score = L[k + 3];
+    const wasAlive = h.alive;
+    h.alive = L[k + 4] === 1;
+    if (i === meIdx) {
+      if (h.alive) {
+        if (wasAlive) R.moveHole(h, input.x, input.z, dt);   // 예측: 기다리지 않고 바로 움직임
+        // 보정: 서버 위치(조금 옛날) + 그동안 움직였을 만큼 쪽으로 살짝 당긴다
+        const lag = net.ping / 2 + 1 / 30;
+        const sx = L[k] + h.vx * lag, sz = L[k + 1] + h.vz * lag;
+        const err = Math.hypot(sx - h.x, sz - h.z);
+        if (!wasAlive || err > 6) { h.x = L[k]; h.z = L[k + 1]; h.vx = h.vz = 0; }
+        else { const c = Math.min(1, dt * 3); h.x += (sx - h.x) * c; h.z += (sz - h.z) * c; }
+      }
+      h.r = lerp(h.r, L[k + 2], Math.min(1, dt * 6));
+    } else {
+      h.x = lerp(a.h[k], b.h[k], t);
+      h.z = lerp(a.h[k + 1], b.h[k + 1], t);
+      h.r = lerp(a.h[k + 2], b.h[k + 2], t);
+    }
+  });
+  // 차들
+  state.drivers.forEach((o, i) => {
+    if (o.state !== 'idle') return;
+    const k = i * 3;
+    if (b.c[k] == null || a.c[k] == null) return;
+    const nx = lerp(a.c[k], b.c[k], t), nz = lerp(a.c[k + 1], b.c[k + 1], t);
+    const moved = Math.hypot(nx - o.x, nz - o.z);
+    if (moved > 15) o.anim = 0;
+    else o.anim = (o.anim + moved / (2 * Math.PI * R.TYPES[o.type].wheel)) % 1;   // 움직인 만큼 바퀴가 돈다
+    o.x = nx; o.z = nz;
+    o.rot = lerpAngle(a.c[k + 2], b.c[k + 2], t);
+    if (!o._c) { o._c = true; state.changed.push(o); }
+  });
+  state.time = latest.t;
+  R.clientStep(state, dt);                                  // 걷는 사람·떨어지는 물건·덜덜
+  const eaten = !state.holes[meIdx].alive;
+  if (eaten !== lastEaten) { $('eaten').hidden = !eaten; lastEaten = eaten; }
 }
 
 let last = performance.now(), acc = 0;
@@ -605,7 +810,11 @@ function frame(now) {
   last = now;
   clock += dt;
   if (!state) return;
-  if (running) {
+  if (running && mode === 'multi') {
+    netFrame(dt);
+    hudTimer -= dt;
+    if (hudTimer <= 0 && running) { renderHud(state); hudTimer = 0.2; }
+  } else if (running) {
     acc += dt;
     const input = readInput();
     let n = 0;
@@ -614,11 +823,11 @@ function frame(now) {
     handleEvents();
     hudTimer -= dt;
     if (hudTimer <= 0 && running) { renderHud(state); hudTimer = 0.2; }
-  } else if (!$('startPanel').hidden) {
+  } else if ($('resultPanel').hidden) {
     // 시작 화면 뒤: 사람·차만 움직이고 카메라가 천천히 도시를 돈다
     showcase += dt;
     R.animateCity(state, Math.min(dt, 0.05));
-    const p = state.holes[0];
+    const p = state.holes[meIdx];
     p.x = MID + Math.cos(showcase * 0.06) * MID * 0.6;
     p.z = MID + Math.sin(showcase * 0.06) * MID * 0.6;
   }
@@ -630,17 +839,37 @@ function frame(now) {
 
 // ---------- 시작 ----------
 $('nameInput').value = (store.get(NAME_KEY) || '').slice(0, 12);
-$('startBtn').addEventListener('click', start);
-$('againBtn').addEventListener('click', start);
+$('startBtn').addEventListener('click', () => start());
+$('againBtn').addEventListener('click', () => {
+  if (mode !== 'multi') { start(); return; }
+  newGame();                                               // 친구 대결이 끝나면 방 대기실로(방장이 다시 시작)
+  if (net.room) { showPanel('roomPanel'); renderRoom(); } else showPanel('lobbyPanel');
+});
 $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('startBtn').disabled) start(); });
-$('submitBtn').addEventListener('click', () => ranking.show(state ? state.holes[0].score : 0));
+$('multiBtn').addEventListener('click', openLobby);
+$('createBtn').addEventListener('click', createRoom);
+$('joinBtn').addEventListener('click', () => joinRoom());
+$('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom(); });
+$('refreshBtn').addEventListener('click', refreshRooms);
+$('lobbyBack').addEventListener('click', () => showPanel('startPanel'));
+$('roomStart').addEventListener('click', () => {
+  net.socket.emit('gh:start', null, (res) => { if (!res || !res.ok) setMsg('roomMsg', (res && res.error) || '시작하지 못했어요.'); });
+});
+$('roomLeave').addEventListener('click', () => {
+  net.socket.emit('gh:leave', null, () => {});
+  net.room = null;
+  showPanel('lobbyPanel');
+  refreshRooms();
+});
+$('submitBtn').addEventListener('click', () => ranking.show(state ? state.holes[meIdx].score : 0));
 $('rankBtn').addEventListener('click', () => ranking.show(0));
 
 loadModels((done, total) => { $('startBtn').textContent = '모형 불러오는 중… ' + done + '/' + total; })
   .then(() => {
     newGame();
     $('startBtn').disabled = false;
-    $('startBtn').textContent = '▶ 시작하기';
+    $('startBtn').textContent = '🤖 컴퓨터와 대결';
+    $('multiBtn').disabled = false;
     requestAnimationFrame(frame);
   })
   .catch((err) => {

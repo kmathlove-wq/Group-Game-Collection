@@ -14,6 +14,7 @@ const { setupLiarGame } = require('./src/liar');
 const { setupMafiaGame } = require('./src/mafia');
 const { setupNunchiGame } = require('./src/nunchi');
 const { setupRoachGame } = require('./src/roach');
+const { setupGulpHole } = require('./src/gulp-hole');
 const { createDictionary } = require('./src/word-chain/dictionary');
 const { createMaster, createExtras, loadWordList } = require('./src/word-chain/master');
 const { createPatrol } = require('./src/word-chain/patrol');
@@ -88,6 +89,7 @@ const liarGame = setupLiarGame({ app, io, rootDir: __dirname });
 const mafiaGame = setupMafiaGame({ app, io, rootDir: __dirname });
 const nunchiGame = setupNunchiGame({ app, io, rootDir: __dirname });
 const roachGame = setupRoachGame({ app, io, rootDir: __dirname });
+const gulpHole = setupGulpHole({ io }); // 🕳️ 꿀꺽 구멍 👫 친구들과 대결(사람끼리)
 // Render 무료 서버는 다시 켜질 때 파일이 지워지므로, Gist 설정이 있으면 끝말잇기 기억 노트·한방 단어장을 Gist에도 보관한다.
 const oneShotStore = createOneShotStore(process.env.WORD_CHAIN_STORE_PATH || path.join(__dirname, 'data', 'word-chain-one-shot.json'), { remote: gistSync });
 const wordChainBrain = createBrain(process.env.WORD_CHAIN_BRAIN_PATH || path.join(__dirname, 'data', 'word-chain-brain.json'), { remote: gistSync });
@@ -1035,5 +1037,5 @@ if (require.main === module) {
 
 module.exports = {
   app, server, io, rooms, normalizeAnswer, validateNickname, normalizeSettings, canSeeSecret, validateCustomWordList,
-  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame, nunchiGame, roachGame
+  hintRevealCount, isOneEditApart, musicGame, triangleGame, landGame, wordChainGame, duelGames, liarGame, mafiaGame, nunchiGame, roachGame, gulpHole
 };

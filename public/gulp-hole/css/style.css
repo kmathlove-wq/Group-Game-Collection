@@ -63,6 +63,31 @@ button, input { font: inherit; }
 .result-list span { flex: 1; }
 .result-list em { font-style: normal; width: 34px; font-weight: 900; }
 
+.primary.friends { margin-top: 10px; background: linear-gradient(135deg, #12b886, #228be6); }
+.msg { min-height: 1.4em; margin: 8px 0 0; color: #c92a2a; font-weight: 700; font-size: 14px; }
+.msg.ok { color: #2b8a3e; }
+.check { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 10px 0; color: var(--muted); font-weight: 700; }
+.code-row { display: flex; gap: 8px; }
+.code-row input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid #d9dbe8; border-radius: 12px; outline: none; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 900; }
+.code-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #6c4cff2e; }
+.list-head { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 6px; }
+.link { border: 0; background: none; color: var(--accent); font-weight: 800; cursor: pointer; }
+.room-list, .player-list { list-style: none; margin: 0; padding: 0; text-align: left; max-height: 240px; overflow: auto; }
+.room-list li, .player-list li { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; }
+.room-list li:nth-child(odd), .player-list li:nth-child(odd) { background: #f6f6fb; }
+.room-list span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-list small { color: var(--muted); }
+.room-list button { border: 0; border-radius: 10px; padding: 7px 12px; background: var(--accent); color: #fff; font-weight: 800; cursor: pointer; }
+.room-list button:disabled { background: #ced4da; cursor: default; }
+.room-list .empty { color: var(--muted); justify-content: center; }
+.player-list i { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.player-list span { flex: 1; }
+.player-list li.me { font-weight: 900; color: var(--accent); }
+.code-big { margin: 4px 0; font-size: 18px; }
+.code-big b { font-size: 34px; letter-spacing: 0.2em; color: var(--accent); }
+.lead.small { font-size: 14px; margin: 2px 0 12px; }
+.ghost.wide { width: 100%; margin-top: 10px; }
+
 @media (max-width: 640px) {
   .board { font-size: 12px; min-width: 128px; padding: 6px 8px; }
   .chip { padding: 5px 10px; font-size: 13px; }

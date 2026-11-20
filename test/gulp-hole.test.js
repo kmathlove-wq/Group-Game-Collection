@@ -149,14 +149,10 @@ test('2분이 지나면 경기가 끝나고 점수 순서로 등수를 매긴다
   assert.ok(list[0].score > 0, '컴퓨터 구멍도 먹는다');
 });
 
-test('꿀꺽 구멍 페이지와 순위 API', async (t) => {
-  const { server, io, rooms } = require('../server');
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+test('꿀꺽 구멍 페이지와 순위 API', async () => {
+  const { server } = require('../server');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));   // 서버는 맨 끝 시험이 끈다
   const url = `http://127.0.0.1:${server.address().port}`;
-  t.after(async () => {
-    rooms.clear();
-    await new Promise((resolve) => io.close(resolve));
-  });
   assert.equal((await fetch(`${url}/gulp-hole/`)).status, 200);
   assert.equal((await fetch(`${url}/shared/three/three.module.min.js`)).status, 200);
   assert.equal((await fetch(`${url}/gulp-hole/models/tower.glb`)).status, 200);
@@ -167,4 +163,54 @@ test('꿀꺽 구멍 페이지와 순위 API', async (t) => {
   assert.equal((await ok.json()).rank, 1);
   const bad = await fetch(`${url}/api/gulp-hole/scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'x', score: -5 }) });
   assert.equal(bad.status, 400);
+});
+
+test('👫 친구들과 대결: 방 만들기·코드 입장·시작·움직이기·끝(봇 없음, 서버가 판정)', async (t) => {
+  const { io: ioClient } = require('socket.io-client');
+  const { server, io, rooms, gulpHole } = require('../server');
+  if (!server.listening) await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const a = ioClient(url, { transports: ['websocket'] });
+  const b = ioClient(url, { transports: ['websocket'] });
+  t.after(async () => {
+    a.close(); b.close();
+    rooms.clear();
+    await new Promise((resolve) => io.close(resolve));
+  });
+  const call = (s, ev, data) => new Promise((resolve) => s.emit(ev, data, resolve));
+  const once = (s, ev) => new Promise((resolve) => s.once(ev, resolve));
+
+  const made = await call(a, 'gh:create', { nickname: '방장', isPublic: true });
+  assert.equal(made.ok, true);
+  const code = made.room.code;
+  assert.match(code, /^[A-Z2-9]{4}$/);
+  assert.equal((await call(a, 'gh:start', null)).ok, false, '혼자서는 시작 못 함');
+  assert.equal((await call(b, 'gh:join', { nickname: '방장', code })).ok, false, '같은 이름은 거절');
+  assert.equal((await call(b, 'gh:join', { nickname: '친구', code: 'ZZZZ' })).ok, false, '없는 방');
+  const list = await call(b, 'gh:rooms', null);
+  assert.ok(list.rooms.some((r) => r.code === code && r.canJoin));
+  assert.equal((await call(b, 'gh:join', { nickname: '친구', code: code.toLowerCase() })).ok, true);
+  assert.equal((await call(b, 'gh:start', null)).ok, false, '방장만 시작');
+
+  const startA = once(a, 'gh:start'), startB = once(b, 'gh:start');
+  assert.equal((await call(a, 'gh:start', null)).ok, true);
+  const [sa, sb] = await Promise.all([startA, startB]);
+  assert.equal(sa.seed, sb.seed, '모두 같은 도시');
+  assert.equal(sa.players.length, 2, '봇 없이 사람 2명만');
+  assert.notEqual(sa.you, sb.you);
+
+  const room = gulpHole.rooms.get(code);
+  const hb = room.game.state.holes[sb.you];
+  const x0 = hb.x;
+  for (let i = 0; i < 10; i++) { b.emit('gh:input', { x: 5, z: 0 }); await new Promise((r) => setTimeout(r, 30)); }  // 5는 1로 줄어든다
+  const snapMsg = await once(b, 'gh:snap');
+  assert.equal(snapMsg.h.length, 2 * 5);
+  assert.ok(hb.x > x0 + 1, '친구 구멍이 오른쪽으로 움직임');
+  assert.ok(hb.x - x0 < R.speedFor(hb.r) * 2, '너무 빠르게 움직이지 않음');
+  assert.ok(room.game.state.holes.every((h) => !h.bot));
+
+  room.game.state.duration = room.game.state.time + 0.05;      // 시험: 바로 끝내기
+  const over = await once(a, 'gh:over');
+  assert.equal(over.standings.length, 2);
+  assert.equal(room.state, 'over');
 });
