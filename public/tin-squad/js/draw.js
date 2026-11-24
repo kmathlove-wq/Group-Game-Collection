@@ -195,7 +195,7 @@
       var hs = HERO_SIZE[pose], run = pose.indexOf('run') === 0, st = p.dead ? 1 : p.ground ? 1 + Math.sin(clock * 6) * 0.012 - landT * 0.9 : 1 + Math.min(0.12, Math.abs(p.vy) / 6000);
       if (p.shootPose > 0.2) st -= 0.015;
       TS.Anim.draw(c, im, 'hero_' + pose, cx, by + 2 - (run ? Math.abs(Math.sin(p.anim * Math.PI / 2)) * 4 : 0), hs[0], {
-        flip: p.face < 0, anchor: hs[1], sx: 2 - st, sy: st, rot: p.dead ? -clock * 5 : run ? 0.05 : 0, t: clock, walk: run ? 1 : 0, act: p.shootPose > 0.2 ? 1 : 0,
+        atlas: heroPic('rig_hero_' + pose), flip: p.face < 0, anchor: hs[1], sx: 2 - st, sy: st, rot: p.dead ? -clock * 5 : run ? 0.05 : 0, t: clock, walk: run ? 1 : 0, act: p.shootPose > 0.2 ? 1 : 0,
         aim: pose === 'up' ? 0 : Math.atan2(p.ay, Math.abs(p.ax))
       });
       if (p.melee > 0) wrench(c, cx, by - 30, p);
@@ -248,7 +248,7 @@
   D.hero = codeHero;
   function mech(c, cx, by, face, p) {
     var im = pics.mech;
-    if (im) { TS.Anim.draw(c, im, 'mech', cx, by + 2, 104, { flip: face < 0, sy: 1 + Math.sin(clock * 10) * 0.015, t: p ? p.anim * 0.16 : clock, walk: p && Math.abs(p.vx) > 30 ? 1 : 0, act: p && p.shootPose > 0.2 ? 1 : 0, aim: p ? Math.atan2(p.ay, Math.abs(p.ax)) : 0 }); if (p && p.mech) mechBar(c, cx, by, p); return; }
+    if (im) { TS.Anim.draw(c, im, 'mech', cx, by + 2, 104, { atlas: pics.rig_mech, flip: face < 0, sy: 1 + Math.sin(clock * 10) * 0.015, t: p ? p.anim * 0.16 : clock, walk: p && Math.abs(p.vx) > 30 ? 1 : 0, act: p && p.shootPose > 0.2 ? 1 : 0, aim: p ? Math.atan2(p.ay, Math.abs(p.ax)) : 0 }); if (p && p.mech) mechBar(c, cx, by, p); return; }
     c.save(); c.translate(cx, by); c.scale(face, 1);
     var st = p && Math.abs(p.vx) > 30 ? Math.sin(p.anim * 1.4) * 9 : 0;
     c.fillStyle = '#59657a'; rr(c, -24 + st, -24, 18, 24, 4); rr(c, 8 - st, -24, 18, 24, 4);
@@ -333,7 +333,7 @@
       case 'fan': rot = Math.max(-0.3, Math.min(0.3, e.vx * e.dir * 0.003)) + Math.sin(e.t * 3) * 0.05; break;
       case 'bulb':
         rot = Math.sin(e.t * 5) * 0.12;
-        over = function (g, W, H) { var r = W * (0.3 + Math.sin(e.t * 12) * 0.04), q = g.createRadialGradient(W * 0.68, H * 0.35, 4, W * 0.68, H * 0.35, r); q.addColorStop(0, 'rgba(255,244,150,.6)'); q.addColorStop(1, 'rgba(255,220,80,0)'); g.fillStyle = q; g.beginPath(); g.arc(W * 0.68, H * 0.35, r, 0, TAU); g.fill(); };
+        over = function (g, W, H) { g.strokeStyle = '#341e2c'; g.lineWidth = W * 0.022; g.lineCap = 'round'; g.beginPath(); g.moveTo(W * 0.63, H * 0.2); g.quadraticCurveTo(W * 0.6, H * 0.06, W * 0.53, H * 0.05); g.moveTo(W * 0.74, H * 0.2); g.quadraticCurveTo(W * 0.78, H * 0.06, W * 0.86, H * 0.05); g.stroke(); var r = W * (0.3 + Math.sin(e.t * 12) * 0.04), q = g.createRadialGradient(W * 0.68, H * 0.35, 4, W * 0.68, H * 0.35, r); q.addColorStop(0, 'rgba(255,244,150,.6)'); q.addColorStop(1, 'rgba(255,220,80,0)'); g.fillStyle = q; g.beginPath(); g.arc(W * 0.68, H * 0.35, r, 0, TAU); g.fill(); };
         break;
       case 'vacuum':
         if (e.st === 'wind') { rot = -0.16; jig = Math.sin(clock * 60) * 2; } else if (e.st === 'dash') { rot = 0.06; sx = 1.12; sy = 0.92; } else rot = Math.sin(e.t * 8) * 0.02;
@@ -355,7 +355,7 @@
         break;
       case 'fridge': up = Math.abs(Math.sin(e.t * 11)) * 2 * v.walk; sy = 1 + Math.sin(e.t * 3) * 0.012 + act * 0.06; rot = -act * 0.06; break;
     }
-    TS.Anim.draw(c, im, 'enemy_' + e.type, cx + jig, by + 2 - up, e.h * BIG[e.type], { flip: e.dir < 0, maxW: e.w * 1.75, sx: sx, sy: sy, rot: rot, t: e.t, walk: v.walk, act: act, aim: aim, over: over, e: e });
+    TS.Anim.draw(c, im, 'enemy_' + e.type, cx + jig, by + 2 - up, e.h * BIG[e.type], { atlas: pics['rig_enemy_' + e.type], flip: e.dir < 0, maxW: e.w * 1.75, sx: sx, sy: sy, rot: rot, t: e.t, walk: v.walk, act: act, aim: aim, over: over, e: e });
   }
   D.enemyArt = ART;
   function enemies(c, s) {
@@ -388,7 +388,15 @@
   };
   D.bossArt = BART;
   // 보스 그림 위에 덧그리는 움직임: 프로펠러, 오븐 불빛, 전조등, 소리 물결
+  function pinwheel(g, x, y, r, a, cols) {
+    g.save(); g.translate(x, y); g.rotate(a); g.strokeStyle = '#2a1030'; g.lineWidth = Math.max(2.5, r * 0.04); g.lineJoin = 'round';
+    for (var i = 0; i < cols.length; i++) { g.rotate(TAU / cols.length); g.fillStyle = cols[i]; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(r * 0.75, -r * 0.5, r, r * 0.12); g.quadraticCurveTo(r * 0.55, r * 0.5, 0, 0); g.fill(); g.stroke(); }
+    g.fillStyle = '#ffb03d'; g.beginPath(); g.arc(0, 0, r * 0.15, 0, TAU); g.fill(); g.stroke(); g.restore();
+  }
   var bossOver = {
+    clown: function (g, W, H, b) {
+      pinwheel(g, W * 0.642, H * 0.862, W * 0.12, -b.t * 13, ['#ff9a2f', '#8c4dff', '#33b1ff', '#ff4d4d', '#ffd23d']);
+      pinwheel(g, W * 0.7, H * 0.435, W * 0.165, b.t * 6, ['#ff4d4d', '#ff9a2f', '#33b1ff', '#8c4dff', '#1f7fe0', '#7ed957', '#ffd23d', '#57c93c']); },
     airship: function (g, W, H, b) {
       g.save(); g.translate(W * 0.205, H * 0.475); g.fillStyle = 'rgba(235,240,250,.4)'; g.beginPath(); g.ellipse(0, 0, W * 0.21, H * 0.45, 0, 0, TAU); g.fill();
       g.scale(0.62, 1); g.rotate(b.t * 24); g.fillStyle = '#aeb6c4'; g.strokeStyle = '#2a1030'; g.lineWidth = 4;
@@ -420,12 +428,13 @@
       var k = Math.max(b.w * 1.15 / im.width, b.h * 1.15 / im.height), v = seen(b, b.x), act = b.st === 'act' ? Math.min(1, b.at * 4) : b.st === 'wind' ? -0.35 : 0, sx = 1, sy = 1 + Math.sin(b.t * 2.6) * 0.015, rot = 0;
       v.pose = (v.pose || 0) + (act - (v.pose || 0)) * 0.2;
       if (b.st === 'wind') { sy -= 0.06; sx += 0.05; }
+      if (b.kind === 'train') sy += Math.abs(Math.sin(b.t * 22)) * 0.012 * (0.3 + v.walk); // 덜컹덜컹
       if (b.st === 'act' && b.atk === 'charge') { rot = -0.05; sx = 1.05; sy *= 0.96; }
       if (b.st === 'act' && b.atk === 'jump') { sy = 1 + Math.min(0.12, Math.abs(b.vy) / 5000); sx = 2 - sy; }
       if (b.move === 'hover') rot += Math.sin(b.t * 1.3) * 0.03;
       if (b.dead) rot = Math.sin(clock * 30) * 0.04 + b.deadT * 0.06;
       var ov = bossOver[b.kind], pose = v.pose;
-      TS.Anim.draw(c, im, 'boss_' + b.kind, b.w / 2, b.h + 2, im.height * k, { flip: flip, sx: sx, sy: sy, rot: rot, t: b.t * (b.rage ? 1.35 : 1), walk: v.walk, act: pose, aim: 0, over: ov && function (g, W, H) { ov(g, W, H, b, Math.max(0, pose)); }, e: b });
+      TS.Anim.draw(c, im, 'boss_' + b.kind, b.w / 2, b.h + 2, im.height * k, { atlas: pics['rig_boss_' + b.kind], flip: flip, sx: sx, sy: sy, rot: rot, t: b.t * (b.rage ? 1.35 : 1), walk: v.walk, act: pose, aim: 0, over: ov && function (g, W, H) { ov(g, W, H, b, Math.max(0, pose)); }, e: b });
     }
     else { if (flip) { c.translate(b.w, 0); c.scale(-1, 1); } BART[b.kind](c, b); }
     c.restore();

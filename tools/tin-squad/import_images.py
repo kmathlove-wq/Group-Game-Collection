@@ -52,12 +52,56 @@ def cut_background(im):
     return np.clip(a, 0, 255)
 
 
+def fix_airship(a):
+    """그려진 프로펠러와 잔상을 지우고(게임이 코드로 돌린다) 뒤의 빨간 몸을 메운다."""
+    from scipy import ndimage
+    from cut_parts import nearest_fill, poly_mask
+    h, w = a.shape[:2]
+    a = np.round(a)
+    ys, xs = np.mgrid[0:h, 0:w]
+    e = np.hypot((xs / w - 0.57) / 0.342, (ys / h - 0.415) / 0.423)  # 풍선 몸통을 타원으로 본다
+    left = (xs < w * 0.42) & (ys < h * 0.8)
+    out = (left & (e > 1)) | ((xs < w * 0.355) & (ys >= h * 0.8))
+    a[out | ((a[..., 3] < 215) & (xs < w * 0.5) & (e > 1)), 3] = 0
+    hull = left & (e <= 1)
+    a[hull, 3] = 255
+    edge = hull & (e > 0.972)
+    a[edge, :3] = (44, 14, 46)
+    swirl = hull & ~edge & ~poly_mask([(22, 22), (45, 18), (45, 36), (24, 38)], w, h) & ~((a[..., 0] > 150) & (a[..., 0] - a[..., 1] > 130))
+    red0 = hull & ~edge & ~swirl & (a[..., 0] - a[..., 1] > 130)
+    nearest_fill(a, a.copy(), red0, swirl)
+    blade = poly_mask([(21, 36.5), (47.5, 37), (47.5, 61), (21, 61)], w, h) & (a[..., 3] > 0) & ~edge
+    red = (a[..., 0] > 150) & (a[..., 0] - a[..., 1] > 110) & (a[..., 3] > 200)
+    gray = ndimage.binary_dilation(blade & ~red, iterations=3) & blade
+    nearest_fill(a, a.copy(), red & ~gray, gray)
+    soft = (gray | swirl) & ~edge
+    for ch in range(3):
+        a[..., ch] = np.where(soft, ndimage.gaussian_filter(a[..., ch], 7), a[..., ch])
+    return a
+
+
 def fix_glow(a, name):
     """빛무리·날개 잔상에 섞인 자홍빛을 어울리는 색으로 바꾼다."""
     m = np.minimum(a[..., 0], a[..., 2]) - a[..., 1]
     if name == 'enemy_bulb':
-        a[(m > 30) | ((a[..., 3] < 200) & (a[..., 0] > 100)), 3] = 0  # 빛무리는 지우고 게임이 코드로 빛을 그린다
-    elif name in ('boss_airship', 'boss_clown'):
+        # 빛무리는 지우고(게임이 코드로 빛을 그린다) 어두운 테두리·더듬이는 남긴다
+        h, w = a.shape[:2]
+        ys, xs = np.mgrid[0:h, 0:w]
+        x, y = xs / w, ys / h
+        dist = np.hypot(x - 0.68, (y - 0.365) * h / w)
+        luma = a[..., :3] @ np.array([0.3, 0.59, 0.11])
+        keep = (dist < 0.181) | (x < 0.365 + y * 0.22) | ((y > 0.57) & (x < 0.775)) | ((x > 0.36) & (x < 0.56) & (y > 0.435) & (y < 0.62))
+        a[~keep, 3] = 0
+        a[(m > 10) & (luma > 45) & (dist > 0.165), 3] = 0
+        a[(dist > 0.165) & (dist < 0.181) & (y < 0.57) & (a[..., 3] > 0), :3] = (52, 30, 44)
+        a[(a[..., 3] > 60) & (luma < 60), 3] = 255
+        a[a[..., 3] <= 60, 3] = 0
+    elif name == 'boss_overlord':
+        hit = m > 50
+        a[hit, 0], a[hit, 1], a[hit, 2] = 61, 225, 240
+    elif name == 'boss_airship':
+        a = fix_airship(a)
+    elif name == 'boss_clown':
         hit = (m > 95) & (a[..., 0] > 150)
         a[hit, 0], a[hit, 1], a[hit, 2] = 238, 242, 250
         a[hit, 3] *= 0.7
@@ -187,6 +231,8 @@ def main():
         elif 17 <= n <= 24:
             cover(im, 1280, 720).save(out / f'bg_{WORLDS[n - 17]}.jpg', quality=82)
             made.append(f'bg_{WORLDS[n - 17]}')
+    from cut_parts import run as cut_run
+    print(f'관절 그림 {cut_run(out, out / "rigs.js")}개를 만들었어요.')
     known = {p.stem: p.name for p in sorted(out.iterdir()) if p.suffix in ('.png', '.jpg')}
     (out / 'manifest.js').write_text(
         '// 자동으로 만들어지는 그림 목록(tools/tin-squad/import_images.py). 여기에 없는 그림은 코드로 그린다. 손으로 고치지 말 것.\n'
