@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>그룹 게임 컬렉션-깡통 소탕대</title>
+  <link rel="icon" type="image/png" href="../assets/group-game-logo.png">
+  <link rel="stylesheet" href="../shared/ranking.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="bar" aria-label="게임 메뉴">
+    <a href="/">← 그룹 게임 컬렉션</a>
+    <div class="bar-actions">
+      <button id="guideBtn" type="button" aria-label="설명 보기">❓</button>
+      <button id="rankBtn" type="button">🏆 순위</button>
+      <button id="soundBtn" type="button">🔊</button>
+      <button id="pauseBtn" type="button" hidden>⏸</button>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <div class="stage" id="stage">
+      <canvas id="game" aria-label="깡통 소탕대 게임 화면"></canvas>
+
+      <section id="title" class="screen title-screen">
+        <img id="titleImg" alt="" hidden>
+        <h1>깡통 소탕대</h1>
+        <p class="sub">반란을 일으킨 가전제품 로봇을 물리치고, 갇힌 동물을 구하라!</p>
+        <div class="menu">
+          <button id="playBtn" type="button" class="primary">▶ 모험 시작</button>
+          <button id="towerBtn" type="button" class="second">🗼 끝없는 탑</button>
+          <button id="shopBtn" type="button" class="second">🛒 상점</button>
+          <button id="skinBtn" type="button" class="second">👕 옷장</button>
+        </div>
+        <p class="stat"><span id="coinText">🪙 0</span><span id="starText">⭐ 0/120</span><span id="towerText">🗼 최고 0층</span></p>
+      </section>
+
+      <section id="map" class="screen panel" hidden>
+        <header><button type="button" class="back" data-back>← 뒤로</button><h2>스테이지 고르기</h2><span class="coins" data-coins></span></header>
+        <div id="worlds" class="worlds"></div>
+      </section>
+
+      <section id="shop" class="screen panel" hidden>
+        <header><button type="button" class="back" data-back>← 뒤로</button><h2>🛒 상점</h2><span class="coins" data-coins></span></header>
+        <div id="shopList" class="cards"></div>
+      </section>
+
+      <section id="skins" class="screen panel" hidden>
+        <header><button type="button" class="back" data-back>← 뒤로</button><h2>👕 옷장</h2><span class="coins" data-coins></span></header>
+        <div id="skinList" class="cards"></div>
+      </section>
+
+      <section id="pause" class="screen center" hidden>
+        <h2>잠깐 멈춤</h2>
+        <div class="menu"><button id="resumeBtn" type="button" class="primary">▶ 이어 하기</button><button id="retryBtn" type="button" class="second">↻ 처음부터</button><button id="quitBtn" type="button" class="second">나가기</button></div>
+      </section>
+
+      <section id="result" class="screen center" hidden>
+        <h2 id="resTitle"></h2>
+        <div id="resStars" class="stars" aria-hidden="true"></div>
+        <ul id="resList" class="res-list"></ul>
+        <p id="resNote" class="note"></p>
+        <div class="menu row"><button id="resNext" type="button" class="primary"></button><button id="resAgain" type="button" class="second">↻ 다시 하기</button><button id="resMap" type="button" class="second">나가기</button></div>
+      </section>
+
+      <section id="perk" class="screen center" hidden>
+        <h2 id="perkTitle"></h2>
+        <p class="note">능력을 하나 골라요! (숫자 키 1·2·3)</p>
+        <div id="perkList" class="perks"></div>
+      </section>
+
+      <div id="touch" class="touch" hidden>
+        <div id="stick" class="stick" aria-hidden="true"><i></i></div>
+        <button type="button" class="tbtn tb-bomb" data-key="bomb">💣</button>
+        <button type="button" class="tbtn tb-jump" data-key="jump">점프</button>
+        <button type="button" class="tbtn tb-fire" data-key="fire">발사</button>
+      </div>
+    </div>
+    <p class="help" id="help">← → 움직이기 · ↑ 위로 조준 · ↓ 숙이기 · <b>Z</b> 발사(꾹) · <b>X</b> 점프 · <b>C</b> 폭탄 · <b>P</b> 멈춤 &nbsp;|&nbsp; 왼손 조작: WASD + J 발사 · K(스페이스) 점프 · L 폭탄</p>
+    <p class="rotate">📱 휴대폰은 옆으로 눕히면 훨씬 크게 할 수 있어요!</p>
+  </main>
+
+  <div id="guide" class="dialog" role="dialog" aria-modal="true" aria-labelledby="guideTitle" hidden>
+    <div class="dialog-card">
+      <h2 id="guideTitle">🤖 깡통 소탕대</h2>
+      <ul class="guide">
+        <li><b>총</b>은 꾹 누르면 계속 나가요. 로봇이 바로 앞에 있으면 자동으로 <b>렌치</b>로 때려요(아주 세고 동전도 더 줘요).</li>
+        <li><b>↑</b>를 누르면 위로, ↑와 →를 같이 누르면 비스듬히 쏴요. 공중에서 <b>↓</b>는 아래로 쏘기!</li>
+        <li><b>↓ + 점프</b>로 얇은 발판에서 내려와요. 숙이면 높은 총알을 피해요.</li>
+        <li>갇힌 <b>동물</b>의 우리를 부수면 특별한 총이나 하트를 줘요. 판마다 세 마리!</li>
+        <li><b>방패 전자레인지</b>는 앞에서 쏘면 튕겨요. 문이 열릴 때 쏘거나, 뛰어넘거나, 폭탄을 던져요.</li>
+        <li>끊기지 않게 부수면 <b>콤보</b>! 점수가 최대 5배가 되고, 10콤보마다 선물이 나와요.</li>
+        <li>⭐ 별 3개: ① 깨기 ② 한 번도 쓰러지지 않기 ③ 동물 모두 구하기</li>
+        <li>동전으로 <b>상점</b>에서 강해지고, <b>끝없는 탑</b>에서 몇 층까지 가는지 겨뤄요.</li>
+      </ul>
+      <button id="guideClose" type="button" class="primary">알겠어요!</button>
+    </div>
+  </div>
+
+  <script src="../shared/ranking.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/boss.js"></script>
+  <script src="js/game.js"></script>
+  <script src="img/manifest.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/main.js"></script>
+  <script src="/shared/name-lock.js"></script>
+</body>
+</html>

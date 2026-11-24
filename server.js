@@ -163,6 +163,8 @@ registerScoreboard('egg-heist', 1_000_000_000_000, { top: 50, perPlayer: true })
 registerScoreboard('antarctica', 100_000_000, { top: 50 }); // 🐧 남극 탐험: 모은 연구 점수
 registerScoreboard('gulp-hole', 10_000_000, { top: 50 }); // 🕳️ 꿀꺽 구멍: 2분 동안 삼킨 점수
 registerScoreboard('baseball', 10_000_000, { top: 50 }); // ⚾ 풀카운트 야구: 득점×100 + 안타×20 + 승리 500
+registerScoreboard('tin-squad', 100_000_000, { top: 50, perPlayer: true }); // 🤖 깡통 소탕대: 40판 최고 점수 합(사람마다 한 줄)
+registerScoreboard('tin-squad-tower', 100_000_000, { top: 50, perPlayer: true }); // 🗼 깡통 소탕대 끝없는 탑 점수
 // 🎹 피아노 리듬: 곡·난이도마다 순위표 따로(piano-rhythm-<곡>-<난이도>, 5곡×3 = 15개), 모두 100만 점 만점.
 for (const slug of PIANO_RHYTHM.boardSlugs()) registerScoreboard(slug, PIANO_RHYTHM.SCORE_MAX, { top: 50 });
 // 광질 타이쿤: 💰 번 돈(클수록 위)·⏱️ 보물까지 걸린 초·🌍 지구 파괴까지 걸린 초(작을수록 위). 모두 게임 한 판(playerId)당 한 줄.

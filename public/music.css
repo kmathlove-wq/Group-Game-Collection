@@ -25,3 +25,6 @@
 .hole-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#8fd16f,#3d7a2e);font-size:30px}
 .baseball-card{background:linear-gradient(145deg,#fff,#e8f0ff)}
 .baseball-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#1f6feb,#0b1f3f);font-size:30px}
+
+.tin-card{background:linear-gradient(145deg,#fff,#fff0e0)}
+.tin-card .game-emoji{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#ff9a2f,#3a4670);font-size:30px}
