@@ -25,3 +25,6 @@ data/worldcup-images-raw.json
 
 # 블렌더 자동 예비 파일
 *.blend1
+
+# 깡통 소탕대 원본 그림(37MB, 게임에는 잘라 만든 public/tin-squad/img만 씀)
+사진/깡통소탕대(Tin Squad)/*.png

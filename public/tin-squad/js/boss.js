@@ -26,7 +26,7 @@
     var b = { kind: kind, name: d.name, w: d.w, h: d.h, hp: hp, maxHp: hp, move: d.move, shot: d.shot, minion: d.minion, attacks: d.attacks, lock: lock,
       x: lock + VW + 40, y: 450 - d.h, vx: 0, vy: 0, dir: -1, t: 0, enter: 1.8, st: 'idle', cd: 1.2, atk: null, at: 0, i: -1, flash: 0, dead: false, deadT: 0, rage: false, n: 0 };
     b.homeX = lock + VW - d.w - 70;
-    b.homeY = d.move === 'hover' ? 70 : 450 - d.h;
+    b.homeY = d.move === 'hover' ? Math.max(60, 230 - d.h) : 450 - d.h;
     b.y = b.homeY;
     return b;
   }

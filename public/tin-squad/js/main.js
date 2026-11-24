@@ -286,12 +286,10 @@
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('button'); if (b && mode === 'play') b.blur(); });
   if (touchUI) $('help').textContent = '왼쪽 동그라미로 움직이고 조준해요(위 = 위로 쏘기, 아래 = 숙이기). 오른쪽 단추로 발사·점프·폭탄!';
 
-  D.load(function () {
-    var t = D.pic('title');
-    if (t) { $('titleImg').src = t.src; $('titleImg').hidden = false; }
-    resize(); demo(); show('title');
-    if (!get('tin-squad:guide-seen')) openGuide();
-    requestAnimationFrame(loop);
-  });
+  // 그림을 다 받기 전에도 바로 시작하고(그동안은 코드 그림), 받는 대로 바꿔 그린다
+  resize(); demo(); show('title');
+  if (!get('tin-squad:guide-seen')) openGuide();
+  requestAnimationFrame(loop);
+  D.load(function () { var t = D.pic('title'); if (t) { $('titleImg').src = t.src; $('titleImg').hidden = false; $('title').classList.add('has-pic'); } });
   TS.debug = { get state() { return state; }, get mode() { return mode; }, get save() { return save; }, start: startStage, tower: startTower };
 })(window.TinSquad);

@@ -24,6 +24,9 @@ SHEETS = {
 }
 
 
+FLIP = {'enemy_turret'}  # 왼쪽을 보고 그려진 그림은 오른쪽을 보게 뒤집는다
+
+
 def cut_background(im):
     """투명 배경이면 그대로, 아니면 네 모서리 색과 비슷한 색을 투명하게(가장자리는 부드럽게)."""
     a = np.asarray(im.convert('RGBA')).astype(np.float32)
@@ -47,6 +50,53 @@ def cut_background(im):
         alpha = np.clip((d - 26) / 34, 0, 1)
     a[..., 3] *= alpha
     return np.clip(a, 0, 255)
+
+
+def fix_glow(a, name):
+    """빛무리·날개 잔상에 섞인 자홍빛을 어울리는 색으로 바꾼다."""
+    m = np.minimum(a[..., 0], a[..., 2]) - a[..., 1]
+    if name == 'enemy_bulb':
+        a[(m > 30) | ((a[..., 3] < 200) & (a[..., 0] > 100)), 3] = 0  # 빛무리는 지우고 게임이 코드로 빛을 그린다
+    elif name in ('boss_airship', 'boss_clown'):
+        hit = (m > 95) & (a[..., 0] > 150)
+        a[hit, 0], a[hit, 1], a[hit, 2] = 238, 242, 250
+        a[hit, 3] *= 0.7
+    return a
+
+
+def close_end(a):
+    """오른쪽이 그림 밖으로 잘린 전동차: 뒤쪽 모서리를 둥글게 하고 테두리를 그려 마무리한다."""
+    h, w = a.shape[:2]
+    if (a[:, -2, 3] > 128).mean() < 0.5:
+        return a
+    r, line = round(h * 0.13), max(4, h // 60)
+    ys, xs = np.mgrid[0:h, 0:w]
+    top = np.where(a[:, -2, 3] > 128)[0][0]
+    dx, dy = xs - (w - r), (top + r) - ys
+    dist = np.sqrt(np.clip(dx, 0, None) ** 2 + np.clip(dy, 0, None) ** 2)
+    corner = (dx > 0) & (dy > 0)
+    a[corner & (dist > r), 3] = 0
+    edge = (corner & (dist > r - line)) | ((xs >= w - line) & (dy <= 0))
+    a[edge & (a[..., 3] > 0), :3] = (38, 16, 48)
+    return a
+
+
+def clean_specks(a):
+    """떨어져 있는 작은 자홍빛 얼룩(배경 찌꺼기)을 지운다."""
+    from scipy import ndimage
+    lab, n = ndimage.label(a[..., 3] > 24)
+    if n < 2:
+        return a
+    idx = range(1, n + 1)
+    area = ndimage.sum(np.ones(lab.shape), lab, idx)
+    tint = ndimage.mean((a[..., 0] + a[..., 2]) / 2 - a[..., 1], lab, idx)
+    solid = ndimage.mean(a[..., 3], lab, idx)
+    biggest = area.max()
+    for i in idx:
+        small = area[i - 1] < biggest * 0.06
+        if area[i - 1] < biggest * 0.002 or (small and (tint[i - 1] > 22 or solid[i - 1] < 140)):
+            a[lab == i] = 0
+    return a
 
 
 def trim(a):
@@ -92,7 +142,9 @@ def main():
     for f in sorted(src.iterdir()):
         m = re.match(r'^(\d{1,2})\D', f.name)
         if m and f.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
-            files[int(m.group(1))] = f
+            n = int(m.group(1))
+            hint = re.search(r'적\s*([ABC])', f.name)  # '03_적B'처럼 번호를 잘못 적어도 A·B·C를 믿는다
+            files[{'A': 3, 'B': 4, 'C': 5}[hint.group(1)] if hint else n] = f
     made = []
     for n, f in sorted(files.items()):
         im = Image.open(f)
@@ -102,10 +154,13 @@ def main():
             h, w = a.shape[:2]
             for i, name in enumerate(names):
                 x, y = i % cols, i // cols
-                cell = trim(a[y * h // rows:(y + 1) * h // rows, x * w // cols:(x + 1) * w // cols])
+                cell = trim(clean_specks(a[y * h // rows:(y + 1) * h // rows, x * w // cols:(x + 1) * w // cols].copy()))
                 if cell is None:
                     print(f'⚠ {f.name}: {name} 칸이 비어 있어요(코드 그림을 써요)')
                     continue
+                cell = fix_glow(cell, name)
+                if name in FLIP:
+                    cell = cell[:, ::-1]
                 save_png(cell, out / f'{name}.png', size)
                 made.append(name)
         elif n == 7:
@@ -121,11 +176,12 @@ def main():
             cover(im, 1280, 720).save(out / 'title.jpg', quality=84)
             made.append('title')
         elif 9 <= n <= 16:
-            cell = trim(cut_background(im))
+            cell = trim(clean_specks(cut_background(im)))
             if cell is None:
                 print(f'⚠ {f.name}: 그림을 찾지 못했어요')
                 continue
             name = f'boss_{BOSSES[n - 9]}'
+            cell = fix_glow(close_end(cell) if n == 11 else cell, name)
             save_png(cell, out / f'{name}.png', 560)
             made.append(name)
         elif 17 <= n <= 24:

@@ -417,7 +417,7 @@
     var id = p.mech ? 'mech' : p.weapon;
     var w = p.mech ? { rate: 0.085, dmg: 13, speed: 1000, life: 0.9, spread: 0.05 } : WEAPONS[id];
     p.fireT = w.rate / s.st.rate; p.shootPose = 0.25;
-    var ox = cxOf(p) + p.ax * (p.mech ? 46 : 26), oy = p.y + (p.mech ? 38 : p.crouch ? 16 : 22) + p.ay * 30;
+    var ox = cxOf(p) + p.ax * (p.mech ? 46 : 26), oy = p.y + (p.mech ? 38 : p.crouch ? 9 : 20) + p.ay * 30;
     var base = Math.atan2(p.ay, p.ax), n = w.pellets || 1;
     for (i = 0; i < n; i++) {
       var a = base + (n > 1 ? (i / (n - 1) - 0.5) * w.spread : (s.rand() - 0.5) * (w.spread || 0));
