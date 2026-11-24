@@ -278,7 +278,7 @@
   function soundIcon() { var m = S.mode(); $('soundBtn').textContent = m === 'on' ? '🔊' : m === 'music-off' ? '🔉' : '🔇'; $('soundBtn').setAttribute('aria-label', m === 'on' ? '소리 켜짐. 누르면 음악만 끔' : m === 'music-off' ? '음악 꺼짐. 누르면 모두 끔' : '소리 꺼짐. 누르면 켬'); }
   $('soundBtn').addEventListener('click', function () { S.unlock(); S.next(); soundIcon(); });
   soundIcon();
-  function openGuide() { pause(); $('guide').hidden = false; $('guideClose').focus(); }
+  function openGuide() { pause(); $('guide').hidden = false; $('guideClose').focus({ preventScroll: true }); $('guide').firstElementChild.scrollTop = 0; } // 조작키 표부터 보이게
   function closeGuide() { $('guide').hidden = true; set('tin-squad:guide-seen', '1'); }
   $('guideBtn').addEventListener('click', openGuide);
   $('guideClose').addEventListener('click', closeGuide);

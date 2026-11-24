@@ -81,6 +81,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dialog { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 8, 20, .7); }
 .dialog-card { width: 100%; max-width: 560px; max-height: 90dvh; overflow: auto; padding: 18px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); }
 .dialog-card h2 { margin: 0 0 8px; }
+.dialog-card h3 { margin: 10px 0 6px; font-size: 16px; color: var(--gold); }
+.keys { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 14px; line-height: 1.5; }
+.keys th, .keys td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; word-break: keep-all; }
+.keys thead th { color: var(--muted); }
+.keys tbody th { font-weight: 700; }
+.keys kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px solid #52639c; border-bottom-width: 3px; border-radius: 6px; background: #0b1020; font: inherit; font-weight: 800; text-align: center; }
 .guide { margin: 0 0 14px; padding-left: 20px; line-height: 1.65; }
 .guide li { margin-bottom: 6px; }
 .dialog-card .primary { width: 100%; }
