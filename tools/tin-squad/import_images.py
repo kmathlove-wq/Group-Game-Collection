@@ -149,6 +149,11 @@ def clean_specks(a):
 
 
 def trim(a):
+    box = trim_box(a)
+    return None if box is None else a[box[1]:box[3], box[0]:box[2]]
+
+
+def trim_box(a):
     mask = a[..., 3] > 40
     # 옆 칸에서 살짝 넘어온 조각 지우기: 가장자리에 붙은 얇은 줄이 전체의 2%보다 작으면 무시
     rows, cols = mask.sum(1), mask.sum(0)
@@ -163,7 +168,7 @@ def trim(a):
         return (keep[0][0], keep[-1][-1] + 1) if keep else (idx[0], idx[-1] + 1)
     y0, y1 = main_span(rows)
     x0, x1 = main_span(cols)
-    return a[y0:y1, x0:x1]
+    return int(x0), int(y0), int(x1), int(y1)
 
 
 def save_png(a, path, size):
@@ -195,6 +200,8 @@ def main():
             hint = re.search(r'적\s*([ABC])', f.name)  # '03_적B'처럼 번호를 잘못 적어도 A·B·C를 믿는다
             files[{'A': 3, 'B': 4, 'C': 5}[hint.group(1)] if hint else n] = f
     made = []
+    base = {}   # 주인공 동작마다 칸 안의 몸 자리(비율)와 줄인 배율 — 옷 그림을 여기에 맞춘다
+    boxes = {}  # 옷 그림 안에서 기본 몸이 있는 자리(픽셀)
     for n, f in sorted(files.items()):
         im = Image.open(f)
         if n in SHEETS:
@@ -203,7 +210,25 @@ def main():
             h, w = a.shape[:2]
             for i, name in enumerate(names):
                 x, y = i % cols, i // cols
-                cell = trim(clean_specks(a[y * h // rows:(y + 1) * h // rows, x * w // cols:(x + 1) * w // cols].copy()))
+                raw = clean_specks(a[y * h // rows:(y + 1) * h // rows, x * w // cols:(x + 1) * w // cols].copy())
+                ch, cw = raw.shape[:2]
+                b = trim_box(raw)
+                if n == 1 and b:
+                    base[name] = (b[0] / cw, b[1] / ch, b[2] / cw, b[3] / ch, min(1, size / max(b[2] - b[0], b[3] - b[1])) * cw)
+                pose = name.split('_', 2)[-1]
+                if n >= 25 and b and pose in base:
+                    # 망토처럼 몸 밖으로 나온 장식이 있어도 몸 크기와 자리가 기본 그림과 같게
+                    bx = base[pose]
+                    bb = (bx[0] * cw, bx[1] * ch, bx[2] * cw, bx[3] * ch)
+                    u = (int(min(b[0], bb[0])), int(min(b[1], bb[1])), int(np.ceil(max(b[2], bb[2]))), int(np.ceil(max(b[3], bb[3]))))
+                    k = bx[4] / cw
+                    piece = fix_glow(raw[u[1]:u[3], u[0]:u[2]], name)
+                    im2 = Image.fromarray(piece.astype(np.uint8), 'RGBA')
+                    im2.resize((round(im2.width * k), round(im2.height * k)), Image.LANCZOS).save(out / f'{name}.png', optimize=True)
+                    boxes[name] = [round((bb[0] - u[0]) * k, 1), round((bb[1] - u[1]) * k, 1), round((bb[2] - bb[0]) * k, 1), round((bb[3] - bb[1]) * k, 1)]
+                    made.append(name)
+                    continue
+                cell = raw[b[1]:b[3], b[0]:b[2]] if b else None
                 if cell is None:
                     print(f'⚠ {f.name}: {name} 칸이 비어 있어요(코드 그림을 써요)')
                     continue
@@ -237,7 +262,7 @@ def main():
             cover(im, 1280, 720).save(out / f'bg_{WORLDS[n - 17]}.jpg', quality=82)
             made.append(f'bg_{WORLDS[n - 17]}')
     from cut_parts import run as cut_run
-    print(f'관절 그림 {cut_run(out, out / "rigs.js")}개를 만들었어요.')
+    print(f'관절 그림 {cut_run(out, out / "rigs.js", boxes)}개를 만들었어요.')
     known = {p.stem: p.name for p in sorted(out.iterdir()) if p.suffix in ('.png', '.jpg')}
     (out / 'manifest.js').write_text(
         '// 자동으로 만들어지는 그림 목록(tools/tin-squad/import_images.py). 여기에 없는 그림은 코드로 그린다. 손으로 고치지 말 것.\n'

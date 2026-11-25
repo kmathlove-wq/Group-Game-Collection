@@ -67,13 +67,16 @@
   // 그리기: cx 가운데, by 발밑, h 높이, o.atlas 오려 둔 그림, o.flip 좌우 뒤집기, o.anchor 가운데로 볼 자리(0~1), o.sx·o.sy 전체 늘이기, o.rot 전체 기울기
   A.draw = function (c, im, name, cx, by, h, o) {
     var W = im.width, H = im.height, k = h / H, rig = TS.RIGS && TS.RIGS[name], atlas = o.atlas, move = A.MOVE[name.replace(/^sk_[a-z]+_/, '')], i, q;
+    var box = rig && rig.box; // 옷 그림: 기본 몸 자리를 기준으로 크기와 자리를 맞춘다(망토는 밖으로 나온다)
+    if (box) k = h / box[3];
     if (o.maxW && W * k > o.maxW) k = o.maxW / W;
     c.save();
     c.translate(cx, by);
     c.scale((o.flip ? -1 : 1) * (o.sx || 1) * k, (o.sy || 1) * k);
     if (o.rot) { c.translate(0, -H / 2); c.rotate(o.rot); c.translate(0, H / 2); }
-    c.translate(-W * (o.anchor == null ? 0.5 : o.anchor), -H);
-    if (!rig || !atlas || !move) c.drawImage(im, 0, 0);
+    if (box) c.translate(-box[0] - box[2] * (o.anchor == null ? 0.5 : o.anchor), -box[1] - box[3]);
+    else c.translate(-W * (o.anchor == null ? 0.5 : o.anchor), -H);
+    if (!rig || !rig.parts.length || !atlas || !move) c.drawImage(im, 0, 0);
     else {
       for (i = 0; i < rig.parts.length; i++) { q = rig.parts[i]; if (q.back) part(c, atlas, q, move[q.id], o, W, H); }
       c.drawImage(atlas, 0, 0, W, H, 0, 0, W, H);

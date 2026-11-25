@@ -101,14 +101,19 @@ SPEC = {
 }
 
 
+# 망토가 등을 덮는 옷은 머플러 조각을 따로 움직이지 않는다(망토가 잘리므로)
+SKIP = {'sk_gold': ('scarf',)}
+
+
 def base_name(name):
     """옷 그림 sk_mint_hero_idle은 hero_idle과 같은 자리에서 오린다."""
     return re.sub(r'^sk_[a-z]+_', '', name)
 
 
-def poly_mask(poly, w, h):
+def poly_mask(poly, w, h, box=None):
+    ox, oy, bw, bh = box or (0, 0, w, h)
     m = Image.new('L', (w, h), 0)
-    ImageDraw.Draw(m).polygon([(x / 100 * w, y / 100 * h) for x, y in poly], fill=255)
+    ImageDraw.Draw(m).polygon([(ox + x / 100 * bw, oy + y / 100 * bh) for x, y in poly], fill=255)
     return np.asarray(m) > 0
 
 
@@ -121,15 +126,16 @@ def nearest_fill(dst, src, src_mask, want):
     dst[want, 3] = 255
 
 
-def cut(name, img):
+def cut(name, img, box=None):
     a = np.asarray(img.convert('RGBA')).copy()
     h, w = a.shape[:2]
     alpha = a[..., 3] > 12
     masks = []
     taken = np.zeros((h, w), bool)
-    spec_list = SPEC[base_name(name)]
+    spec_list = [p for p in SPEC[base_name(name)] if p[0] not in SKIP.get(re.sub(r'_hero_.*$', '', name), ())]
+    ox, oy, bw, bh = box or (0, 0, w, h)
     for pid, poly, pivot, opt in spec_list:
-        m = poly_mask(poly, w, h) & alpha & ~taken
+        m = poly_mask(poly, w, h, box) & alpha & ~taken
         if opt.get('blue'):
             r, b = a[..., 0].astype(int), a[..., 2].astype(int)
             core = ndimage.binary_opening(m & (b > r + 70) & (b > 120), iterations=1)
@@ -176,13 +182,15 @@ def cut(name, img):
         return light if light.sum() > mask.sum() * 0.3 else mask & solid
     parts = []
     for (pid, poly, pivot, opt), m in zip(spec_list, masks):
+        if not m.any():
+            continue
         part = np.zeros_like(a)
         part[m] = a[m]
         n = opt.get('n', 0)
         if opt.get('r'):
-            rad = opt['r'] / 100 * w
-            disc = np.hypot(xs - pivot[0] / 100 * w, ys - pivot[1] / 100 * h) <= rad
-            near = np.hypot(xs - pivot[0] / 100 * w, ys - pivot[1] / 100 * h) <= rad * 2.2
+            rad = opt['r'] / 100 * bw
+            far = np.hypot(xs - ox - pivot[0] / 100 * bw, ys - oy - pivot[1] / 100 * bh)
+            disc, near = far <= rad, far <= rad * 2.2
             if opt.get('back'):
                 nearest_fill(part, a, inner(m) & near if (inner(m) & near).any() else inner(m), disc & rest & solid)
             else:
@@ -194,7 +202,7 @@ def cut(name, img):
             grow = ndimage.binary_dilation(rest, iterations=n) & m & solid
             nearest_fill(body, a, rest & solid, grow)
         if opt.get('under'):
-            nearest_fill(body, a, rest & solid, poly_mask(opt['under'], w, h) & m)
+            nearest_fill(body, a, rest & solid, poly_mask(opt['under'], w, h, box) & m)
         if opt.get('panel'):
             x, y, pw, ph, col = opt['panel']
             box = [x / 100 * w, y / 100 * h, (x + pw) / 100 * w, (y + ph) / 100 * h]
@@ -213,26 +221,30 @@ def cut(name, img):
     ah = max([h] + [b[3] - b[1] for b in boxes])
     atlas = Image.new('RGBA', (int(aw), int(ah)))
     atlas.paste(Image.fromarray(body), (0, 0))
-    ox = w + 2
+    sx = w + 2
     rig = {'w': w, 'h': h, 'parts': []}
+    if box:
+        rig['box'] = list(box)  # 기본 몸이 있는 자리
     for (pid, part, pivot, opt), b in zip(parts, boxes):
-        atlas.paste(Image.fromarray(part[b[1]:b[3], b[0]:b[2]]), (int(ox), 0))
-        rig['parts'].append({'id': pid, 'back': 1 if opt.get('back') else 0, 'sx': int(ox), 'x': int(b[0]), 'y': int(b[1]), 'w': int(b[2] - b[0]), 'h': int(b[3] - b[1]),
-                             'px': round(pivot[0] / 100 * w, 1), 'py': round(pivot[1] / 100 * h, 1)})
-        ox += b[2] - b[0] + 2
+        atlas.paste(Image.fromarray(part[b[1]:b[3], b[0]:b[2]]), (int(sx), 0))
+        rig['parts'].append({'id': pid, 'back': 1 if opt.get('back') else 0, 'sx': int(sx), 'x': int(b[0]), 'y': int(b[1]), 'w': int(b[2] - b[0]), 'h': int(b[3] - b[1]),
+                             'px': round(ox + pivot[0] / 100 * bw, 1), 'py': round(oy + pivot[1] / 100 * bh, 1)})
+        sx += b[2] - b[0] + 2
     return atlas, rig
 
 
-def run(img_dir, js_path):
-    rigs = {}
+def run(img_dir, js_path, boxes=None):
+    boxes, rigs = boxes or {}, {}
     skins = sorted(f.stem for f in img_dir.glob('sk_*.png') if base_name(f.stem) in SPEC)
     for name in list(SPEC) + skins:
         f = img_dir / f'{name}.png'
         if not f.exists():
             continue
-        atlas, rig = cut(name, Image.open(f))
+        atlas, rig = cut(name, Image.open(f), boxes.get(name))
         atlas.save(img_dir / f'rig_{name}.png', optimize=True)
         rigs[name] = rig
+    for name, box in boxes.items():  # 관절 없는 동작(위로 쏘기·맞음)도 몸 자리는 알려 준다
+        rigs.setdefault(name, {'parts': [], 'box': list(box)})
     js_path.write_text('// 자동으로 만들어지는 관절 자리 표(tools/tin-squad/cut_parts.py). 손으로 고치지 말 것.\nwindow.TinSquad = window.TinSquad || {};\n'
                        + f'window.TinSquad.RIGS = {json.dumps(rigs, separators=(",", ":"))};\n', encoding='utf8', newline='\n')
     return len(rigs)
