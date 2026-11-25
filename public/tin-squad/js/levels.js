@@ -292,7 +292,7 @@
     var out = { cols: cols, rows: ROWS, width: cols * TILE, tiles: tiles, world: spec.world, type: spec.type, diff: spec.diff, seed: spec.seed,
       spawns: [], props: [], coins: [], arenas: [], boss: null, goal: null, mech: null, petsTotal: 0, start: { x: 4 * TILE, y: 10 * TILE } };
     var pets = [], spots = [];
-    var fill = Math.min(0.97, 0.62 + spec.diff * 0.012);
+    var fill = Math.min(0.82, 0.52 + spec.diff * 0.008);
     var cx = 0;
     parts.forEach(function (p) {
       var w = p.map[0].length;
@@ -331,12 +331,12 @@
   }
 
   function makeWaves(W, diff, r) {
-    var count = 2 + Math.min(2, Math.floor(diff / 12)), waves = [];
+    var count = 2 + Math.min(1, Math.floor(diff / 18)), waves = [];
     for (var i = 0; i < count; i++) {
-      var n = Math.min(9, 3 + Math.floor(diff / 10) + i), list = [];
+      var n = Math.min(6, 2 + Math.floor(diff / 12) + i), list = [];
       for (var k = 0; k < n; k++) {
         var flying = r() < 0.35;
-        list.push({ type: pick(flying ? W.f : W.g, r), side: r() < 0.5 ? -1 : 1, delay: k * 0.45, fly: flying });
+        list.push({ type: pick(flying ? W.f : W.g, r), side: r() < 0.5 ? -1 : 1, delay: k * 0.6, fly: flying });
       }
       if (i === count - 1 && diff >= 3) list.push({ type: pick(W.G, r), side: 1, delay: 1.2, fly: false });
       waves.push(list);

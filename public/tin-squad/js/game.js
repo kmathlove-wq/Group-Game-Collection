@@ -1,7 +1,7 @@
 // ===== game.js =====
 // 깡통 소탕대 규칙(화면을 모름, 브라우저 window.TinSquad.Game · Node 겸용).
 // create(옵션) → 상태, update(상태, 입력, dt) → 이번에 일어난 사건 목록(소리·반짝이 효과용).
-// 입력: { left, right, up, down, jump, fire, bomb } 모두 참/거짓(누르고 있는지).
+// 입력: { left, right, up, down, jump, fire, bomb } 모두 참/거짓(누르고 있는지). aim: { x, y }(지도 자리)를 주면 그쪽으로 조준한다(마우스).
 (function (root, factory) {
   var L = typeof require === 'function' && typeof module === 'object' ? require('./levels.js') : root.TinSquad.Levels;
   var B = typeof require === 'function' && typeof module === 'object' ? require('./boss.js') : root.TinSquad.Boss;
@@ -12,7 +12,7 @@
   'use strict';
   var T = L.TILE, VW = L.VIEW_W, VH = L.VIEW_H;
   var GRAV = 1900, RUN = 240, JUMP = 780;
-  var INV_TIME = 1.5, COMBO_TIME = 2.6, GROUND_Y = 10 * T;
+  var INV_TIME = 2, COMBO_TIME = 2.6, GROUND_Y = 10 * T;
 
   // ----- 무기 -----
   var WEAPONS = {
@@ -61,8 +61,8 @@
   function statsOf(up, mods) {
     up = up || {}; mods = mods || {};
     return {
-      maxHp: 3 + (up.heart || 0) + (mods.hp || 0),
-      lives: 3 + (up.life || 0),
+      maxHp: 4 + (up.heart || 0) + (mods.hp || 0),
+      lives: 4 + (up.life || 0),
       dmg: (1 + (up.power || 0) * 0.12) * (1 + (mods.dmg || 0)),
       rate: 1 + (mods.rate || 0),
       run: RUN * (1 + (mods.run || 0)),
@@ -87,7 +87,7 @@
     var carry = opts.carry || {};
     var s = {
       map: map, tower: tower, floor: opts.floor || 0, st: st, rand: L.rng((opts.seed || 7) + (opts.stage || 0) * 31 + 5),
-      diff: map.diff, hpMul: 1 + map.diff * 0.026, shotMul: 1 + map.diff * 0.007, rateMul: 1 + map.diff * 0.011,
+      diff: map.diff, hpMul: 0.9 + map.diff * 0.016, shotMul: 0.84 + map.diff * 0.0035, rateMul: 0.8 + map.diff * 0.006, // 난이도(2026-11-25 사용자 요청으로 낮춤)
       time: 0, score: 0, coins: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, pets: 0, petsTotal: map.petsTotal, deaths: 0, hurts: 0,
       lives: tower ? 1 : st.lives, status: 'play', endT: 0,
       camX: 0, lock: null, go: 0, arena: null, spawnQ: [],
@@ -113,7 +113,7 @@
     });
     map.coins.forEach(function (c) { s.items.push({ kind: 'coin', x: c.x, y: c.y, vx: 0, vy: 0, still: true, life: 999 }); });
     if (map.mech) s.mechSpot = { x: map.mech.x, y: map.mech.y - 88, w: 78, h: 88 };
-    if (map.type === 'chase') s.chase = { x: -520, speed: 128 + Math.min(48, map.diff * 1.2), wait: 2.5 };
+    if (map.type === 'chase') s.chase = { x: -520, speed: 112 + Math.min(38, map.diff * 0.95), wait: 3 };
     s.events.push({ t: 'start' });
     return s;
   }
@@ -223,9 +223,9 @@
     for (var i = 0; i < n; i++) dropItem(s, 'coin', cxOf(e), cyOf(e));
     var r = s.rand();
     if (e.type === 'fridge') { r < 0.5 ? dropItem(s, 'heart', cxOf(e), cyOf(e)) : dropWeapon(s, cxOf(e), cyOf(e)); }
-    else if (r < 0.035) dropWeapon(s, cxOf(e), cyOf(e));
-    else if (r < 0.06) dropItem(s, 'bomb', cxOf(e), cyOf(e));
-    else if (r < 0.072) dropItem(s, 'heart', cxOf(e), cyOf(e));
+    else if (r < 0.045) dropWeapon(s, cxOf(e), cyOf(e));
+    else if (r < 0.075) dropItem(s, 'bomb', cxOf(e), cyOf(e));
+    else if (r < 0.107) dropItem(s, 'heart', cxOf(e), cyOf(e));
     if (s.st.leech && ++s.leechN >= Math.max(8, 32 - s.st.leech * 6)) { s.leechN = 0; heal(s, 1); }
   }
   function hurtBoss(s, dmg) {
@@ -250,12 +250,12 @@
     else if (p.kind === 'crate') {
       ev(s, 'crate', x, y);
       var r = s.rand();
-      if (r < 0.34) dropWeapon(s, x, y); else if (r < 0.74) dropItem(s, 'coins', x, y); else if (r < 0.86) dropItem(s, 'bomb', x, y); else dropItem(s, 'heart', x, y);
+      if (r < 0.34) dropWeapon(s, x, y); else if (r < 0.66) dropItem(s, 'coins', x, y); else if (r < 0.78) dropItem(s, 'bomb', x, y); else dropItem(s, 'heart', x, y);
     } else { // 동물 우리
       s.pets++;
       ev(s, 'pet', x, y, { pet: p.pet, n: s.pets });
       addScore(s, 500, x, y);
-      if (s.p.hp < s.p.maxHp && s.rand() < 0.4) dropItem(s, 'heart', x, y); else dropWeapon(s, x, y);
+      if (s.p.hp < s.p.maxHp && s.rand() < 0.65) dropItem(s, 'heart', x, y); else dropWeapon(s, x, y);
       dropItem(s, 'coins', x, y);
     }
   }
@@ -346,12 +346,16 @@
     if (p.stun > 0) { p.stun -= dt; dir = 0; }
     var wantCrouch = !!input.down && p.ground && !p.mech;
     setCrouch(s, wantCrouch);
-    if (dir) p.face = dir;
+    var aim = input.aim && s.status === 'play' ? input.aim : null;
+    if (aim) { if (Math.abs(aim.x - cxOf(p)) > 4) p.face = aim.x < cxOf(p) ? -1 : 1; } else if (dir) p.face = dir;
     var run = s.st.run * (p.mech ? 0.95 : 1);
     var target = p.crouch ? 0 : dir * run;
     if (!(p.stun > 0)) p.vx += (target - p.vx) * Math.min(1, dt * (p.ground ? 18 : 11));
     // 조준
-    if (input.up) { p.ax = dir ? p.face * 0.7071 : 0; p.ay = dir ? -0.7071 : -1; }
+    if (aim) {
+      var ay0 = aim.y - (p.y + (p.mech ? 38 : p.crouch ? 9 : 20)), ax0 = aim.x - cxOf(p), al = Math.hypot(ax0, ay0);
+      if (al > 6) { p.ax = ax0 / al; p.ay = ay0 / al; } else { p.ax = p.face; p.ay = 0; }
+    } else if (input.up) { p.ax = dir ? p.face * 0.7071 : 0; p.ay = dir ? -0.7071 : -1; }
     else if (input.down && !p.ground) { p.ax = 0; p.ay = 1; }
     else { p.ax = p.face; p.ay = 0; }
     // 점프
@@ -390,10 +394,15 @@
     p.fireT -= dt; p.bombT -= dt;
     if (input.fire && p.fireT <= 0 && s.status === 'play') fire(s);
     if (bombPress && p.bombT <= 0 && s.status === 'play') {
-      if (p.mech) { if (p.mech.cd > s.time) { /* 대포 식는 중 */ } else { p.mech.cd = s.time + 0.8; s.shots.push({ x: cxOf(p) + p.face * 40, y: p.y + 30, vx: p.face * 700, vy: -40, dmg: 60 * s.st.dmg, r: 12, life: 1.4, kind: 'rocket', boom: 110, pierce: 0, hits: [] }); ev(s, 'rocket', cxOf(p), p.y + 30); } }
+      if (p.mech) { if (p.mech.cd > s.time) { /* 대포 식는 중 */ } else { p.mech.cd = s.time + 0.8; s.shots.push({ x: cxOf(p) + p.ax * 40, y: p.y + 34 + p.ay * 30, vx: p.ax * 700, vy: p.ay * 700 - 40, dmg: 60 * s.st.dmg, r: 12, life: 1.4, kind: 'rocket', boom: 110, pierce: 0, hits: [] }); ev(s, 'rocket', cxOf(p), p.y + 30); } }
       else if (p.bombs > 0) {
         p.bombs--; p.bombT = 0.35;
-        s.bombs.push({ x: cxOf(p), y: p.y + 10, vx: p.face * (input.up ? 220 : 420) + p.vx * 0.3, vy: input.up ? -760 : -480, fuse: 2, kind: 'bomb', side: 'p', bounce: 1 });
+        var bvx = p.face * (input.up ? 220 : 420) + p.vx * 0.3, bvy = input.up ? -760 : -480;
+        if (aim) { // 마우스를 누른 자리로 포물선을 그리며 던진다
+          var bt = clamp(Math.hypot(aim.x - cxOf(p), aim.y - p.y) / 760, 0.3, 0.75);
+          bvx = clamp((aim.x - cxOf(p)) / bt, -820, 820); bvy = clamp((aim.y - p.y - 10) / bt - 750 * bt, -1050, 700);
+        }
+        s.bombs.push({ x: cxOf(p), y: p.y + 10, vx: bvx, vy: bvy, fuse: 2, kind: 'bomb', side: 'p', bounce: 1 });
         ev(s, 'throw', cxOf(p), p.y);
       }
     }
@@ -406,7 +415,7 @@
       var box = { x: p.face > 0 ? p.x + p.w - 6 : p.x - 44, y: p.y - 6, w: 50, h: p.h + 10 };
       for (i = 0; i < s.enemies.length; i++) {
         var e = s.enemies[i];
-        if (e.on && !e.dead && e.type !== 'fridge' && p.ay === 0 && hit(box, e)) {
+        if (e.on && !e.dead && e.type !== 'fridge' && Math.abs(p.ay) < 0.6 && hit(box, e)) {
           p.melee = 0.22; p.fireT = 0.3; ev(s, 'melee', cxOf(e), cyOf(e));
           hurtEnemy(s, e, 45 * s.st.dmg, 0, true);
           if (e.dead) { dropItem(s, 'coin', cxOf(e), cyOf(e)); addScore(s, 50); }
@@ -661,8 +670,8 @@
       }
       facePlayer(s, e);
       var dx = Math.abs(cxOf(p) - cxOf(e));
-      if (dx < 46 && Math.abs(cyOf(p) - cyOf(e)) < 70 && !p.dead) { e.st = 'fuse'; e.n = 0.5; ev(s, 'fuse', cxOf(e), e.y); return; }
-      if (dx < 700 && walk(s, e, dt, 165 + s.diff * 1.2) && e.ground && e.cd <= 0) { e.vy = -640; e.cd = 0.8; }
+      if (dx < 46 && Math.abs(cyOf(p) - cyOf(e)) < 70 && !p.dead) { e.st = 'fuse'; e.n = 0.65; ev(s, 'fuse', cxOf(e), e.y); return; }
+      if (dx < 700 && walk(s, e, dt, 145 + s.diff * 0.8) && e.ground && e.cd <= 0) { e.vy = -640; e.cd = 0.8; }
       if (dx < 90 && cyOf(p) < cyOf(e) - 70 && e.ground && e.cd <= 0) { e.vy = -820; e.cd = 1.4; } // 발판 위로 도망가면 뛰어오른다
       if (!e.ground) moveX(s, e, e.dir * 120 * dt);
     },
@@ -677,13 +686,14 @@
     },
     bulb: function (s, e, dt, p) {
       facePlayer(s, e);
-      var a = Math.atan2(cyOf(p) - cyOf(e), cxOf(p) - cxOf(e)), sp = 125 + s.diff;
+      var a = Math.atan2(cyOf(p) - cyOf(e), cxOf(p) - cxOf(e)), sp = 110 + s.diff * 0.7;
       e.x += (Math.cos(a) * sp + Math.sin(e.t * 5) * 50) * dt; e.y += (Math.sin(a) * sp * 0.7 + Math.cos(e.t * 6) * 80) * dt;
     },
     vacuum: function (s, e, dt, p) {
       if (e.st === 'dash') { e.n -= dt; if (walk(s, e, dt, 330) || e.n <= 0) { e.st = 'idle'; e.cd = 1.3; } return; }
       if (e.st === 'wind') { if (e.cd <= 0) { e.st = 'dash'; e.n = 0.9; } return; }
       if (canSee(s, e, 380) && Math.abs(cyOf(p) - cyOf(e)) < 90 && e.cd <= 0) { facePlayer(s, e); e.st = 'wind'; e.cd = 0.45; ev(s, 'fuse', cxOf(e), e.y); return; }
+      if (e.arena && Math.abs(cxOf(p) - cxOf(e)) > 200) facePlayer(s, e); // 전투 구역에서는 멀리 숨지 않고 다가온다
       if (walk(s, e, dt, 95)) e.dir = -e.dir;
     },
     turret: function (s, e, dt) {

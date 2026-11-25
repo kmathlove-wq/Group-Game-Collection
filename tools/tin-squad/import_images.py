@@ -51,6 +51,11 @@ def cut_background(im):
     a[..., 3] *= alpha
     return np.clip(a, 0, 255)
 
+# 25~29번: 옷장 옷(주인공 동작 8개와 같은 배치)
+SKINS = ['mint', 'pink', 'lemon', 'ninja', 'gold']
+for _i, _s in enumerate(SKINS):
+    SHEETS[25 + _i] = (4, 2, [f'sk_{_s}_{h}' for h in HERO], 220)
+
 
 def fix_airship(a):
     """그려진 프로펠러와 잔상을 지우고(게임이 코드로 돌린다) 뒤의 빨간 몸을 메운다."""

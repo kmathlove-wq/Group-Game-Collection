@@ -86,7 +86,7 @@ test('깡통 소탕대: 맞으면 하트가 줄고, 목숨을 다 쓰면 실패'
   assert.equal(G.hurtPlayer(s, s.p.x + 50), false, '맞은 직후엔 잠깐 무적');
   for (let k = 0; k < 4000 && s.status === 'play'; k += 1) { s.p.inv = 0; G.hurtPlayer(s, s.p.x + 50); G.update(s, {}, DT); }
   assert.equal(s.status, 'fail');
-  assert.equal(s.deaths, 3);
+  assert.equal(s.deaths, s.st.lives);
 });
 
 test('깡통 소탕대: 구덩이에 빠지면 하트 한 칸만 잃고 땅으로 돌아온다', () => {
@@ -114,7 +114,7 @@ test('깡통 소탕대: 콤보 배수·업그레이드·탑 능력', () => {
   assert.equal(G.comboMult(0), 1);
   assert.ok(G.comboMult(10) > G.comboMult(5));
   assert.equal(G.comboMult(9999), 5);
-  assert.equal(G.statsOf({ heart: 2, jump: 1 }).maxHp, 5);
+  assert.equal(G.statsOf({ heart: 2, jump: 1 }).maxHp, 6);
   assert.equal(G.statsOf({ jump: 1 }).jumps, 2);
   const mods = {}, carry = { hp: 2, bombs: 1 };
   for (const p of G.PERKS) G.applyPerk(p, mods, carry, Math.random);
@@ -122,6 +122,30 @@ test('깡통 소탕대: 콤보 배수·업그레이드·탑 능력', () => {
   const s = G.create({ floor: 2, seed: 5, mods, carry });
   assert.ok(s.p.hp <= s.p.maxHp && s.lives === 1);
   assert.equal(new Set(G.perkChoices({}, Math.random).map((p) => p.id)).size, 3);
+});
+
+test('깡통 소탕대: 마우스 자리로 조준·발사하고 폭탄을 던진다', () => {
+  const s = G.create({ stage: 0 });
+  s.enemies = []; s.props = []; s.p.x = 600; s.p.face = 1;
+  for (let k = 0; k < 20; k += 1) G.update(s, {}, DT);
+  const p = s.p, from = { x: p.x + 14, y: p.y + 20 };
+  for (const [dx, dy] of [[-200, -150], [220, -60], [10, -260], [-180, 10]]) {
+    s.shots = []; p.fireT = 0;
+    G.update(s, { fire: true, aim: { x: from.x + dx, y: from.y + dy } }, DT);
+    assert.equal(s.shots.length, 1);
+    const b = s.shots[0], want = Math.atan2(dy, dx), got = Math.atan2(b.vy, b.vx);
+    assert.ok(Math.abs(Math.atan2(Math.sin(got - want), Math.cos(got - want))) < 0.05, `${dx},${dy}`);
+    assert.equal(p.face, dx < 0 ? -1 : 1, '마우스 쪽을 본다');
+  }
+  G.update(s, {}, DT); G.update(s, { right: true, aim: { x: from.x - 300, y: from.y } }, DT);
+  assert.equal(p.face, -1, '오른쪽으로 걸어도 마우스 쪽을 본다'); assert.ok(p.vx > 0);
+  s.bombs = []; p.bombT = 0;
+  const left = p.bombs, target = { x: p.x + 250, y: 440 };
+  G.update(s, { bomb: true, aim: target }, DT);
+  assert.equal(p.bombs, left - 1);
+  let near = 999;
+  for (let k = 0; k < 70 && s.bombs.length; k += 1) { near = Math.min(near, Math.hypot(s.bombs[0].x - target.x, s.bombs[0].y - target.y)); G.update(s, { aim: target }, DT); }
+  assert.ok(near < 40, `폭탄이 누른 자리 근처로: ${near}`);
 });
 
 test('깡통 소탕대: 로봇을 타면 로봇이 대신 맞고, 부서지면 내린다', () => {

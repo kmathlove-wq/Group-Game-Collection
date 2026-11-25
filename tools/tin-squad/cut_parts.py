@@ -10,6 +10,7 @@
 #   under: 조각 뒤에 몸이 있어야 하는 자리(다각형) — 주변 색으로 메운다 / keep: 몸에서 지우지 않는다(커지기만 하는 조각)
 #   blue: 다각형 안의 파란 부분만(선풍기 날개)
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -100,6 +101,11 @@ SPEC = {
 }
 
 
+def base_name(name):
+    """옷 그림 sk_mint_hero_idle은 hero_idle과 같은 자리에서 오린다."""
+    return re.sub(r'^sk_[a-z]+_', '', name)
+
+
 def poly_mask(poly, w, h):
     m = Image.new('L', (w, h), 0)
     ImageDraw.Draw(m).polygon([(x / 100 * w, y / 100 * h) for x, y in poly], fill=255)
@@ -121,7 +127,8 @@ def cut(name, img):
     alpha = a[..., 3] > 12
     masks = []
     taken = np.zeros((h, w), bool)
-    for pid, poly, pivot, opt in SPEC[name]:
+    spec_list = SPEC[base_name(name)]
+    for pid, poly, pivot, opt in spec_list:
         m = poly_mask(poly, w, h) & alpha & ~taken
         if opt.get('blue'):
             r, b = a[..., 0].astype(int), a[..., 2].astype(int)
@@ -148,7 +155,7 @@ def cut(name, img):
                 thin |= piece
     if thin.any() and taken.any():
         owner = np.zeros((h, w), int)
-        for k, (m, spec) in enumerate(zip(masks, SPEC[name])):
+        for k, (m, spec) in enumerate(zip(masks, spec_list)):
             if not spec[3].get('keep'):
                 owner[m] = k + 1
         _, (iy, ix) = ndimage.distance_transform_edt(owner == 0, return_indices=True)
@@ -168,7 +175,7 @@ def cut(name, img):
         light = mask & solid & (luma > 75)
         return light if light.sum() > mask.sum() * 0.3 else mask & solid
     parts = []
-    for (pid, poly, pivot, opt), m in zip(SPEC[name], masks):
+    for (pid, poly, pivot, opt), m in zip(spec_list, masks):
         part = np.zeros_like(a)
         part[m] = a[m]
         n = opt.get('n', 0)
@@ -218,7 +225,8 @@ def cut(name, img):
 
 def run(img_dir, js_path):
     rigs = {}
-    for name in SPEC:
+    skins = sorted(f.stem for f in img_dir.glob('sk_*.png') if base_name(f.stem) in SPEC)
+    for name in list(SPEC) + skins:
         f = img_dir / f'{name}.png'
         if not f.exists():
             continue

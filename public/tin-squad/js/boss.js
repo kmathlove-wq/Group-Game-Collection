@@ -22,7 +22,7 @@
   };
 
   function create(kind, lock, diff, tower) {
-    var d = BOSSES[kind], hp = Math.round(d.hp * (tower ? 0.55 + diff * 0.022 : 1));
+    var d = BOSSES[kind], hp = Math.round(d.hp * (tower ? 0.45 + diff * 0.015 : 0.75));
     var b = { kind: kind, name: d.name, w: d.w, h: d.h, hp: hp, maxHp: hp, move: d.move, shot: d.shot, minion: d.minion, attacks: d.attacks, lock: lock,
       x: lock + VW + 40, y: 450 - d.h, vx: 0, vy: 0, dir: -1, t: 0, enter: 1.8, st: 'idle', cd: 1.2, atk: null, at: 0, i: -1, flash: 0, dead: false, deadT: 0, rage: false, n: 0 };
     b.homeX = lock + VW - d.w - 70;
@@ -89,8 +89,8 @@
       b.dir = kit.cx(s.p) < b.x + b.w / 2 ? -1 : 1;
       if (b.move === 'hover') { b.x += Math.sin(b.t * 0.9) * 70 * dt; b.y = b.homeY + Math.sin(b.t * 1.7) * 24; b.x = kit.clamp(b.x, b.lock + 20, b.lock + VW - b.w - 20); }
       else if (b.move === 'ground' && Math.abs(kit.cx(s.p) - b.x - b.w / 2) > 260) b.x += b.dir * 60 * dt;
-      b.cd -= dt * (b.rage ? 1.5 : 1);
-      if (b.cd <= 0) { b.i = (b.i + 1 + (s.rand() < 0.35 ? 1 : 0)) % b.attacks.length; b.atk = b.attacks[b.i]; b.st = 'wind'; b.cd = ATT[b.atk].wind * (b.rage ? 0.8 : 1); kit.ev(s, 'boss-wind', b.x + b.w / 2, b.y, { atk: b.atk }); }
+      b.cd -= dt * (b.rage ? 1.25 : 1);
+      if (b.cd <= 0) { b.i = (b.i + 1 + (s.rand() < 0.35 ? 1 : 0)) % b.attacks.length; b.atk = b.attacks[b.i]; b.st = 'wind'; b.cd = ATT[b.atk].wind * (b.rage ? 1.05 : 1.3); kit.ev(s, 'boss-wind', b.x + b.w / 2, b.y, { atk: b.atk }); }
     } else if (b.st === 'wind') {
       b.cd -= dt;
       if (b.cd <= 0) { b.st = 'act'; b.at = 0; if (ATT[b.atk].start) ATT[b.atk].start(s, b, kit); }
@@ -98,7 +98,7 @@
       b.at += dt;
       var a = ATT[b.atk];
       if (a.tick) a.tick(s, b, kit, dt);
-      if (b.at >= a.dur) { if (a.end) a.end(s, b, kit); b.st = 'idle'; b.cd = Math.max(0.55, 1.15 - s.diff * 0.01); }
+      if (b.at >= a.dur) { if (a.end) a.end(s, b, kit); b.st = 'idle'; b.cd = Math.max(0.95, 1.6 - s.diff * 0.011); }
     }
   }
   return { BOSSES: BOSSES, ATT: ATT, create: create, step: step, hitTest: hitTest, touch: touch };

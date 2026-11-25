@@ -66,7 +66,7 @@
   }
   // 그리기: cx 가운데, by 발밑, h 높이, o.atlas 오려 둔 그림, o.flip 좌우 뒤집기, o.anchor 가운데로 볼 자리(0~1), o.sx·o.sy 전체 늘이기, o.rot 전체 기울기
   A.draw = function (c, im, name, cx, by, h, o) {
-    var W = im.width, H = im.height, k = h / H, rig = TS.RIGS && TS.RIGS[name], atlas = o.atlas, move = A.MOVE[name], i, q;
+    var W = im.width, H = im.height, k = h / H, rig = TS.RIGS && TS.RIGS[name], atlas = o.atlas, move = A.MOVE[name.replace(/^sk_[a-z]+_/, '')], i, q;
     if (o.maxW && W * k > o.maxW) k = o.maxW / W;
     c.save();
     c.translate(cx, by);

@@ -10,7 +10,9 @@
 
   // ----- 그림 불러오기 -----
   D.load = function (done) {
-    var list = TS.IMAGES || {}, names = Object.keys(list), left = names.length;
+    // 옷 그림(sk_<옷>_…)은 무거워서 입거나 옷장을 열 때만 받는다
+    var list = TS.IMAGES || {}, names = Object.keys(list).filter(function (n) { return !/^(rig_)?sk_/.test(n); }), left = names.length;
+    ready = true; D.setSkin(skinId);
     if (!left) return done();
     names.forEach(function (n) {
       var im = new Image();
@@ -21,27 +23,65 @@
   };
   D.pic = function (n) { return pics[n] || null; };
 
-  // 옷 색(머플러·모자 색, 그림을 쓰면 색조를 돌린다)
+  // 옷: main 머플러·고글 색, suit 작업복 색. 사용자가 만든 옷 그림(sk_<옷>_hero_…)이 있으면 그 그림을 쓴다
   D.SKINS = {
-    orange: { name: '주황 머플러', main: '#ff8a3d', suit: '#2f5d8a', price: 0, hue: 0 },
-    mint: { name: '민트 머플러', main: '#2fd6a3', suit: '#5b4a8a', price: 150, hue: 120 },
-    pink: { name: '분홍 머플러', main: '#ff6fa5', suit: '#3d6b5a', price: 150, hue: 300 },
-    lemon: { name: '레몬 머플러', main: '#ffd84a', suit: '#8a3d4a', price: 250, hue: 30 },
-    ninja: { name: '밤그림자', main: '#8c5bff', suit: '#23242f', price: 400, hue: 230 },
-    gold: { name: '황금 용사', main: '#ffe27a', suit: '#b8860b', price: 900, hue: 45 }
+    orange: { name: '주황 머플러', main: '#ff8a3d', suit: '#2f5d8a', price: 0 },
+    mint: { name: '민트 머플러', main: '#2fd6a3', suit: '#5b4a8a', price: 150 },
+    pink: { name: '분홍 머플러', main: '#ff6fa5', suit: '#3d6b5a', price: 150 },
+    lemon: { name: '레몬 머플러', main: '#ffd84a', suit: '#8a3d4a', price: 250 },
+    ninja: { name: '밤그림자', main: '#8c5bff', suit: '#23242f', price: 400 },
+    gold: { name: '황금 용사', main: '#ffe27a', suit: '#b8860b', price: 900 }
   };
-  D.setSkin = function (id) { if (D.SKINS[id]) { skinId = id; tinted = {}; } };
+  var ready = false, loading = {};
+  function fetchPic(n, done) {
+    var list = TS.IMAGES || {};
+    if (pics[n] || !list[n]) return done && done(pics[n] || null);
+    if (loading[n]) { loading[n].push(done); return; }
+    loading[n] = [done];
+    var im = new Image();
+    im.onload = function () { pics[n] = im; loading[n].forEach(function (f) { if (f) f(im); }); delete loading[n]; };
+    im.onerror = function () { loading[n].forEach(function (f) { if (f) f(null); }); delete loading[n]; };
+    im.src = 'img/' + list[n];
+  }
+  D.setSkin = function (id) {
+    if (!D.SKINS[id]) return;
+    skinId = id; tinted = {};
+    if (ready) Object.keys(TS.IMAGES || {}).forEach(function (n) { if (n.replace(/^rig_/, '').indexOf('sk_' + id + '_') === 0) fetchPic(n); });
+  };
+  // 옷장 미리보기: 옷 그림이 있으면 그 그림, 없으면 색만 바꾼 기본 그림
+  D.skinPreview = function (id, done) {
+    done(null);
+    if ((TS.IMAGES || {})['sk_' + id + '_hero_idle']) fetchPic('sk_' + id + '_hero_idle', done);
+    else if ((TS.IMAGES || {}).hero_idle) fetchPic('hero_idle', function (im) { done(im && recolor(im, id)); });
+  };
   var tinted = {};
+  function rgb(hex) { return [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); }); }
+  // 주황(머플러·고글)과 파랑(작업복)만 옷 색으로 바꾼다. 얼굴·머리·총은 그대로.
+  function recolor(im, id) {
+    var sk = D.SKINS[id];
+    if (!sk.price) return im;
+    var c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    var x = c.getContext('2d'); x.drawImage(im, 0, 0);
+    try {
+      var px = x.getImageData(0, 0, c.width, c.height), d = px.data, M = rgb(sk.main), U = rgb(sk.suit);
+      for (var i = 0; i < d.length; i += 4) {
+        if (!d[i + 3]) continue;
+        var r = d[i], g = d[i + 1], b = d[i + 2], hi = Math.max(r, g, b), lo = Math.min(r, g, b), sat = hi ? (hi - lo) / hi : 0, k, to = null;
+        if (r === hi && sat > 0.7 && r > 150 && g > r * 0.28 && g < r * 0.72 && b < r * 0.35) { k = hi / 250; to = M; }
+        else if (b === hi && sat > 0.38 && b > 70 && g > r && b > r * 1.6 && g < b * 0.82) { k = hi / 190; to = U; }
+        if (to) { d[i] = Math.min(255, to[0] * k); d[i + 1] = Math.min(255, to[1] * k); d[i + 2] = Math.min(255, to[2] * k); }
+      }
+      x.putImageData(px, 0, 0);
+    } catch (e) { return im; }
+    return c;
+  }
+  // 지금 옷의 주인공 그림 { im, atlas, name }: 옷 그림이 있으면 그것, 없으면 기본 그림의 색만 바꿔서
   function heroPic(n) {
-    var im = pics[n], hue = D.SKINS[skinId].hue;
-    if (!im || !hue) return im;
-    if (!tinted[n]) {
-      var c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
-      var x = c.getContext('2d');
-      try { x.filter = 'hue-rotate(' + hue + 'deg)'; } catch (e) { /* 색 바꾸기를 못 하는 브라우저 */ }
-      x.drawImage(im, 0, 0); tinted[n] = c;
-    }
-    return tinted[n];
+    var own = 'sk_' + skinId + '_' + n;
+    if (pics[own]) return { im: pics[own], atlas: pics['rig_' + own], name: own };
+    if (!pics[n]) return null;
+    ['', 'rig_'].forEach(function (pre) { var f = pre + n; if (pics[f] && !tinted[f]) tinted[f] = recolor(pics[f], skinId); });
+    return { im: tinted[n], atlas: tinted['rig_' + n], name: n };
   }
 
   // ----- 세계별 색 -----
@@ -194,8 +234,8 @@
     if (im) {
       var hs = HERO_SIZE[pose], run = pose.indexOf('run') === 0, st = p.dead ? 1 : p.ground ? 1 + Math.sin(clock * 6) * 0.012 - landT * 0.9 : 1 + Math.min(0.12, Math.abs(p.vy) / 6000);
       if (p.shootPose > 0.2) st -= 0.015;
-      TS.Anim.draw(c, im, 'hero_' + pose, cx, by + 2 - (run ? Math.abs(Math.sin(p.anim * Math.PI / 2)) * 4 : 0), hs[0], {
-        atlas: heroPic('rig_hero_' + pose), flip: p.face < 0, anchor: hs[1], sx: 2 - st, sy: st, rot: p.dead ? -clock * 5 : run ? 0.05 : 0, t: clock, walk: run ? 1 : 0, act: p.shootPose > 0.2 ? 1 : 0,
+      TS.Anim.draw(c, im.im, im.name, cx, by + 2 - (run ? Math.abs(Math.sin(p.anim * Math.PI / 2)) * 4 : 0), hs[0], {
+        atlas: im.atlas, flip: p.face < 0, anchor: hs[1], sx: 2 - st, sy: st, rot: p.dead ? -clock * 5 : run ? 0.05 : 0, t: clock, walk: run ? 1 : 0, act: p.shootPose > 0.2 ? 1 : 0,
         aim: pose === 'up' ? 0 : Math.atan2(p.ay, Math.abs(p.ax))
       });
       if (p.melee > 0) wrench(c, cx, by - 30, p);

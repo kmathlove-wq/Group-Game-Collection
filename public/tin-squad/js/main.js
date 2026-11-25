@@ -100,8 +100,13 @@
     Object.keys(D.SKINS).forEach(function (id) {
       var sk = D.SKINS[id], own = save.skins.indexOf(id) >= 0, c = el('div', 'card'), cv = document.createElement('canvas');
       cv.width = 320; cv.height = 120;
-      var x = cv.getContext('2d'); x.translate(160, 112); x.scale(1.35, 1.35);
-      D.hero(x, 0, 0, { vx: 0, anim: 0, ground: true, face: 1, ax: 1, ay: 0, weapon: 'screw', melee: 0, shootPose: 0 }, sk);
+      var x = cv.getContext('2d');
+      D.skinPreview(id, function (im) {
+        x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 320, 120);
+        if (im) { var hh = 110, ww = im.width * hh / im.height; x.drawImage(im, 160 - ww / 2, 6, ww, hh); return; }
+        x.translate(160, 112); x.scale(1.35, 1.35);
+        D.hero(x, 0, 0, { vx: 0, anim: 0, ground: true, face: 1, ax: 1, ay: 0, weapon: 'screw', melee: 0, shootPose: 0 }, sk);
+      });
       c.appendChild(cv); c.appendChild(el('b', null, sk.name));
       var b = el('button', null, save.skin === id ? '입고 있어요' : own ? '입기' : '🪙 ' + sk.price); b.type = 'button';
       b.disabled = save.skin === id || (!own && save.coins < sk.price);
@@ -193,7 +198,9 @@
   // ----- 입력 -----
   var KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', KeyZ: 'fire', KeyJ: 'fire', KeyX: 'jump', KeyK: 'jump', Space: 'jump', KeyC: 'bomb', KeyL: 'bomb' };
   var down = {}, touch = {}, touchUI = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-  function clearInput() { down = {}; touch = {}; document.querySelectorAll('.tbtn.on').forEach(function (b) { b.classList.remove('on'); }); }
+  // 마우스: 왼쪽 = 발사, 오른쪽 = 폭탄, 커서 쪽으로 조준. 키보드로 쏘면(Z·J) 키보드 조준으로 돌아가고 마우스를 움직이면 다시 마우스 조준.
+  var mouse = { on: false, x: 0, y: 0, fire: false, bomb: false, fireTap: false, bombTap: false };
+  function clearInput() { down = {}; touch = {}; mouse.fire = mouse.bomb = mouse.fireTap = mouse.bombTap = false; document.querySelectorAll('.tbtn.on').forEach(function (b) { b.classList.remove('on'); }); }
   function typing(e) { var t = e.target; return t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName); }
   window.addEventListener('keydown', function (e) {
     if (typing(e) || rankStory.isOpen() || rankTower.isOpen()) return;
@@ -203,6 +210,7 @@
     if (e.code === 'KeyP' || e.code === 'Escape') { if (mode === 'play') pause(); else if (mode === 'pause') resume(); else if (e.code === 'Escape' && /^(map|shop|skins)$/.test(mode)) back(); return; }
     if (mode !== 'play' || !KEYS[e.code] || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault(); down[e.code] = true; S.unlock();
+    if (KEYS[e.code] === 'fire') mouse.on = false;
   });
   window.addEventListener('keyup', function (e) { delete down[e.code]; });
   window.addEventListener('blur', clearInput);
@@ -211,8 +219,33 @@
     Object.keys(down).forEach(function (k) { o[KEYS[k]] = true; });
     Object.keys(touch).forEach(function (k) { if (touch[k]) o[k] = true; });
     if (o.left && o.right) o.left = o.right = false;
+    if (mouse.fire || mouse.fireTap) o.fire = true;
+    if (mouse.bomb || mouse.bombTap) o.bomb = true;
+    mouse.fireTap = mouse.bombTap = false;
+    if (mouse.on) o.aim = { x: mouse.x + state.camX, y: mouse.y };
     return o;
   }
+  (function () {
+    var stage = $('stage');
+    function place(e) {
+      var r = canvas.getBoundingClientRect();
+      mouse.x = (e.clientX - r.left) / r.width * L.VIEW_W; mouse.y = (e.clientY - r.top) / r.height * L.VIEW_H;
+    }
+    window.addEventListener('pointermove', function (e) { if (e.pointerType !== 'mouse' || mode !== 'play') return; place(e); if (e.movementX || e.movementY) mouse.on = true; });
+    // pointerdown이 아니라 mousedown을 쓴다: 왼쪽을 누른 채 오른쪽을 누르면 pointerdown은 다시 오지 않는다
+    stage.addEventListener('mousedown', function (e) {
+      if (mode !== 'play' || !$('guide').hidden || e.target.closest('button, .stick') || touchMouse(e)) return;
+      if (e.button === 0) { if (!mouse.fire) mouse.fire = mouse.fireTap = true; } else if (e.button === 2) { if (!mouse.bomb) mouse.bomb = mouse.bombTap = true; }
+      e.preventDefault(); place(e); mouse.on = true; S.unlock();
+    });
+    function touchMouse(e) { return Date.now() - lastTouch < 800; } // 손가락 누름 뒤에 따라오는 가짜 마우스는 무시
+    var lastTouch = 0;
+    window.addEventListener('touchstart', function () { lastTouch = Date.now(); }, { passive: true });
+    window.addEventListener('touchend', function () { lastTouch = Date.now(); }, { passive: true });
+    window.addEventListener('mouseup', function (e) { if (e.button === 0) mouse.fire = false; else if (e.button === 2) mouse.bomb = false; });
+    window.addEventListener('pointercancel', function () { mouse.fire = mouse.bomb = false; });
+    stage.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  })();
   document.querySelectorAll('.tbtn').forEach(function (b) {
     var key = b.getAttribute('data-key');
     b.addEventListener('pointerdown', function (e) { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (x) { /* 무시 */ } touch[key] = true; b.classList.add('on'); S.unlock(); });
